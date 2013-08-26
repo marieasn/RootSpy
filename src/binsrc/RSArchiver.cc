@@ -230,15 +230,19 @@ void MainLoop()
 		// ask each server for their "final" histograms
 		for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
 		    server_it != RS_INFO->servers.end(); server_it++) {
+		    // don't ask for zero histograms, it will crash cMsg
+		    if( server_it->second.hnamepaths.size() == 0 ) continue;
+
 		    //_DBG_ << "sending request to" << server_it->first.serverName 
 		    _DBG_ << "sending request to" << server_it->first 
 			  << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
-		    // is this your final answer?
+
+
 		    RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
 		}		
 		// make a thread to handle collecting the final histograms
 		pthread_create(&the_thread, NULL, ArchiveFile, 
-			       new map<string,server_info_t>(RS_INFO->servers) ); /// ARGH SHOULD BE DEEP COPY??
+			       new map<string,server_info_t>(RS_INFO->servers) ); 
 		thread_ids.push_back(the_thread);
 		RS_INFO->Unlock();
 		
@@ -444,6 +448,15 @@ void *ArchiveFile(void * ptr)
     const int FINAL_TIMEOUT = 600;   // only wait 5 minutes for everyone to report in
 
     _DBG_<<"Starting in ArchiveFile()..."<<endl;
+
+    // clean up server list - any servers containing zero histograms should be removed
+    for( map<string,server_info_t>::iterator server_itr = the_servers->begin();
+	 server_itr!=the_servers->end(); server_itr++) { 
+	if(server_itr->second.hnamepaths.empty()) {
+	    the_servers->erase(server_itr);
+	}
+    }
+
 
     // make file and directory to save histograms in
     stringstream ss;
