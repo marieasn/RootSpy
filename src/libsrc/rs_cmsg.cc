@@ -149,14 +149,14 @@ void rs_cmsg::RequestTreeInfo(string servername)
 //---------------------------------
 void rs_cmsg::FinalHistogram(string servername, vector<string> hnamepaths)
 {
-	cMsgMessage finalhist;
-	finalhist.setSubject(servername);
-	finalhist.setType(myname);
-	finalhist.setText("provide final");
-	finalhist.add("hnamepaths", hnamepaths);
-
-	cMsgSys->send(&finalhist);
-	cerr<<"final hist request sent"<<endl;
+    cMsgMessage finalhist;
+    finalhist.setSubject(servername);
+    finalhist.setType(myname);
+    finalhist.setText("provide final");
+    finalhist.add("hnamepaths", hnamepaths);
+    
+    cMsgSys->send(&finalhist);
+    cerr<<"final hist request sent"<<endl;
 }
 
 
