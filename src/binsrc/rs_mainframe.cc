@@ -257,7 +257,8 @@ void rs_mainframe::DoTimer(void) {
 			if(hinfo_it->second.hist != NULL) {
 			    //_DBG_ << "Pointer to histogram was not NULL" << endl;
 			    //hinfo_it->second.hist->Draw();
-			    DrawHist(hinfo_it->second.hist, hinfo_it->second.hnamepath);
+			    DrawHist(hinfo_it->second.hist, hinfo_it->second.hnamepath,
+				     hdef_t::histdimension_t::oneD);  // kludge
 			} else {
 				//_DBG_ << "Pointer to histogram was NULL" << endl;
 			}
@@ -269,7 +270,8 @@ void rs_mainframe::DoTimer(void) {
 		if(hdef_iter->second.sum_hist_modified && hdef_iter->second.sum_hist!=NULL){
 			canvas->cd();
 			//hdef_iter->second.sum_hist->Draw();
-			DrawHist(hdef_iter->second.sum_hist, hdef_iter->second.hnamepath);
+			DrawHist(hdef_iter->second.sum_hist, hdef_iter->second.hnamepath,
+				 hdef_iter->second.type);
 			hdef_iter->second.sum_hist_modified = false;	// set flag indicating we've drawn current version
 			canvas->Modified();
 			canvas->Update();
@@ -964,7 +966,9 @@ void rs_mainframe::CreateGUI(void)
 
    // "fGroupFrame750" group frame
    TGGroupFrame *fGroupFrame711 = new TGGroupFrame(fHorizontalFrame1060,"cMsg Info.");
-   TGLabel *fLabel1030 = new TGLabel(fGroupFrame711,"UDL = cMsg://127.0.0.1/cMsg/rootspy");
+   //TGLabel *fLabel1030 = new TGLabel(fGroupFrame711,"UDL = cMsg://127.0.0.1/cMsg/rootspy");
+   string udl_label = "UDL = "+ROOTSPY_UDL;
+   TGLabel *fLabel1030 = new TGLabel(fGroupFrame711,udl_label.c_str());
    fLabel1030->SetTextJustify(36);
    fLabel1030->SetMargins(0,0,0,0);
    fLabel1030->SetWrapLength(-1);
@@ -1169,13 +1173,29 @@ void rs_mainframe::DoOnline(void)
 	SetWindowName("RootSpy - Offline");
 }
 
-void rs_mainframe::DrawHist(TH1 *hist, string hnamepath)
+
+// helper function
+// move this somewhere else?
+static void add_to_draw_hist_args(string &args, string toadd) 
+{
+    if(args == "") 
+	args = toadd;
+    else 
+	args = args + " " + toadd;
+	    
+}
+
+void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
+			    hdef_t::histdimension_t hdim )
 {
     string histdraw_args = "";
     bool overlay_mode = (show_archived_hists->GetState()==kButtonDown);
     
     double hist_line_width = 1.;
 
+    if(hdim == hdef_t::histdimension_t::twoD) {
+	add_to_draw_hist_args(histdraw_args, "COLZ");
+    }
 
     if(overlay_mode && (archive_file!=NULL) ) {
 	// iff we're overlaying histograms, get the one to overlay, scale it to be the same size
@@ -1183,6 +1203,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath)
 	_DBG_<<"trying to get archived histogram: " << hnamepath << endl;
 	TH1 *archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
 	//histdraw_args += "E1";
+	add_to_draw_hist_args(histdraw_args, "E1");
 
 	if(archived_hist) { // only plot it if we can find it
 	    _DBG_<<"found it!"<<endl;
@@ -1193,13 +1214,14 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath)
 	    archived_hist->SetStats(0);
 	    archived_hist->Draw();
 
-	    //hist->SetMarkerStyle(20);
-	    //hist->SetMarkerSize(0.7);
+	    hist->SetMarkerStyle(20);
+	    hist->SetMarkerSize(0.7);
 
 	    //hist->SetLineWidth(2.5);
 	    hist_line_width = 2.5;
 
-	    histdraw_args += "SAME";
+	    //histdraw_args += "SAME";
+	    add_to_draw_hist_args(histdraw_args, "SAME");
 	} else {
 	    _DBG_<<"didn't find it!"<<endl;
 	}

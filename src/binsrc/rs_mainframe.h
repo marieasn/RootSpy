@@ -101,8 +101,8 @@ class rs_mainframe:public TGMainFrame {
 
 	protected:
 			viewStyle_t_rs viewStyle_rs;
-			void DrawHist(TH1 *hist, string hnamepath);
-
+			void DrawHist(TH1 *hist, string hnamepath,
+				      hdef_t::histdimension_t hdim );
 	private:
 	
 		TTimer *timer;

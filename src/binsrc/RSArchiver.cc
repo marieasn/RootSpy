@@ -615,7 +615,7 @@ void *ArchiveFile(void * ptr)
     delete the_servers;
     pthread_rwlock_unlock(ROOT_MUTEX);
     
-    RUN_NUMBER += 1;    // mutex lock?  - not sure this is affected by anywhere else in the code
+    RUN_NUMBER += 1;    // mutex lock, yes, could have multiple runs
 
     // thread is over
 }
