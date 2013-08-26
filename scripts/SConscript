@@ -1,0 +1,11 @@
+#  SConscript for scripts
+#
+#  ejw, 18-apr-2013
+
+
+Import('*')
+from halld_lib import buildScripts
+
+
+#  just install scripts
+buildScripts(scriptEnv)

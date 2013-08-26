@@ -1,0 +1,19 @@
+#  SConscript for test
+#
+#  to customize fill in package dependencies
+#
+#  only installs into local installation dir, not global dir
+#
+#  ejw, 16-apr-2013
+
+
+Import('*')
+from halld_lib import define_dependencies, buildTest
+
+
+#  set package dependencies
+define_dependencies(testEnv,'')
+
+
+#  build programs and scripts into local installation dir only
+buildTest(testEnv)

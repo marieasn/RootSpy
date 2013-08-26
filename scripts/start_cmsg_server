@@ -1,0 +1,8 @@
+#!/bin/tcsh -f 
+
+
+#java -cp $CMSGROOT/jar/cMsg-3.3.jar  org/jlab/coda/cMsg/cMsgDomain/server/cMsgNameServer 
+java -cp $CMSGROOT/jar/cMsg-3.3.jar -DdomainPort=45010  org/jlab/coda/cMsg/cMsgDomain/server/cMsgNameServer 
+
+
+

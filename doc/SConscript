@@ -1,0 +1,11 @@
+#  SConscript for docs
+#
+#  ejw, 18-apr-2013
+
+
+Import('*')
+from halld_lib import buildDoc
+
+
+#  just install files
+buildDoc(docEnv)
