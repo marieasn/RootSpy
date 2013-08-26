@@ -253,12 +253,14 @@ void rs_mainframe::DoTimer(void) {
 		}
 		
 		if(hinfo_it != hdef_iter->second.hists.end() && !hinfo_it->second.hasBeenDisplayed){
-			canvas->cd();		
+		        canvas->cd();		
 			if(hinfo_it->second.hist != NULL) {
 			    //_DBG_ << "Pointer to histogram was not NULL" << endl;
 			    //hinfo_it->second.hist->Draw();
+			    //map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
 			    DrawHist(hinfo_it->second.hist, hinfo_it->second.hnamepath,
-				     hdef_t::histdimension_t::oneD);  // kludge
+				     hdef_iter->second.type);  // kludge
+			    //hdef_t::histdimension_t::oneD);  // kludge
 			} else {
 				//_DBG_ << "Pointer to histogram was NULL" << endl;
 			}

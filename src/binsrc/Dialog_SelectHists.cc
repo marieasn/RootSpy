@@ -442,13 +442,15 @@ void Dialog_SelectHists::CreateGUI(void)
    // vertical frame
    TGVerticalFrame *fVerticalFrame802 = new TGVerticalFrame(fVerticalFrame801,96,42,kVerticalFrame);
    TGRadioButton *fRadioButton803 = new TGRadioButton(fVerticalFrame802,"View By Object");
-   fRadioButton803->SetState(kButtonUp);
+   fRadioButton803->SetState(kButtonDown);
+   //fRadioButton803->SetState(kButtonUp);
    fRadioButton803->SetTextJustify(36);
    fRadioButton803->SetMargins(0,0,0,0);
    fRadioButton803->SetWrapLength(-1);
    fVerticalFrame802->AddFrame(fRadioButton803, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
    TGRadioButton *fRadioButton804 = new TGRadioButton(fVerticalFrame802,"View By Server");
-   fRadioButton804->SetState(kButtonDown);
+   //fRadioButton804->SetState(kButtonDown);
+   fRadioButton804->SetState(kButtonUp);
    fRadioButton804->SetTextJustify(36);
    fRadioButton804->SetMargins(0,0,0,0);
    fRadioButton804->SetWrapLength(-1);
