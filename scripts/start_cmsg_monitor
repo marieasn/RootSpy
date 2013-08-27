@@ -1,3 +1,0 @@
-#!/bin/tcsh -f 
-
-java org/jlab/coda/cMsg/cMsgDomain/cMsgMonitor/Monitor
