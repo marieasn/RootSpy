@@ -257,10 +257,8 @@ void rs_mainframe::DoTimer(void) {
 			if(hinfo_it->second.hist != NULL) {
 			    //_DBG_ << "Pointer to histogram was not NULL" << endl;
 			    //hinfo_it->second.hist->Draw();
-			    //map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
 			    DrawHist(hinfo_it->second.hist, hinfo_it->second.hnamepath,
-				     hdef_iter->second.type);  // kludge
-			    //hdef_t::histdimension_t::oneD);  // kludge
+				     hdef_iter->second.type);  
 			} else {
 				//_DBG_ << "Pointer to histogram was NULL" << endl;
 			}
@@ -1187,6 +1185,7 @@ static void add_to_draw_hist_args(string &args, string toadd)
 	    
 }
 
+// wrapper for histogram drawing
 void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 			    hdef_t::histdimension_t hdim )
 {
@@ -1195,39 +1194,46 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
     
     double hist_line_width = 1.;
 
+    // handle drawing 2D histograms differently
+    // probably don't want to overlay them
     if(hdim == hdef_t::histdimension_t::twoD) {
 	add_to_draw_hist_args(histdraw_args, "COLZ");
+    } else {
+
+	if(overlay_mode && (archive_file!=NULL) ) {
+	    // iff we're overlaying histograms, get the one to overlay, scale it to be the same size
+	    // then plot it
+	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
+	    TH1 *archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
+	    //histdraw_args += "E1";
+	    
+	    if(archived_hist) { 
+		// only plot the archived histogram if we can find it
+		_DBG_<<"found it!"<<endl;
+		
+		// we want to compare just the shape of the archived histogram
+		archived_hist->SetStats(0);
+		archived_hist->Scale( hist->Integral()/archived_hist->Integral() );
+		
+		// draw archived histograms with shading
+		archived_hist->SetFillColor(5);
+		archived_hist->Draw();
+		
+		// draw the current histogram with points/error bars
+		hist->SetMarkerStyle(20);
+		hist->SetMarkerSize(0.7);
+		
+		//histdraw_args += "SAME";
+		add_to_draw_hist_args(histdraw_args, "E1");
+		add_to_draw_hist_args(histdraw_args, "SAME");
+
+		//hist_line_width = 2.5;		
+	    } else {
+		_DBG_<<"didn't find it!"<<endl;
+	    }
+	} 
+
     }
-
-    if(overlay_mode && (archive_file!=NULL) ) {
-	// iff we're overlaying histograms, get the one to overlay, scale it to be the same size
-	// then plot it
-	_DBG_<<"trying to get archived histogram: " << hnamepath << endl;
-	TH1 *archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
-	//histdraw_args += "E1";
-	add_to_draw_hist_args(histdraw_args, "E1");
-
-	if(archived_hist) { // only plot it if we can find it
-	    _DBG_<<"found it!"<<endl;
-
-	    archived_hist->Scale( hist->Integral()/archived_hist->Integral() );
-
-	    archived_hist->SetFillColor(5);
-	    archived_hist->SetStats(0);
-	    archived_hist->Draw();
-
-	    hist->SetMarkerStyle(20);
-	    hist->SetMarkerSize(0.7);
-
-	    //hist->SetLineWidth(2.5);
-	    hist_line_width = 2.5;
-
-	    //histdraw_args += "SAME";
-	    add_to_draw_hist_args(histdraw_args, "SAME");
-	} else {
-	    _DBG_<<"didn't find it!"<<endl;
-	}
-    } 
 
 
     hist->SetLineWidth(hist_line_width);

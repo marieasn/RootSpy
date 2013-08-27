@@ -48,7 +48,8 @@ Dialog_SelectHists::Dialog_SelectHists(const TGWindow *p, UInt_t w, UInt_t h):TG
 	last_ping_time = now;
 	last_hist_time = now;
 	
-	viewStyle = rs_info::kViewByServer;
+	//viewStyle = rs_info::kViewByServer;
+	viewStyle = rs_info::kViewByObject;
 	
 	DoTimer();
 
