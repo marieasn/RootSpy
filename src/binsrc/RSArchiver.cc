@@ -180,7 +180,7 @@ void MainLoop()
 	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
 	    server_it != RS_INFO->servers.end(); server_it++) {
 	    RS_CMSG->RequestHists(server_it->first);
-	    RS_CMSG->RequestTreeInfo(server_it->first);
+	    //RS_CMSG->RequestTreeInfo(server_it->first);
 	}
 
 
@@ -193,12 +193,14 @@ void MainLoop()
 		hist_it != server_it->second.hnamepaths.end(); hist_it++) {
 		RS_CMSG->RequestHistogram(server_it->first, *hist_it);
 	    }
-
+	    
+	    /*
 	    // get/save current status of trees
 	    for(vector<tree_info_t>::const_iterator tree_it = server_it->second.trees.begin();
 		tree_it != server_it->second.trees.end(); tree_it++) {
 		RS_CMSG->RequestTree(server_it->first, tree_it->name, tree_it->path);
 	    }
+	    */
 	}
 	
 
