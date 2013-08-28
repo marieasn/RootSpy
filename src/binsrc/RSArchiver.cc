@@ -178,17 +178,31 @@ void MainLoop()
 	RS_INFO->Lock();
 	// update list of histograms
 	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
-	    server_it != RS_INFO->servers.end(); server_it++)
+	    server_it != RS_INFO->servers.end(); server_it++) {
 	    RS_CMSG->RequestHists(server_it->first);
+	    RS_CMSG->RequestTreeInfo(server_it->first);
+	}
 
-	// get/save current histogram versions
+
+	// get/save information
 	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
-	    server_it != RS_INFO->servers.end(); server_it++)
-	    for(vector<string>::const_iterator hist_it = server_it->second.hnamepaths.begin();
-		hist_it != server_it->second.hnamepaths.end(); hist_it++)
-		RS_CMSG->RequestHistogram(server_it->first, *hist_it);
+	    server_it != RS_INFO->servers.end(); server_it++) {
 
+	    // get/save current histogram versions
+	    for(vector<string>::const_iterator hist_it = server_it->second.hnamepaths.begin();
+		hist_it != server_it->second.hnamepaths.end(); hist_it++) {
+		RS_CMSG->RequestHistogram(server_it->first, *hist_it);
+	    }
+
+	    // get/save current status of trees
+	    for(vector<tree_info_t>::const_iterator tree_it = server_it->second.trees.begin();
+		tree_it != server_it->second.trees.end(); tree_it++) {
+		RS_CMSG->RequestTree(server_it->first, tree_it->name, tree_it->path);
+	    }
+	}
 	
+
+
 	// save current state of summed histograms
 	pthread_rwlock_wrlock(ROOT_MUTEX);
 	RS_INFO->sum_dir->ls();
@@ -236,7 +250,6 @@ void MainLoop()
 		    //_DBG_ << "sending request to" << server_it->first.serverName 
 		    _DBG_ << "sending request to" << server_it->first 
 			  << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
-
 
 		    RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
 		}		
@@ -489,6 +502,13 @@ void *ArchiveFile(void * ptr)
 
 	_DBG_<<" number of servers left = "<<the_servers->size()
 	     <<" number of queued messages = "<<RS_INFO->final_hists.size()<<endl;
+	cout << "we are still waiting on these servers: ";
+	for( map<string,server_info_t>::iterator server_itr = the_servers->begin();
+	     server_itr!=the_servers->end(); server_itr++) { 
+	    cout << server_itr->first << " ";
+	}
+	cout << endl;
+
 	
 	//for(deque<cMsgMessage>::iterator it_cmsg = RS_INFO->final_messages.begin();
 	//it_cmsg != RS_INFO->final_messages.end(); it_cmsg++) {
