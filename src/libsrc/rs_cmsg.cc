@@ -16,6 +16,7 @@ using namespace std;
 #include <TDirectoryFile.h>
 #include <TMessage.h>
 #include <TH1.h>
+#include <TTree.h>
 
 #include "RootSpy.h"
 #include "rs_cmsg.h"
@@ -145,6 +146,21 @@ void rs_cmsg::RequestTreeInfo(string servername)
 }
 
 //---------------------------------
+// RequestTree
+//---------------------------------
+void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path)
+{
+	cMsgMessage requestTree;
+	requestTree.setSubject(servername);
+	requestTree.setType(myname);
+	requestTree.setText("get tree");
+	requestTree.add("tree_name", tree_name);
+	requestTree.add("tree_path", tree_path);
+
+	cMsgSys->send(&requestTree);
+}
+
+//---------------------------------
 // FinalHistogram
 //---------------------------------
 void rs_cmsg::FinalHistogram(string servername, vector<string> hnamepaths)
@@ -213,10 +229,17 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		RegisterHistogram(sender, msg);
 		handled_message = true;
 	}
+	//===========================================================
 	if(cmd == "tree info") {
 		RegisterTreeInfo(sender, msg);
 		handled_message = true;
 	}
+	//===========================================================
+	if(cmd == "tree") {
+		RegisterTree(sender, msg);
+		handled_message = true;
+	}
+	//===========================================================
 	if(cmd=="final hists"){  // save histograms
 	    _DBG_<<"received final histograms..."<<endl;
 	    RegisterFinalHistogram(sender, msg);
@@ -335,8 +358,11 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 		if(veciter->name.compare(name) == 0) duplicate = true;
 	}
 	if(!duplicate) {
-		rs_trees.push_back(tree_info_t(server, name, path, branch_info));
-	}
+	    // assume that branches are defined at initialization
+	    // and don't change during running
+	    _DBG_ << "tree info from " << server << " Tree " << name << " in " << path << endl;
+	    rs_trees.push_back(tree_info_t(server, name, path, branch_info));
+	} 
 	RS_INFO->Unlock();
 
 	//Test: check RS_INFO for trees
@@ -353,6 +379,114 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 //		}
 //	}
 //	RS_INFO->Unlock();
+}
+
+//---------------------------------
+// RegisterTree
+//---------------------------------
+//TODO: documentation comment.
+// Note that we only store tree info on a server-by-server basis,
+// so this simplifies the code
+void rs_cmsg::RegisterTree(string server, cMsgMessage *msg) 
+{
+
+    RS_INFO->Lock();
+
+    string name = msg->getString("tree_name");
+    string path = msg->getString("tree_path");
+
+    //_DBG_ << "got the following tree from " << server << ": " << name << " from " << path << endl;
+
+    // Get pointer to server_info_t
+    map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
+    if(server_info_iter==RS_INFO->servers.end()){
+	_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
+	_DBG_<<"Throwing away tree."<<endl;
+	RS_INFO->Unlock();
+	return;
+    }
+    server_info_t *server_info = &(server_info_iter->second);
+
+    
+    // Get pointer to tree_info_t
+    tree_info_t *tree_info = NULL;
+
+    vector<tree_info_t> &rs_trees = RS_INFO->servers[server].trees;
+    vector<tree_info_t>::iterator treeinfo_iter = rs_trees.begin();
+    for(; treeinfo_iter != rs_trees.end(); treeinfo_iter ++) {
+	if(treeinfo_iter->name.compare(name) == 0) 
+	    break;
+    }
+    if(treeinfo_iter==rs_trees.end()){
+	// tree_info_t object doesn't exist - add it
+	vector<string> branch_info = *(msg->getStringVector("branch_info"));
+	rs_trees.push_back(tree_info_t(server, name, path, branch_info));
+
+	// get the pointer
+	tree_info = &(rs_trees.back());
+    } else {
+	tree_info = &(*treeinfo_iter);
+    }
+
+
+    /**
+    
+    tree_id_t tree_id(server, name, path);
+    vector<tree_info_t>::iterator treeinfo_iter = RS_INFO->trees.find(tree_id_t);
+    if(treeinfo_iter==RS_INFO->trees.end()){
+	// tree_info_t object doesn't exist. Add one to RS_INFO
+	RS_INFO->hinfos[hid] = hinfo_t(server, hnamepath); //???
+	hinfo_iter = RS_INFO->hinfos.find(hid); //???
+    }
+    tree_info = &(*treeinfo_iter);
+    **/
+
+
+    // Get ROOT object from message and cast it as a TNamed*
+    pthread_rwlock_wrlock(ROOT_MUTEX);
+
+    _DBG_ << "unpacking tree..." << endl;
+
+    MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
+    TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
+    if(!namedObj){
+	_DBG_<<"No valid object returned in histogram message."<<endl;
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	RS_INFO->Unlock();
+	return;
+    }
+    
+    // Cast this as a histogram pointer
+    TTree *T = dynamic_cast<TTree*>(namedObj);
+    if(!T){
+	_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TTree type"<<endl;
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	RS_INFO->Unlock();
+	return;
+    }
+    
+    //_DBG_ << "unpacked tree!" << endl;
+    //T->Print();
+
+    // Update tree_info
+    tree_info->received = time(NULL);
+    if(tree_info->tree){
+	// Delete old histo
+	delete tree_info->tree;
+	tree_info->tree = NULL;
+    }
+    // update branch info?
+
+    // Set pointer to hist in hinfo to new histogram
+    tree_info->tree = T;
+    
+    // Change ROOT TDirectory of new histogram to server's
+    tree_info->tree->SetDirectory(server_info->dir);
+    
+
+    // Unlock mutexes
+    pthread_rwlock_unlock(ROOT_MUTEX);
+    RS_INFO->Unlock();
 }
 
 //---------------------------------

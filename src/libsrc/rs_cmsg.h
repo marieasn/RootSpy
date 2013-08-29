@@ -28,6 +28,7 @@ class rs_cmsg:public cMsgCallback{
 		void RequestHistogram(string servername, string hnamepath);
 		void FinalHistogram(string servername, vector<string> hnamepath);
 		void RequestTreeInfo(string servername);
+		void RequestTree(string servername, string tree_name, string tree_path);
 
 		bool IsOnline() { return is_online; }
 		
@@ -38,6 +39,7 @@ class rs_cmsg:public cMsgCallback{
 		void RegisterHistogram(string server, cMsgMessage *msg);
 		void RegisterFinalHistogram(string server, cMsgMessage *msg);
 		void RegisterTreeInfo(string server, cMsgMessage *msg);
+		void RegisterTree(string server, cMsgMessage *msg);
 
 	private:
 		cMsg *cMsgSys;

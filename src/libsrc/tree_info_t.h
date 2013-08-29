@@ -13,6 +13,7 @@
 #include <map>
 #include <TDirectory.h>
 #include <TH1.h>
+#include <TTree.h>
 #include <string>
 
 using namespace std;
@@ -42,15 +43,15 @@ class tree_id_t{
 		string name;
 		string path;
 
-		bool operator==(const tree_id_t &h) const {
-			return h.tnamepath==tnamepath && h.servername==servername;
+		bool operator==(const tree_id_t &T) const {
+			return T.tnamepath==tnamepath && T.servername==servername;
 		}
-		bool operator!=(const tree_id_t &h) const {
-			return !((*this)==h);
+		bool operator!=(const tree_id_t &T) const {
+			return !((*this)==T);
 		}
-		bool operator<(const tree_id_t &h) const {
-			if(h.servername==servername)return h.tnamepath<tnamepath;
-			return h.servername<servername;
+		bool operator<(const tree_id_t &T) const {
+			if(T.servername==servername)return T.tnamepath<tnamepath;
+			return T.servername<servername;
 		}
 };
 
@@ -60,30 +61,30 @@ class tree_info_t:public tree_id_t{
 		tree_info_t(string server, string name, string path, vector<string> &branch_info):
 			tree_id_t(server, name, path){
 				received = 0;
-				hist = NULL;
-				active = true;
-				hasBeenDisplayed = false;
+				tree = NULL;
+				//active = true;
+				//hasBeenDisplayed = false;
 				isDisplayed = false;
 				this->branch_info = branch_info;
 		}
 
 		tree_info_t():tree_id_t("", "", ""){
 			received = 0;
-			hist = NULL;
-			active = false;
-			hasBeenDisplayed = false;
+			tree = NULL;
+			//active = false;
+			//hasBeenDisplayed = false;
 			isDisplayed = false;
 		}
 
-		bool operator== (const tree_info_t& hi);
+		bool operator== (const tree_info_t& T);
 
 		time_t received;
-		TH1* hist;
+		TTree* tree;
 
-		bool active;					// sees if the histogram is usable
-		bool hasBeenDisplayed;		// makes sure that each hist is not displayed more than once
+		//bool active;					// sees if the histogram is usable
+		//bool hasBeenDisplayed;		// makes sure that each hist is not displayed more than once
 
-		vector<string> branch_info;
+		vector<string> branch_info;  // make sure this is filled?
 
 		bool getDisplayed() {return isDisplayed;}
 		void setDisplayed(bool newDisplay) {isDisplayed = newDisplay;}
