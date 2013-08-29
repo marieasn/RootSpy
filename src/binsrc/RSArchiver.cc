@@ -62,6 +62,128 @@ static bool FINALIZE = false;
 static vector<pthread_t> thread_ids;
 
 
+// ---------------------------------------------------------------------------------
+
+
+
+class rs_archiver : public RunObject {
+
+public:
+  rs_archiver(const string& UDL, const string& name, const string& descr, const string &theSession) : 
+    RunObject(UDL,name,descr) {
+
+    cout << "rs_archiver constructor called" << endl;
+
+    // set session if specified
+    if(!theSession.empty())handleSetSession(theSession);
+  }
+
+
+//-----------------------------------------------------------------------------
+
+
+  ~rs_archiver(void) throw() override {
+    DONE=true;
+  }
+  
+  
+//-----------------------------------------------------------------------------
+
+/*
+  bool userConfigure(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userDownload(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userPrestart(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+
+  bool userGo(const string& s) throw(CodaException) override {
+      //PAUSED=false;
+    RUN_IN_PROGRESS=true;
+    return(true);
+  }
+
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userPause(const string& s) throw(CodaException) override {
+    paused=true;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userResume(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+
+  bool userEnd(const string& s) throw(CodaException) override {
+      //paused=false;
+      RUN_IN_PROGRESS=false;
+      return(true);
+  }
+
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userReset(const string& s) throw(CodaException) override {
+    paused=false;
+    run_in_progress=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+
+  void exit(const string& s) throw(CodaException) override {
+    cout << "rs_archiver received exit command" << endl;
+    RUN_IN_PROGRESS=false;
+    DONE=true;
+  }
+  
+
+//-----------------------------------------------------------------------------
+
+
+  void userMsgHandler(cMsgMessage *msgp, void *userArg) throw(CodaException) override {
+    unique_ptr<cMsgMessage> msg(msgp);
+    cerr << "?et2evio...received unknown message subject,type: "
+         << msg->getSubject() << "," << msg->getType() << endl << endl;
+  }
+
+};
+
+//-----------------------------------------------------------------------------
 
 
 void MainLoop();
@@ -152,12 +274,12 @@ int main(int narg, char *argv[])
 
     // set session name
     if(SESSION.empty()) SESSION="halldsession";
-    /*
+    
     // connect to run management system
-    et2evio c(DAQ_UDL, NAME, "RSArchiver", SESSION);
+    rs_archiver c(DAQ_UDL, NAME, "RSArchiver", SESSION);
     c.startProcessing();
     cout << "Process startup:  " << NAME << " in session " << SESSION <<endl;
-    */
+    
     if(FORCE_START)
 	RUN_IN_PROGRESS = true;
 
@@ -226,12 +348,13 @@ void MainLoop()
 		hist_it != server_it->second.hnamepaths.end(); hist_it++) {
 		RS_CMSG->RequestHistogram(server_it->first, *hist_it);
 	    }
-	    
+	    /*
 	    // get/save current status of trees
 	    for(vector<tree_info_t>::const_iterator tree_it = server_it->second.trees.begin();
 		tree_it != server_it->second.trees.end(); tree_it++) {
 		RS_CMSG->RequestTree(server_it->first, tree_it->name, tree_it->path);
 	    }
+	    */
 	}
 	
 
@@ -240,7 +363,7 @@ void MainLoop()
 	pthread_rwlock_wrlock(ROOT_MUTEX);
 	RS_INFO->sum_dir->ls();
 
-	SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
+	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
 
 	pthread_rwlock_unlock(ROOT_MUTEX);
