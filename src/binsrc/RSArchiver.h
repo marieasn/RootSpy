@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <memory>
 using namespace std;
 
 
@@ -26,7 +27,6 @@ extern pthread_rwlock_t *ROOT_MUTEX;
 
 // class for communication with CODA
 #include <RunObject.hxx>
-using namespace evio;
 using namespace codaObject;
 
 

@@ -22,26 +22,28 @@
 #include "RSArchiver.h"
 #include "rs_cmsg.h"
 #include "rs_info.h"
-#include "rs_mainframe.h"
+//#include "rs_mainframe.h"
 
 
 // GLOBALS
 // should set a namespace for these?
-rs_mainframe *RSMF = NULL;
+//rs_mainframe *RSMF = NULL;
 rs_cmsg *RS_CMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
 
 // configuration variables
-static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
-static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
+//static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
+//static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
+static string DAQ_UDL = "cMsg://gluon44/cMsg";                // for testing
+static string ROOTSPY_UDL = "cMsg://gluon44/cMsg/rootspy";    // for testing
 static string CMSG_NAME = "<not set here. see below>";
 static string OUTPUT_FILENAME = "current_run.root";
 
 static TFile *CURRENT_OUTFILE = NULL;
 static double POLL_DELAY = 30;   // time between polling runs, default 1 min?
 //const double MIN_POLL_DELAY = 10;
-const double MIN_POLL_DELAY = 5;
+const double MIN_POLL_DELAY = 0;
 
 // run management
 //bool KEEP_RUNNING = true;
@@ -52,7 +54,7 @@ static bool RUN_IN_PROGRESS = false;
 static  int RUN_NUMBER = 1;
 //string ARCHIVE_PATHNAME = "/u/home/sdobbs/test_archives";  // DEFAULT FOR TESTING
 static string ARCHIVE_PATHNAME = "<nopath>";
-static string NAME = "RSArchiver";
+//static string NAME = "RSArchiver";
 static string SESSION = "";
 
 // communication variables
@@ -147,6 +149,8 @@ public:
 
   bool userEnd(const string& s) throw(CodaException) override {
       //paused=false;
+    cout << "rs_archiver received end run command" << endl;
+      FINALIZE=true;
       RUN_IN_PROGRESS=false;
       return(true);
   }
@@ -186,7 +190,7 @@ public:
 //-----------------------------------------------------------------------------
 
 
-void MainLoop();
+void MainLoop(rs_archiver &c);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
 void SaveDirectory( TDirectory *the_dir, TFile *the_file );
@@ -198,7 +202,8 @@ void signal_stop_handler(int signum);
 void signal_switchfile_handler(int signum);
 void signal_finalize_handler(int signum);
 
-void *ArchiveFile(void * ptr);
+//void *ArchiveFile(void * ptr);
+void ArchiveFile(int run_number, map<string,server_info_t> *the_servers );
 
 bool IsGoodTFile(TFile *the_file)
 {
@@ -266,7 +271,9 @@ int main(int narg, char *argv[])
     char hostname[256];
     gethostname(hostname, 256);
     char str[512];
-    sprintf(str, "RootSpy Archiver %s-%d", hostname, getpid());
+    //sprintf(str, "RootSpy Archiver %s-%d", hostname, getpid());
+    //sprintf(str, "RSArchiver_%d", getpid());
+    sprintf(str, "RSArchiver");
     CMSG_NAME = string(str);
     cout << "Full UDL is " << ROOTSPY_UDL << endl;
     RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
@@ -276,15 +283,15 @@ int main(int narg, char *argv[])
     if(SESSION.empty()) SESSION="halldsession";
     
     // connect to run management system
-    rs_archiver c(DAQ_UDL, NAME, "RSArchiver", SESSION);
+    rs_archiver c(DAQ_UDL, CMSG_NAME, "RSArchiver", SESSION);
     c.startProcessing();
-    cout << "Process startup:  " << NAME << " in session " << SESSION <<endl;
+    cout << "Process startup:  " << CMSG_NAME << " in session " << SESSION <<endl;
     
     if(FORCE_START)
 	RUN_IN_PROGRESS = true;
 
     //  regularly poll servers for new histograms
-    MainLoop();
+    MainLoop(c);
 
 
     // clean up and write out the current state of the summed histograms to a file
@@ -292,6 +299,7 @@ int main(int narg, char *argv[])
     cout << "Write all the histograms out..." << endl; 
 
     // dump summed histograms to file
+    // we get stuck here sometimes, on dieing
     pthread_rwlock_wrlock(ROOT_MUTEX);
 
     RS_INFO->Lock();
@@ -303,7 +311,7 @@ int main(int narg, char *argv[])
 
 
     delete RS_CMSG;
-    delete RSMF;
+    // delete RSMF;
     
     return 0;
 }
@@ -312,11 +320,55 @@ int main(int narg, char *argv[])
 //-----------
 // MainLoop
 //-----------
-void MainLoop()
+void MainLoop(rs_archiver &c)
 {
+  //time_t time_last_run = time(NULL);	
+
     while(!DONE) {
 	
 	cout << "Running main event loop..." << endl;
+
+
+	_DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
+	
+	// keeps the connections alive, and keeps the list of servers up-to-date
+	RS_CMSG->PingServers();
+	
+	// End-of-run logic
+	if(FINALIZE) {
+	  _DBG_ << "in finalize logic..." << endl;
+
+	  RS_INFO->Lock();
+	  //pthread_t the_thread; 
+	  
+	  // ask each server for their "final" histograms
+	  for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
+	      server_it != RS_INFO->servers.end(); server_it++) {
+	    // don't ask for zero histograms, it will crash cMsg
+	    if( server_it->second.hnamepaths.size() == 0 ) continue;
+	    
+	    //_DBG_ << "sending request to" << server_it->first.serverName 
+	    _DBG_ << "sending request to" << server_it->first 
+		  << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
+	    
+	    RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
+	  }		
+	  
+	  map<string,server_info_t> *current_servers = new map<string,server_info_t>(RS_INFO->servers);
+
+	  RS_INFO->Unlock();
+		
+	  
+	  // make a thread to handle collecting the final histograms
+	  //pthread_create(&the_thread, NULL, ArchiveFile, 
+	  //new map<string,server_info_t>(RS_INFO->servers) ); 
+	  //thread_ids.push_back(the_thread);
+	  
+	  ArchiveFile( c.getRunNumber(), current_servers );
+		
+	  //RUN_NUMBER += 1;    // mutex lock?
+	  FINALIZE=false;
+	}
 
 	if(!RUN_IN_PROGRESS) {
 	    _DBG_ << "no current run, sleeping..." << endl;
@@ -324,18 +376,14 @@ void MainLoop()
 	    continue;
 	}
 
-	_DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
 	
-	// keeps the connections alive, and keeps the list of servers up-to-date
-	RS_CMSG->PingServers();
-
-
+	// Okay, we are running, let's do stuff
 	RS_INFO->Lock();
 	// update list of histograms
 	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
 	    server_it != RS_INFO->servers.end(); server_it++) {
 	    RS_CMSG->RequestHists(server_it->first);
-	    RS_CMSG->RequestTreeInfo(server_it->first);
+	    //RS_CMSG->RequestTreeInfo(server_it->first);
 	}
 
 
@@ -368,8 +416,13 @@ void MainLoop()
 
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
-    
 
+
+	// sleep for awhile
+	sleep(POLL_DELAY);
+
+
+	/**
 	// make sure we sleep for the full amount even if we get hit with a signal
 	// so that we can use signals to test begin/end run behavior
 	// NOTE that we should really do this with cMsg, or something like that, 
@@ -379,65 +432,24 @@ void MainLoop()
 
 	while(now < start_time+POLL_DELAY) {  
 
+	  //if( FINALIZE || !RUN_IN_PROGRESS ) break;
+	  if( !RUN_IN_PROGRESS ) {
+	    _DBG_ << "dropping out of sleep loop!" << endl;
+	    break;
+	  }
+
 	    // handle signals
 
 	    // time to end the run, save the current file, and start a new one
 	    // This should also be moved to a cMsg handler at some point
-	    // more for testing, probably don't need this anymore
-	    /*
-	    if(SWITCH_FILES) {
-		RS_INFO->Lock();
-		WriteArchiveFile( RS_INFO->sum_dir );
-		RS_INFO->Unlock();
-		
-		RUN_NUMBER += 1;    // mutex lock?
-		SWITCH_FILES=false;
-	    }
-	    */
-	    
-	    // End-of-run logic
-	    if(FINALIZE) {
-		RS_INFO->Lock();
-		pthread_t the_thread; 
-		
-		// ask each server for their "final" histograms
-		for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
-		    server_it != RS_INFO->servers.end(); server_it++) {
-		    // don't ask for zero histograms, it will crash cMsg
-		    if( server_it->second.hnamepaths.size() == 0 ) continue;
-
-		    //_DBG_ << "sending request to" << server_it->first.serverName 
-		    _DBG_ << "sending request to" << server_it->first 
-			  << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
-
-		    RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
-		}		
-		// make a thread to handle collecting the final histograms
-		pthread_create(&the_thread, NULL, ArchiveFile, 
-			       new map<string,server_info_t>(RS_INFO->servers) ); 
-		thread_ids.push_back(the_thread);
-		RS_INFO->Unlock();
-		
-		//RUN_NUMBER += 1;    // mutex lock?
-		FINALIZE=false;
-	    }
-
+	    // more for testing, probably don't need this anymore	    
 
 	    sleep(POLL_DELAY - (now-start_time));
 	    now = time(NULL);
 	    
-	    /*
-	    if(DONE) {
-		// for testing...
-		for(vector<pthread_t>::iterator tid_it=thread_ids.begin();
-		    tid_it!=thread_ids.end(); tid_it++) {
-		    pthread_cancel(*tid_it);
-		}
-		
-		break;
+	    
 	    }
-	    */
-	}
+	**/
     }
 }
 
@@ -450,6 +462,8 @@ void signal_stop_handler(int signum)
     // let main loop know that it's time to stop
     //KEEP_RUNNING = false;
     DONE = true;
+
+    //pthread_rwlock_unlock(ROOT_MUTEX);   // is this okay??
 }
 
 /*
@@ -492,6 +506,13 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 		cerr<<"-u option requires an argument"<<endl;
 	    }else{
 		ROOTSPY_UDL = argv[i+1];
+	    }
+	    break;
+	case 'q':
+	    if(i>=(narg-1)){
+		cerr<<"-q option requires an argument"<<endl;
+	    }else{
+		DAQ_UDL = argv[i+1];
 	    }
 	    break;
 	case 'n':
@@ -554,9 +575,11 @@ void Usage(void)
     cout<<"Options:"<<endl;
     cout<<endl;
     cout<<"   -h        Print this message"<<endl;
-    cout<<"   -u udl    UDL of cMsg server (def. "<<ROOTSPY_UDL<<")"<<endl;
+    cout<<"   -u udl    UDL of cMsg RootSpy server (def. "<<ROOTSPY_UDL<<")"<<endl;
+    cout<<"   -q udl    UDL of cMsg CODA server (def. "<<DAQ_UDL<<")"<<endl;
     cout<<"   -n name   Specify name this program registers with cMsg server"<<endl;
     cout<<"             (def. "<<CMSG_NAME<<")"<<endl;
+    cout<<"   -force    Start assuming run is already in progress"<<endl;
     cout<<"   -A path   Root directory of archives (def. ?)" <<endl;
     cout<<"   -f fn     Name of ROOT file to store cumulative output in"
 	<<"(def. "<<OUTPUT_FILENAME<<")"<<endl;
@@ -690,11 +713,12 @@ void SaveTrees( TDirectoryFile *the_file )
 
 // function for saving end-of-run histograms
 // use server info map to keep track of which histograms we're waiting for
-void *ArchiveFile(void * ptr) 
+//void *ArchiveFile(void * ptr) 
+void ArchiveFile(int run_number, map<string,server_info_t> *the_servers) 
 {
     // map of the set of servers and histograms that we want to save
     // should have already been allocated before starting the thread
-    map<string,server_info_t> *the_servers = static_cast< map<string,server_info_t> *>(ptr);
+  //map<string,server_info_t> *the_servers = static_cast< map<string,server_info_t> *>(ptr);
     const int FINAL_TIMEOUT = 600;   // only wait 5 minutes for everyone to report in
 
     _DBG_<<"Starting in ArchiveFile()..."<<endl;
@@ -710,13 +734,15 @@ void *ArchiveFile(void * ptr)
 
     // make file and directory to save histograms in
     stringstream ss;
-    ss << ARCHIVE_PATHNAME << "/" << "run" << RUN_NUMBER << "_output.root";
+    //ss << ARCHIVE_PATHNAME << "/" << "run" << RUN_NUMBER << "_output.root";
+    ss << ARCHIVE_PATHNAME << "/" << "run" << run_number << "_output.root";
     
     pthread_rwlock_wrlock(ROOT_MUTEX);
     TFile *archive_file = new TFile(ss.str().c_str(), "create");
     if(!IsGoodTFile(archive_file)) {
 	delete the_servers;
-	return NULL;
+	return;
+	//return NULL;
     }
     
     //TDirectory *out_dir = archive_file->mkdir("rootspy", ""); // don't need this?

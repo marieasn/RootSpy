@@ -136,7 +136,7 @@ void rs_mainframe::DoTimer(void) {
 	//if (can_view_indiv) indiv->SetEnabled(kTRUE);
 	//else indiv->SetEnabled(kFALSE);
 
-    // disable whole timer routine if we're not connected to cMsg? - sdobbs, 4/22/2013
+  // disable whole timer routine if we're not connected to cMsg? - sdobbs, 4/22/2013
         if(!RS_CMSG->IsOnline())
 	    return;
 
