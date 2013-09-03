@@ -1,0 +1,28 @@
+#  SConscript for binsrc
+#
+#  to customize fill in package dependencies
+#
+#  ejw, 16-apr-2013
+
+
+Import('*')
+from halld_lib import define_dependencies, buildBin
+
+
+#  define package dependencies
+define_dependencies(binEnv,'root codaobject')
+
+
+#  build programs
+buildBin(binEnv)
+
+
+#prog = binEnv.Program(target='RSArchiver', source=['RSArchiver.cc'])
+#binEnv.Alias("install", binEnv.Install(binEnv['install_dir']+"/bin",prog))
+#binEnv.Default(prog)
+            
+#rootspy_source = [ 'Dialog_IndivHists.cc',       'Dialog_SelectHists.cc',       'RootSpy.cc', 'Dialog_IndivHists_Dict.cc',  'Dialog_SelectHists_Dict.cc', 'Dialog_SaveHists.cc',  'Dialog_SelectTree.cc',  'rs_mainframe.cc', 'Dialog_SaveHists_Dict.cc',   'Dialog_SelectTree_Dict.cc',   'rs_mainframe_Dict.cc' ]
+
+#prog = binEnv.Program(target='RootSpy', source=rootspy_source)
+#binEnv.Alias("install", binEnv.Install(binEnv['install_dir']+"/bin",prog))
+#binEnv.Default(prog)
