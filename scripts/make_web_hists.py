@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 #from sys import exit
 import sys
 from os import mkdir,path
