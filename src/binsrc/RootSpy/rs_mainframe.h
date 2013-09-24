@@ -2,6 +2,7 @@
 #ifndef _RS_MAINFRAME_H_
 #define _RS_MAINFRAME_H_
 
+
 // This class is made into a ROOT dictionary ala rootcint.
 // Therefore, do NOT include anything Hall-D specific here.
 // It is OK to do that in the .cc file, just not here in the 

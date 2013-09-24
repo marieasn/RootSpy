@@ -24,7 +24,6 @@
 #include "rs_info.h"
 //#include "rs_mainframe.h"
 
-
 // GLOBALS
 // should set a namespace for these?
 //rs_mainframe *RSMF = NULL;
@@ -33,10 +32,10 @@ rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
 
 // configuration variables
-//static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
-//static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
-static string DAQ_UDL = "cMsg://gluon44/cMsg";                // for testing
-static string ROOTSPY_UDL = "cMsg://gluon44/cMsg/rootspy";    // for testing
+static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
+static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
+//static string DAQ_UDL = "cMsg://gluon44/cMsg";                // for testing
+//static string ROOTSPY_UDL = "cMsg://gluon44/cMsg/rootspy";    // for testing
 static string CMSG_NAME = "<not set here. see below>";
 static string OUTPUT_FILENAME = "current_run.root";
 
@@ -45,13 +44,21 @@ static double POLL_DELAY = 30;   // time between polling runs, default 1 min?
 //const double MIN_POLL_DELAY = 10;
 const double MIN_POLL_DELAY = 0;
 
-// run management
-//bool KEEP_RUNNING = true;
-static bool DONE = false;
-static bool FORCE_START = false;
-static bool RUN_IN_PROGRESS = false;
+// run management 
 
-static  int RUN_NUMBER = 1;
+//bool KEEP_RUNNING = true;
+static bool FORCE_START = false;
+
+//static bool DONE = false;
+//static bool RUN_IN_PROGRESS = false;
+//static  int RUN_NUMBER = 1;
+//static bool FINALIZE = false;
+
+bool DONE = false;
+bool RUN_IN_PROGRESS = false;
+// int RUN_NUMBER = 1;
+bool FINALIZE = false;
+
 //string ARCHIVE_PATHNAME = "/u/home/sdobbs/test_archives";  // DEFAULT FOR TESTING
 static string ARCHIVE_PATHNAME = "<nopath>";
 //static string NAME = "RSArchiver";
@@ -59,135 +66,15 @@ static string SESSION = "";
 
 // communication variables
 //static bool SWITCH_FILES = false;
-static bool FINALIZE = false;
+//static bool FINALIZE = false;
 
 static vector<pthread_t> thread_ids;
 
-
 // ---------------------------------------------------------------------------------
 
+#include "rs_archiver_runcontrol.h"
 
-
-class rs_archiver : public RunObject {
-
-public:
-  rs_archiver(const string& UDL, const string& name, const string& descr, const string &theSession) : 
-    RunObject(UDL,name,descr) {
-
-    cout << "rs_archiver constructor called" << endl;
-
-    // set session if specified
-    if(!theSession.empty())handleSetSession(theSession);
-  }
-
-
-//-----------------------------------------------------------------------------
-
-
-  ~rs_archiver(void) throw() override {
-    DONE=true;
-  }
-  
-  
-//-----------------------------------------------------------------------------
-
-/*
-  bool userConfigure(const string& s) throw(CodaException) override {
-    paused=false;
-    return(true);
-  }
-*/
-
-//-----------------------------------------------------------------------------
-
-/*
-  bool userDownload(const string& s) throw(CodaException) override {
-    paused=false;
-    return(true);
-  }
-*/
-
-//-----------------------------------------------------------------------------
-
-/*
-  bool userPrestart(const string& s) throw(CodaException) override {
-    paused=false;
-    return(true);
-  }
-*/
-
-//-----------------------------------------------------------------------------
-
-
-  bool userGo(const string& s) throw(CodaException) override {
-      //PAUSED=false;
-    RUN_IN_PROGRESS=true;
-    return(true);
-  }
-
-
-//-----------------------------------------------------------------------------
-
-/*
-  bool userPause(const string& s) throw(CodaException) override {
-    paused=true;
-    return(true);
-  }
-*/
-
-//-----------------------------------------------------------------------------
-
-/*
-  bool userResume(const string& s) throw(CodaException) override {
-    paused=false;
-    return(true);
-  }
-*/
-
-//-----------------------------------------------------------------------------
-
-
-  bool userEnd(const string& s) throw(CodaException) override {
-      //paused=false;
-    cout << "rs_archiver received end run command" << endl;
-      FINALIZE=true;
-      RUN_IN_PROGRESS=false;
-      return(true);
-  }
-
-
-//-----------------------------------------------------------------------------
-
-/*
-  bool userReset(const string& s) throw(CodaException) override {
-    paused=false;
-    run_in_progress=false;
-    return(true);
-  }
-*/
-
-//-----------------------------------------------------------------------------
-
-
-  void exit(const string& s) throw(CodaException) override {
-    cout << "rs_archiver received exit command" << endl;
-    RUN_IN_PROGRESS=false;
-    DONE=true;
-  }
-  
-
-//-----------------------------------------------------------------------------
-
-
-  void userMsgHandler(cMsgMessage *msgp, void *userArg) throw(CodaException) override {
-    unique_ptr<cMsgMessage> msg(msgp);
-    cerr << "?et2evio...received unknown message subject,type: "
-         << msg->getSubject() << "," << msg->getType() << endl << endl;
-  }
-
-};
-
-//-----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------
 
 
 void MainLoop(rs_archiver &c);
@@ -289,6 +176,7 @@ int main(int narg, char *argv[])
     
     if(FORCE_START)
 	RUN_IN_PROGRESS = true;
+
 
     //  regularly poll servers for new histograms
     MainLoop(c);
@@ -590,6 +478,7 @@ void Usage(void)
     exit(0);
 }
 
+/**
 // write out a directory of ROOT objects to an archived file
 // do we need this?
 void WriteArchiveFile( TDirectory *sum_dir )
@@ -614,8 +503,9 @@ void WriteArchiveFile( TDirectory *sum_dir )
     //RS_INFO->Unlock();
     pthread_rwlock_unlock(ROOT_MUTEX);
 
-
 }
+**/
+
 
 // recursively copy/save a directory to a file
 void SaveDirectory( TDirectory *the_dir, TFile *the_file )

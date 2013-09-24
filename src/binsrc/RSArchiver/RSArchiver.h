@@ -25,9 +25,6 @@ extern pthread_rwlock_t *ROOT_MUTEX;
 #endif
 
 
-// class for communication with CODA
-#include <RunObject.hxx>
-using namespace codaObject;
 
 
 

@@ -71,8 +71,8 @@ class rs_info{
 	private:
 		pthread_mutex_t mutex;
 
-#else
-	ClassDef(rs_info,1)
+		//#else
+		//Class//Def(rs_info,1)
 #endif //__CINT__
 };
 
