@@ -1,0 +1,231 @@
+#ifndef _RS_ARCHIVER_RUNCONTROL_H_
+#define _RS_ARCHIVER_RUNCONTROL_H_
+
+#ifdef NO_CODAOBJECTROOT
+
+#pragma message ("Not using CODAObject interface...")
+
+#include <cMsg.hxx>
+using namespace cmsg;
+
+class rs_archiver : public cMsgCallback {
+    
+ public:
+    // constructor
+ rs_archiver(const string& udl, const string& name, const string& descr, const string &theSession) : runNumber(1) {
+	
+	cout << "rs_archiver constructor called" << endl;
+
+	cMsgSys = new cMsg(udl, name, descr);   
+	try {                         	          
+	    cMsgSys->connect(); 
+	} catch (cMsgException e) {
+	    cout<<endl<<endl<<endl<<endl<<"_______________  Archiver controls unable to connect to cMsg system! __________________"<<endl;
+	    cout << e.toString() << endl; 
+	    cout<<endl<<endl<<endl<<endl;
+	    return;
+	}
+
+	// subscrube to run control requests
+	cMsgSys->subscribe("runcontrol", "*", this, NULL);
+	cMsgSys->start();
+    }
+    
+    // destructor
+    ~rs_archiver(void)  {
+	DONE=true;
+	// Stop cMsg system
+	cMsgSys->stop();
+    }
+
+    //---------------------------------
+    // startProcessing
+    //---------------------------------
+    void startProcessing()  { /* NOOP */ }
+
+    //---------------------------------
+    // getRunNumber
+    //---------------------------------
+    int getRunNumber()  { return runNumber; }
+
+
+    //---------------------------------
+    // callback
+    //---------------------------------
+    void callback(cMsgMessage *msg, void *userObject)
+    {
+	if(!msg)return;
+
+	// The actual command is always sent in the text of the message
+	if (msg->getText() == "null"){delete msg; return;}
+	string cmd = msg->getText();
+	
+	//===========================================================
+	if(cmd=="beginrun"){
+	    // start archiving
+	    RUN_IN_PROGRESS=true;
+	}
+	//===========================================================
+	if(cmd=="endrun"){
+	    // finish up and end the run
+	    FINALIZE=true;
+	    RUN_IN_PROGRESS=false;
+	}
+	//===========================================================
+	if(cmd=="runnumber"){
+	    // set run number
+	    try {
+		runNumber = msg->getUserInt();
+	    }  catch (cMsgException e) {
+		_DBG_<<"Poorly formed run number payoad. Ignoring."<<endl;
+		return;
+	    }
+	}
+	//===========================================================
+	if(cmd=="exit"){
+	    // time to quit
+	    RUN_IN_PROGRESS=false;
+	    DONE=true;
+	}
+
+	delete msg;
+    }
+    
+ private:
+    cMsg *cMsgSys;
+    int runNumber;
+};
+
+#else
+
+// class for communication with CODA
+#include <RunObject.hxx>
+using namespace codaObject;
+
+class rs_archiver : public RunObject {
+
+public:
+  rs_archiver(const string& UDL, const string& name, const string& descr, const string &theSession) : 
+    RunObject(UDL,name,descr) {
+
+    cout << "rs_archiver constructor called" << endl;
+
+    // set session if specified
+    if(!theSession.empty())handleSetSession(theSession);
+  }
+
+
+//-----------------------------------------------------------------------------
+
+
+  ~rs_archiver(void) throw() override {
+    DONE=true;
+  }
+  
+  
+//-----------------------------------------------------------------------------
+
+/*
+  bool userConfigure(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userDownload(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userPrestart(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+
+  bool userGo(const string& s) throw(CodaException) override {
+      //PAUSED=false;
+    RUN_IN_PROGRESS=true;
+    return(true);
+  }
+
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userPause(const string& s) throw(CodaException) override {
+    paused=true;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userResume(const string& s) throw(CodaException) override {
+    paused=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+
+  bool userEnd(const string& s) throw(CodaException) override {
+      //paused=false;
+    cout << "rs_archiver received end run command" << endl;
+      FINALIZE=true;
+      RUN_IN_PROGRESS=false;
+      return(true);
+  }
+
+
+//-----------------------------------------------------------------------------
+
+/*
+  bool userReset(const string& s) throw(CodaException) override {
+    paused=false;
+    run_in_progress=false;
+    return(true);
+  }
+*/
+
+//-----------------------------------------------------------------------------
+
+
+  void exit(const string& s) throw(CodaException) override {
+    cout << "rs_archiver received exit command" << endl;
+    RUN_IN_PROGRESS=false;
+    DONE=true;
+  }
+  
+
+//-----------------------------------------------------------------------------
+
+
+  void userMsgHandler(cMsgMessage *msgp, void *userArg) throw(CodaException) override {
+    unique_ptr<cMsgMessage> msg(msgp);
+    cerr << "?et2evio...received unknown message subject,type: "
+         << msg->getSubject() << "," << msg->getType() << endl << endl;
+  }
+
+};
+
+#endif // NO_CODAOBJECTROOT
+
+//-----------------------------------------------------------------------------
+
+
+
+
+#endif
