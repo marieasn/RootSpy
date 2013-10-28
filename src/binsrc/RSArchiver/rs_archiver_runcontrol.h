@@ -3,7 +3,7 @@
 
 #ifdef NO_CODAOBJECTROOT
 
-#pragma message ("Not using CODAObject interface...")
+#pragma message ("Using cMsg interface...")
 
 #include <cMsg.hxx>
 using namespace cmsg;
@@ -98,6 +98,13 @@ class rs_archiver : public cMsgCallback {
 
 #else
 
+#if __GNUC__ < 4 || (__GNUC__ == 4 && (__GNUC_MINOR__ < 8 ) ) 
+#error "CodaObject interface requires >= gcc 4.8"
+#endif
+
+#pragma message ("Using CODAObject interface...")
+
+
 // class for communication with CODA
 #include <RunObject.hxx>
 using namespace codaObject;
@@ -116,7 +123,6 @@ public:
 
 
 //-----------------------------------------------------------------------------
-
 
   ~rs_archiver(void) throw() override {
     DONE=true;

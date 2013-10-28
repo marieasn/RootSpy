@@ -61,6 +61,11 @@ bool FINALIZE = false;
 
 //string ARCHIVE_PATHNAME = "/u/home/sdobbs/test_archives";  // DEFAULT FOR TESTING
 static string ARCHIVE_PATHNAME = "<nopath>";
+
+//static bool HTML_OUTPUT = false;
+//static string HTML_BASE_DIR = "<nopath>";
+static bool HTML_OUTPUT = true;
+static string HTML_BASE_DIR = ".";
 //static string NAME = "RSArchiver";
 static string SESSION = "";
 
@@ -82,12 +87,15 @@ void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
 void SaveDirectory( TDirectory *the_dir, TFile *the_file );
 void WriteArchiveFile( TDirectory *sum_dir );
-//void SaveTrees( TFile *the_file );
-void SaveTrees( TDirectoryFile *the_file );
+//void SaveTrees( TDirectoryFile *the_file );
 
 void signal_stop_handler(int signum);
 void signal_switchfile_handler(int signum);
 void signal_finalize_handler(int signum);
+
+
+void GenerateHtmlOutput(TDirectory *the_dir, string output_basedir, string output_subdir);
+
 
 //void *ArchiveFile(void * ptr);
 void ArchiveFile(int run_number, map<string,server_info_t> *the_servers );
@@ -301,6 +309,9 @@ void MainLoop(rs_archiver &c)
 
 	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
+
+	if(HTML_OUTPUT)
+	    GenerateHtmlOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "./html");
 
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
@@ -535,6 +546,8 @@ void SaveDirectory( TDirectory *the_dir, TFile *the_file )
 }
 
 
+
+/** -- working in this --
 // assumes calling function locks the mutex
 //void SaveTrees( TFile *the_file )
 void SaveTrees( TDirectoryFile *the_file )
@@ -600,6 +613,8 @@ void SaveTrees( TDirectoryFile *the_file )
     }
 
 }
+**/
+
 
 // function for saving end-of-run histograms
 // use server info map to keep track of which histograms we're waiting for
