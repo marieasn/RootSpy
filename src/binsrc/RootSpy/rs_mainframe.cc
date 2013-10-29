@@ -1194,12 +1194,13 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
     
     double hist_line_width = 1.;
 
+    /*
     // handle drawing 2D histograms differently
     // probably don't want to overlay them
     if(hdim == hdef_t::histdimension_t::twoD) {
 	add_to_draw_hist_args(histdraw_args, "COLZ");
     } else {
-
+    */
 	if(overlay_mode && (archive_file!=NULL) ) {
 	    // iff we're overlaying histograms, get the one to overlay, scale it to be the same size
 	    // then plot it
@@ -1233,7 +1234,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    }
 	} 
 
-    }
+	//}
 
 
     hist->SetLineWidth(hist_line_width);
