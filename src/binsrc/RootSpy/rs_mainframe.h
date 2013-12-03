@@ -31,6 +31,8 @@
 #include <TTimer.h>
 #include <TH1.h>
 #include <TFile.h>
+#include <TGMenu.h>
+#include <TGDockableFrame.h>
 
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
@@ -47,6 +49,8 @@ class rs_mainframe:public TGMainFrame {
 			kViewByObject_rs,
 			kViewByServer_rs
 		};
+
+		
 
 		void ReadPreferences(void);
 		void SavePreferences(void);
@@ -76,6 +80,9 @@ class rs_mainframe:public TGMainFrame {
 		void DoTreeInfoShort(void);
 		void DoOnline(void);
 		void DoSetArchiveFile(void);
+
+		void HandleMenu(Int_t id);
+		Bool_t HandleKey(Event_t *event);
 		
 		TGMainFrame *dialog_selectserverhist;
 		TGMainFrame *dialog_selecthists;
@@ -92,6 +99,11 @@ class rs_mainframe:public TGMainFrame {
 		TGCheckButton *loop_over_hists;
 		TGCheckButton *show_archived_hists;
 		TGTextButton *indiv;
+
+		TGDockableFrame    *fMenuDock;
+		TGMenuBar  *fMenuBar;
+		TGPopupMenu  *fMenuFile, *fMenuTools;
+		TGLayoutHints      *fMenuBarLayout, *fMenuBarItemLayout, *fMenuBarHelpLayout;
 
 		bool delete_dialog_selectserverhist;
 		bool delete_dialog_selecttree;
