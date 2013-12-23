@@ -13,6 +13,8 @@
 #include <algorithm>
 using namespace std;
 
+#include <boost/algorithm/string/join.hpp>
+
 #include <TDirectoryFile.h>
 #include <TMessage.h>
 #include <TH1.h>
@@ -47,8 +49,10 @@ rs_cmsg::rs_cmsg(string &udl, string &name)
 		cout << e.toString() << endl; 
 		cout<<endl<<endl<<endl<<endl;
 
+		// we need to connect to cMsg to run
 		is_online = false;
-		return;
+		exit(0);          
+		//return;
 	}
 	
 	// Create a unique name for ourself
@@ -594,11 +598,34 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 	if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
 	hdef->sum_hist->Add(h);
     }else{
-	//_DBG_<<"Making summed histogram " << string(h->GetName())+"__sum" << endl;
-	string sum_hist_name = string(h->GetName())+"__sum";
-	hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
-	hdef->sum_hist->SetDirectory(RS_INFO->sum_dir);
+      // get the direction in which to save the summed histogram
+
+      //cout << "get sum dir = " << hdef->path.c_str() << endl;
+      TDirectory *hist_sum_dir = NULL;
+      string sum_path = "/";
+      if(hdef->path == "/")
+	hist_sum_dir = RS_INFO->sum_dir;
+      else {
+	sum_path = boost::algorithm::join(hdef->dirs, "/");
+	hist_sum_dir = RS_INFO->sum_dir->GetDirectory(sum_path.c_str());
+	//hist_sum_dir = RS_INFO->sum_dir->GetDirectory(hdef->path.c_str());
+      }
+
+      cout << "saving in directory " << sum_path << endl;
+
+      // if the directory doesn't exist, make it
+      // (needs better error checking)
+      if(!hist_sum_dir) {
+	hist_sum_dir = RS_INFO->sum_dir->mkdir(sum_path.c_str());
+      }
+      
+      //_DBG_<<"Making summed histogram " << string(h->GetName())+"__sum" << endl;
+      string sum_hist_name = string(h->GetName())+"__sum";
+      hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
+      //hdef->sum_hist->SetDirectory(RS_INFO->sum_dir);
+      hdef->sum_hist->SetDirectory(hist_sum_dir);
     }
+
     //would want to update the hdef_t time stamp here (Justin B)
     //_DBG_<<hdef->sum_hist<<endl;
     hdef->sum_hist_modified = true;

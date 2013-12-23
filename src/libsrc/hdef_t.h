@@ -91,6 +91,8 @@ class hdef_t{
 		bool save_active;
 };
 
+//typedef hdef_t::histdimension_t histdimension_t;
+
 #endif // _hdef_t_
 
 		
