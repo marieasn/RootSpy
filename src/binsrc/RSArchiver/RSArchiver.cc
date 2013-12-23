@@ -20,6 +20,9 @@
 #include <algorithm>
 
 #include "RSArchiver.h"
+#include "HTMLOutputGenerator.h"
+#include "PDFOutputGenerator.h"
+
 #include "rs_cmsg.h"
 #include "rs_info.h"
 //#include "rs_mainframe.h"
@@ -30,6 +33,9 @@
 rs_cmsg *RS_CMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
+
+HTMLOutputGenerator *html_generator = NULL;
+PDFOutputGenerator *pdf_generator = NULL;
 
 // configuration variables
 static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
@@ -66,6 +72,7 @@ static string ARCHIVE_PATHNAME = "<nopath>";
 //static string HTML_BASE_DIR = "<nopath>";
 static bool HTML_OUTPUT = true;
 static string HTML_BASE_DIR = ".";
+static bool PDF_OUTPUT = true;
 //static string NAME = "RSArchiver";
 static string SESSION = "";
 
@@ -157,6 +164,9 @@ int main(int narg, char *argv[])
 	RS_INFO->sum_dir = dir;
     };
 
+
+    html_generator = new HTMLOutputGenerator("png");
+    pdf_generator = new PDFOutputGenerator();
     
     // Makes a Mutex to lock / unlock Root Global
     ROOT_MUTEX = new pthread_rwlock_t;
@@ -184,7 +194,6 @@ int main(int narg, char *argv[])
     
     if(FORCE_START)
 	RUN_IN_PROGRESS = true;
-
 
     //  regularly poll servers for new histograms
     MainLoop(c);
@@ -310,8 +319,10 @@ void MainLoop(rs_archiver &c)
 	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
 
-	if(HTML_OUTPUT)
-	    GenerateHtmlOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "./html");
+	if(HTML_OUTPUT) {
+	  html_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "html");
+	  pdf_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR + "/html");
+	}
 
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
@@ -547,7 +558,7 @@ void SaveDirectory( TDirectory *the_dir, TFile *the_file )
 
 
 
-/** -- working in this --
+/** -- working on this --
 // assumes calling function locks the mutex
 //void SaveTrees( TFile *the_file )
 void SaveTrees( TDirectoryFile *the_file )

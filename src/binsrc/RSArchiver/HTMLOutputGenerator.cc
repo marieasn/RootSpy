@@ -1,32 +1,12 @@
-/// helper functions to generate output in various formats
+/// helper class to make output HTML pages
 
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <sstream> 
-
-using namespace std;
-
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <errno.h>
-
-#include <TCanvas.h>
-#include <TDirectory.h>
-#include <TH1.h>
-#include <TH2.h>
-#include <TList.h>
-#include <TKey.h>
-// #include <TIter.h>
-
-static string IMG_SUFFIX = "png";
-//static TCanvas *c1 = NULL;
+#include "HTMLOutputGenerator.h"
 
 /////////////////////////////////////////////////////////////////////////////
 
 
 
-void write_html_header(ofstream &f, string thedir)
+void HTMLOutputGenerator::write_html_header(ofstream &f, string thedir)
 {
     f << "<html>" << endl 
       << "<head>" << endl 
@@ -59,12 +39,12 @@ void write_html_header(ofstream &f, string thedir)
     f << header_str << endl << endl;
 }
  
-void write_html_footer(ofstream &f)
+void HTMLOutputGenerator::write_html_footer(ofstream &f)
 {
     f << endl << "</body>" << endl << "</html>" << endl;
 }
 
-void write_html_dirs(ofstream &f, vector<string> &dirs)
+void HTMLOutputGenerator::write_html_dirs(ofstream &f, vector<string> &dirs)
 {
     f << "<ul>" << endl;
     f << "<li> <a href=\"../\">../</a>" << endl;
@@ -77,7 +57,7 @@ void write_html_dirs(ofstream &f, vector<string> &dirs)
     f << "</ul>" << endl << endl;
 }
 
-void write_html_hists(ofstream &f, vector<string> &hists)
+void HTMLOutputGenerator::write_html_hists(ofstream &f, vector<string> &hists)
 {
     for( vector<string>::const_iterator hist_it = hists.begin();
 	 hist_it != hists.end(); hist_it++ ) {
@@ -88,7 +68,7 @@ void write_html_hists(ofstream &f, vector<string> &hists)
 }
 
 //static bool do_mkdir(const char *path, mode_t mode)
-static bool do_mkdir(string path, mode_t mode)
+bool HTMLOutputGenerator::do_mkdir(string path, mode_t mode)
 {
     struct stat     st;
     bool            status = true;
@@ -110,20 +90,23 @@ static bool do_mkdir(string path, mode_t mode)
 
 
 
-// this is recursive?
-void GenerateHtmlOutput(TDirectory *root_dir, string basedir, string subdir)
+// this should be recursive?
+void HTMLOutputGenerator::GenerateOutput(TDirectory *root_dir, string basedir, string subdir)
 {
     vector<string> dirs;
     vector<string> hists;
+
+    cout << "In HTMLOutputGenerator::GenerateOutput()..." << endl
+	 << " in directory " << basedir + "/" + subdir + "/index.html" << endl;
 
     ofstream html_file;
     html_file.open( (basedir + "/" + subdir + "/index.html").c_str());
     if(!html_file.is_open())
 	return;
 
-    TCanvas *c1 = new TCanvas("c1", "c1", 800, 600);
     write_html_header(html_file, subdir);
     
+    // collect information on histograms and directories
     TIter next(root_dir->GetListOfKeys());
     TObject *keyobj;  
     while (keyobj = next()) {
@@ -141,43 +124,47 @@ void GenerateHtmlOutput(TDirectory *root_dir, string basedir, string subdir)
 	    cout << name << " is an object of type TDirectory" << endl;
 	    dirs.push_back( name );
 
-	    //if(!do_mkdir(basedir + "/" + subdir + "/" + name, "0755"))
 	    if(!do_mkdir(basedir + "/" + subdir + "/" + name, 0755))
 		continue;
 	    
-	    //GenerateHtmlOutput(the_dir, basedir, subdir+"/"+name);
+	    //GenerateOutput(the_dir, basedir, subdir+"/"+name);   // make sure this works
 	}
 
 
 	// handle histograms - 1D
 	TH1 *the_hist = dynamic_cast<TH1*>(obj);
 	if(the_hist) {
-	    cout << name << " is an object of type TH1" << endl;
+	  cout << name << " is an object of type TH1" << endl;
 	    hists.push_back( name );
 	    
 	    the_hist->Draw();
 	    string img_filename = basedir + "/" + subdir + "/" + name + "."  + IMG_SUFFIX;
-	    c1->Print(img_filename.c_str());
+	    output_canvas->Print(img_filename.c_str());
+
+	    cout << "outputting image: " << img_filename << endl;
 	}
 
 	// handle histograms - 2D
 	TH2 *the_hist2d = dynamic_cast<TH2*>(obj);
 	if(the_hist2d) {
-	    cout << name << " is an object of type TH2" << endl;
+	  cout << name << " is an object of type TH2" << endl;
 	    hists.push_back( name );
 	    
 	    the_hist->Draw("COLZ");
 	    string img_filename = basedir + "/" + subdir + "/" + name + "."  + IMG_SUFFIX;
-	    c1->Print(img_filename.c_str());
+	    output_canvas->Print(img_filename.c_str());
+
+	    cout << "outputting image: " << img_filename << endl;
 	}
     }
 
+    // write out data to files
     write_html_dirs(html_file, dirs);
     write_html_hists(html_file, hists);
     
     write_html_footer(html_file);
 			
     html_file.close();
-    delete c1;
+    //delete output_canvas;
 }
 
