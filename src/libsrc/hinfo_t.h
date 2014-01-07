@@ -8,6 +8,7 @@
 #ifndef _hinfo_t_
 #define _hinfo_t_
 
+#include <iostream>
 #include <vector>
 #include <list>
 #include <map>
@@ -69,6 +70,19 @@ class hid_t{
 			if(h.serverName==serverName)return h.hnamepath<hnamepath;
 			return h.serverName<serverName;
 		}
+
+		friend ostream& operator<<(ostream& os, const hid_t &h)
+		{
+		  os << h.hnamepath << " " << h.serverName;
+		  return os;
+		}
+
+		friend istream& operator>>(istream& is, hid_t &h)
+		{
+		  is >> h.hnamepath >> h.serverName;
+		  return is;
+		}
+
 };
 
 
