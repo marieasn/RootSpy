@@ -68,9 +68,9 @@ enum MenuCommandIdentifiers {
 //-------------------
 rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
 {
-	// Define all of the -graphics objects. 
+	//Define all of the -graphics objects. 
 	CreateGUI();
-	// Set up timer to call the D1oTimer() method repeatedly
+	// Set up timer to call the DoTimer() method repeatedly
 	// so events can be automatically advanced.
 	timer = new TTimer();
 	timer->Connect("Timeout()", "rs_mainframe", this, "DoTimer()");
@@ -168,10 +168,11 @@ void rs_mainframe::DoTimer(void) {
 	//if (can_view_indiv) indiv->SetEnabled(kTRUE);
 	//else indiv->SetEnabled(kFALSE);
 
+  /*
   // disable whole timer routine if we're not connected to cMsg? - sdobbs, 4/22/2013
         if(!RS_CMSG->IsOnline())
 	    return;
-
+  */
 	time_t now = time(NULL);
 	
 	// Pings server to keep it alive
@@ -817,13 +818,13 @@ void rs_mainframe::CreateGUI(void)
    //fMenuBarHelpLayout = new TGLayoutHints(kLHintsTop | kLHintsRight);
    
    fMenuFile = new TGPopupMenu(gClient->GetRoot());
-   fMenuFile->AddEntry("&Open...", M_FILE_OPEN);
-   fMenuFile->AddEntry("&Save...", M_FILE_SAVE);
+   fMenuFile->AddEntry("&Open List...", M_FILE_OPEN);
+   fMenuFile->AddEntry("&Save List...", M_FILE_SAVE);
    fMenuFile->AddSeparator();
    fMenuFile->AddEntry("E&xit", M_FILE_EXIT);
 
-   fMenuFile->DisableEntry(M_FILE_OPEN);
-   fMenuFile->DisableEntry(M_FILE_SAVE);
+   //fMenuFile->DisableEntry(M_FILE_OPEN);
+   //fMenuFile->DisableEntry(M_FILE_SAVE);
 
    fMenuTools = new TGPopupMenu(gClient->GetRoot());
    fMenuTools->AddEntry("Start TBrowser", M_TOOLS_TBROWSER);
@@ -1252,6 +1253,14 @@ void rs_mainframe::HandleMenu(Int_t id)
 
    switch (id) {
 
+   case M_FILE_OPEN:
+     DoLoadHistsList();
+     break;
+
+   case M_FILE_SAVE:
+     DoSaveHistsList();
+     break;
+
    case M_FILE_EXIT: 
      DoQuit();       
      break;
@@ -1319,6 +1328,233 @@ Bool_t rs_mainframe::HandleKey(Event_t *event)
 }
 
 
+void rs_mainframe::DoLoadHistsList(void)
+{
+
+  // list of histo / server combinations
+  //vector<hid_t> hids;
+  vector<string> new_hnamepaths;  // the histograms to activate
+
+  // write them to disk outside of the mutex
+  TGFileInfo* fileinfo = new TGFileInfo();
+  TGFileDialog* filedialog = new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDOpen, fileinfo);
+
+  ///////// CHECK FOR ERRORS ///////////////
+  
+  ifstream ifs(fileinfo->fFilename);
+  if(!ifs.is_open()){
+    cout<<"Unable to read file \""<<fileinfo->fFilename<<"\"!"<<endl;
+    return;
+  }
+
+  int viewStyle;
+  ifs >> viewStyle;
+  if(viewStyle == 0 )
+    RS_INFO->viewStyle = rs_info::kViewByObject;
+  else  if(viewStyle == 1 )
+    RS_INFO->viewStyle = rs_info::kViewByServer;
+  else 
+    RS_INFO->viewStyle = rs_info::kViewByObject;
+
+  _DBG_ << RS_INFO->viewStyle << endl;
+
+  // make sure we are reading in OK...
+  while(!ifs.eof()) {
+    string in_hist;
+    ifs >> in_hist;
+
+    if( in_hist == "" )
+      break;
+
+    _DBG_ << in_hist << endl;
+    new_hnamepaths.push_back( in_hist );
+  }
+  /**
+  while(!ifs.eof()) {
+    hid_t hid;
+    ifs >> hid;
+
+    if( (hid.hnamepath == "") || (hid.serverName=="") )
+      break;
+
+    _DBG_ << hid << endl;
+    hids.push_back( hid );
+  }
+  **/
+
+  ifs.close();
+  cout<<"Histogram list read from \""<<fileinfo->fFilename<<"\""<<endl;
+
+  RS_INFO->Lock();
+
+
+  // loop through all current servers and histograms, and set all of them to not display
+  for(map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.begin();
+      hdef_iter != RS_INFO->histdefs.end(); hdef_iter++) {
+    hdef_iter->second.active = false; 
+    for(map<string, bool>::iterator hdefserver_iter = hdef_iter->second.servers.begin();
+	hdefserver_iter != hdef_iter->second.servers.end(); hdefserver_iter++) {
+      hdefserver_iter->second = false;
+    }
+  }
+  for(map<string,server_info_t>::iterator server_iter = RS_INFO->servers.begin();                            server_iter != RS_INFO->servers.end(); server_iter++) {         
+    server_iter->second.active = false;
+  }
+  
+  // server names are usually ephemeral, so we only load histogram path/name combos
+  // we enable the histos for all servers, but have to do this differently
+  // depending on the view model
+  for( vector<string>::iterator hnamepath_iter = new_hnamepaths.begin();
+       hnamepath_iter != new_hnamepaths.end(); hnamepath_iter++ ) {
+
+    map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(*hnamepath_iter);
+    if(hdef_iter==RS_INFO->histdefs.end()) continue;
+
+    // set all servers to load this histogram
+    for(map<string, bool>::iterator hdefserver_iter = hdef_iter->second.servers.begin();
+	hdefserver_iter != hdef_iter->second.servers.end(); hdefserver_iter++) {
+      hdefserver_iter->second = true;
+
+      if(RS_INFO->viewStyle == rs_info::kViewByServer) {
+	map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(hdefserver_iter->first);
+	if(server_info_iter==RS_INFO->servers.end()) continue;
+	server_info_iter->second.active = true;
+      }
+    }
+  }
+  
+  /**
+  // now load the histograms that we want to display
+  // we do this differently depending on which view model we are using
+  for( vector<hid_t>::const_iterator hid_it = hids.begin();
+       hid_it != hids.end(); hid_it++ ) {
+
+    map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid_it->hnamepath);
+    if(hdef_iter==RS_INFO->histdefs.end()) continue;
+    
+    if(RS_INFO->viewStyle == rs_info::kViewByObject) {
+      hdef_iter->second.active = true;
+      
+      // allow a wildcard "*" to select all servers
+      if(hid_it->serverName != "*") {
+	hdef_iter->second.servers[hid_it->serverName] = true;
+      } else {
+	for(map<string, bool>::iterator hdefserver_iter = hdef_iter->second.servers.begin();
+	    hdefserver_iter != hdef_iter->second.servers.end(); hdefserver_iter++) {
+	  hdefserver_iter->second = true;
+	}
+      }
+    } else {  // RS_INFO->viewStyle == rs_info::kViewByServer
+      map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(hid_it->serverName);
+      if(server_info_iter==RS_INFO->servers.end()) continue;
+
+      server_info_iter->second.active = true;
+      hdef_iter->second.servers[hid_it->serverName] = true;
+    }
+  }
+  **/
+
+  // is setting current working right?
+
+  // If the RS_INFO->current value is not set, then set it to the first server/histo
+  // and set the flag to have DoUpdate called
+  if(RS_INFO->servers.find(RS_INFO->current.serverName)==RS_INFO->servers.end()){
+    if(RS_INFO->servers.size()>0){
+      map<string,server_info_t>::iterator server_iter = RS_INFO->servers.begin();
+      if(server_iter->second.hnamepaths.size()>0){
+	RS_INFO->current = hid_t(server_iter->first, server_iter->second.hnamepaths[0]);
+      }
+    }
+  }
+
+  RSMF->can_view_indiv = true;
+  //RS_INFO->viewStyle = viewStyle;
+  RS_INFO->update = true;
+  
+  RS_INFO->Unlock();
+
+}
+
+
+void rs_mainframe::DoSaveHistsList(void)
+{
+  // get list of histo / server combinations
+  //vector<hid_t> hids;
+  //map<string, bool> hists_tosave;
+  vector<string> hists_tosave;
+
+  RS_INFO->Lock();
+  
+  // keep track of what histograms are selected 
+  // if a histogram is listed as active on any server, then save it
+  for(map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.begin(); 
+      hdef_iter != RS_INFO->histdefs.end(); hdef_iter++) {
+
+    // check to see if it's available on any servers - should only matter for view-by-server
+    bool active_on_servers = false;
+    if(RS_INFO->viewStyle == rs_info::kViewByServer) {
+      for(map<string, bool>::iterator hdefserver_iter = hdef_iter->second.servers.begin();
+	  hdefserver_iter != hdef_iter->second.servers.end(); hdefserver_iter++) {    
+	if(hdefserver_iter->second) {
+	  active_on_servers = true;
+	  break;
+	}
+      }
+    }
+
+    if( hdef_iter->second.active || active_on_servers )
+      hists_tosave.push_back( hdef_iter->second.hnamepath );
+  }
+
+  /*
+  // Make list of all histograms from all servers
+  map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.begin();
+  for(; server_info_iter!=RS_INFO->servers.end(); server_info_iter++){//iterates over servers
+    const string &server = server_info_iter->first;
+    const vector<string> &hnamepaths = server_info_iter->second.hnamepaths;
+    for(unsigned int j=0; j<hnamepaths.size(); j++){//iterates over histogram paths
+
+      // add this hinfo_t object to the list, if it's part of the active set
+      if(RS_INFO->histdefs[hnamepaths[j]].active) {
+	hids.push_back(hid_t(server, hnamepaths[j]));
+      }
+
+    }
+  }
+  */
+
+  RS_INFO->Unlock();
+  
+  // write them to disk outside of the mutex
+  TGFileInfo* fileinfo = new TGFileInfo();
+  TGFileDialog* filedialog = new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDSave, fileinfo);
+
+  ///////// CHECK FOR ERRORS ///////////////
+  
+  ofstream ofs(fileinfo->fFilename);
+  if(!ofs.is_open()){
+    cout<<"Unable to create file \""<<fileinfo->fFilename<<"\"!"<<endl;
+    return;
+  }
+
+  ofs << RS_INFO->viewStyle << endl;
+  for(vector<string>::const_iterator hit = hists_tosave.begin();
+      hit != hists_tosave.end(); hit++) {
+    ofs << *hit << endl;
+  }
+
+  /*
+  for(vector<hid_t>::const_iterator hit = hids.begin();
+      hit != hids.end(); hit++) {
+    ofs << *hit << endl;
+  }
+  */
+
+  ofs.close();
+  cout<<"Histogram list written to \""<<fileinfo->fFilename<<"\""<<endl;
+}
+
+
 void rs_mainframe::DoFinal(void) {
 	//loop servers
 	map<string, server_info_t>::iterator serviter = RS_INFO->servers.begin();
@@ -1380,7 +1616,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	//TH1 *archived_hist = NULL;
 
 	// check for archived histograms and load them if they exist and we are overlaying
-	// we do this first to make see how we should draw the summed histogram
+	// we do this first to determine the parameters needed to overlay the histograms
 	if(overlay_mode && (archive_file!=NULL) ) {
 	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
 	    TH1* archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
@@ -1403,9 +1639,19 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 		overlay_ymax = 1.1*overlay_hist->GetMaximum();
 
 		//_DBG_ << " overlay max, min " << overlay_ymax << ", " << overlay_ymin << endl;
-	    }
-	}
 
+		gStyle->SetStatX(0.85);
+		//cerr << gStyle->GetStatX() << "  " << gStyle->GetStatY() << endl;
+	    } else {
+		gStyle->SetStatX(0.95);
+	    }
+	    
+	    // update histogram with current style parameters
+	    // primarily used to update statistics box
+	    hist->UseCurrentStyle();
+	}
+	
+	
 	// draw summed histogram
 	if(!do_overlay) {
 	    hist->Draw();
@@ -1415,7 +1661,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    double hist_ymax = 1.1*hist->GetMaximum();
 	    double hist_ymin = hist->GetMinimum();
 	    // make sure we at least go down to zero, so that we are displaying the whole
-	    // distribution
+	    // distribution - assumes we are just looking at frequency histograms
 	    if(hist_ymin > 0)
 		hist_ymin = 0;
 	    
@@ -1425,9 +1671,6 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    hist->SetMarkerStyle(20);
 	    hist->SetMarkerSize(0.7);
 	    
-	    //hist->Draw("E1");
-	    //hist->Draw("AXIS");
-
 	    // scale down archived histogram and display it to set the scale
 	    float scale = hist_ymax/overlay_ymax;
 	    //_DBG_ << gPad->GetUymax() << " " << overlay_ymax << " " << scale << endl;
@@ -1438,9 +1681,6 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    // now print the current histogram on top of it
 	    hist->Draw("SAME E1");
 	    //hist->Draw("AXIS");
-
-	    gStyle->SetStatX(0.85);
-	    //cerr << gStyle->GetStatX() << "  " << gStyle->GetStatY() << endl;
 
 	    // add axis to the right for scale of archived histogram
 	    if(overlay_yaxis != NULL)

@@ -80,6 +80,8 @@ class rs_mainframe:public TGMainFrame {
 		void DoTreeInfoShort(void);
 		void DoOnline(void);
 		void DoSetArchiveFile(void);
+		void DoLoadHistsList(void);
+		void DoSaveHistsList(void);
 
 		void HandleMenu(Int_t id);
 		Bool_t HandleKey(Event_t *event);
