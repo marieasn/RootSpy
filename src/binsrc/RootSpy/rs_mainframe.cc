@@ -14,6 +14,7 @@ using namespace std;
 #include "Dialog_SaveHists.h"
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectTree.h"
+#include "Dialog_ConfigMacros.h"
 
 #include <TROOT.h>
 #include <TStyle.h>
@@ -58,6 +59,7 @@ enum MenuCommandIdentifiers {
   M_FILE_SAVE,
   M_FILE_EXIT,
 
+  M_TOOLS_MACROS,
   M_TOOLS_TBROWSER,
   M_TOOLS_TREEINFO,
   M_TOOLS_SAVEHISTS
@@ -91,6 +93,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,
 	dialog_selecthists = NULL;
 	dialog_savehists = NULL;
 	dialog_selecttree = NULL;
+	dialog_configmacros = NULL;
 	dialog_indivhists = NULL;
 	delete_dialog_selectserverhist = false;
 	delete_dialog_selecthists = false;
@@ -103,7 +106,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,
 	//overlay_mode = true;
 	//archive_file = new TFile("/u/home/sdobbs/test_archives/run1_output.root");
 
-	SetWindowName("RootSpy - Online");
+	SetWindowName("RootSpy");
 	/** -- remove offline functionality for now
 	// Finish up and map the window
 	if(RS_CMSG->IsOnline())
@@ -118,7 +121,10 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,
 	MapWindow();
 
 	viewStyle_rs = kViewByServer_rs;
+	exec_shell = new TExec();
 
+	// for testing
+	//macro_files["/components/px"] = "macro.C";
 
 	// Set ROOT style parameters
 	//gROOT->SetStyle("Plain");
@@ -204,6 +210,12 @@ void rs_mainframe::DoTimer(void) {
 		dialog_selecttree = NULL;
 	}
 	delete_dialog_selecttree = false;
+
+	//configmacros_dialog
+	if(delete_dialog_configmacros){
+		dialog_configmacros = NULL;
+	}
+	delete_dialog_configmacros = false;
 
 	// Update server label if necessary
 	if(selected_server){
@@ -379,6 +391,20 @@ void rs_mainframe::DoTreeInfo(void) {
 		dialog_selecttree->RequestFocus();
 	}
 }
+
+//-------------------
+// DoConfigMacros
+//-------------------
+void rs_mainframe::DoConfigMacros(void) {
+	if(!dialog_configmacros){
+		dialog_configmacros = new Dialog_ConfigMacros(gClient->GetRoot(), 10, 10);
+	}else{
+		dialog_configmacros->RaiseWindow();
+		dialog_configmacros->RequestFocus();
+	}
+}
+
+//MakeConfigMacros();
 
 #if 0
 //---------------------------------
@@ -827,6 +853,7 @@ void rs_mainframe::CreateGUI(void)
    //fMenuFile->DisableEntry(M_FILE_SAVE);
 
    fMenuTools = new TGPopupMenu(gClient->GetRoot());
+   fMenuTools->AddEntry("Config Macros...", M_TOOLS_MACROS);
    fMenuTools->AddEntry("Start TBrowser", M_TOOLS_TBROWSER);
    fMenuTools->AddEntry("View Tree Info", M_TOOLS_TREEINFO);
    fMenuTools->AddEntry("Save Hists...",  M_TOOLS_SAVEHISTS);
@@ -855,6 +882,7 @@ void rs_mainframe::CreateGUI(void)
    // Menu button messages are handled by the main frame (i.e. "this")
    // HandleMenu() method.
    fMenuFile->Connect("Activated(Int_t)", "rs_mainframe", this, "HandleMenu(Int_t)");
+   fMenuTools->Connect("Activated(Int_t)", "rs_mainframe", this, "HandleMenu(Int_t)");
 
 	//======================= The following was copied for a macro made with TGuiBuilder ===============
 	   // composite frame
@@ -1251,6 +1279,8 @@ void rs_mainframe::HandleMenu(Int_t id)
 {
    // Handle menu items.
 
+  //cout << "in HandleMenu(" << id << ")" << endl;
+
    switch (id) {
 
    case M_FILE_OPEN:
@@ -1263,6 +1293,10 @@ void rs_mainframe::HandleMenu(Int_t id)
 
    case M_FILE_EXIT: 
      DoQuit();       
+     break;
+
+   case M_TOOLS_MACROS:
+     DoConfigMacros();
      break;
 
    case M_TOOLS_TBROWSER:
@@ -1704,4 +1738,15 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	hist->Draw();
     }
 
+
+    // finally, after we've finished drawing on the screen, run any macros that may exist
+    map<string,string>::iterator macro_iter = macro_files.find(hnamepath);
+    if(macro_iter != macro_files.end()) {
+      stringstream ss;
+      ss << ".x " << macro_iter->second;
+      
+      _DBG_ << "running macro = " << macro_iter->second << endl;
+      
+      exec_shell->Exec(ss.str().c_str());
+    }
 }

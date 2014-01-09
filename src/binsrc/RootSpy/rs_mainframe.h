@@ -33,6 +33,7 @@
 #include <TFile.h>
 #include <TGMenu.h>
 #include <TGDockableFrame.h>
+#include <TExec.h>
 
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
@@ -82,6 +83,7 @@ class rs_mainframe:public TGMainFrame {
 		void DoSetArchiveFile(void);
 		void DoLoadHistsList(void);
 		void DoSaveHistsList(void);
+		void DoConfigMacros(void);
 
 		void HandleMenu(Int_t id);
 		Bool_t HandleKey(Event_t *event);
@@ -91,6 +93,7 @@ class rs_mainframe:public TGMainFrame {
 		TGMainFrame *dialog_savehists;
 		TGMainFrame *dialog_indivhists;
 		TGMainFrame *dialog_selecttree;
+		TGMainFrame *dialog_configmacros;
 		TGLabel *selected_server;
 		TGLabel *selected_hist;
 		TGLabel *retrieved_lab;
@@ -112,7 +115,11 @@ class rs_mainframe:public TGMainFrame {
 		bool delete_dialog_selecthists;
 		bool delete_dialog_savehists;
 		bool delete_dialog_indivhists;
+		bool delete_dialog_configmacros;
 		bool can_view_indiv;
+
+		map<string,string> macro_files;
+
 
 	protected:
 			viewStyle_t_rs viewStyle_rs;
@@ -138,6 +145,9 @@ class rs_mainframe:public TGMainFrame {
 		// info for comparing with archived histograms
 		//bool overlay_mode; // maybe don't need this?
 		TFile *archive_file;
+
+		TExec *exec_shell;
+
 		
 	ClassDef(rs_mainframe,1)
 };
