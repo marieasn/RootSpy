@@ -25,11 +25,8 @@
 
 #include "rs_cmsg.h"
 #include "rs_info.h"
-//#include "rs_mainframe.h"
 
 // GLOBALS
-// should set a namespace for these?
-//rs_mainframe *RSMF = NULL;
 rs_cmsg *RS_CMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
@@ -37,53 +34,43 @@ pthread_rwlock_t *ROOT_MUTEX = NULL;
 HTMLOutputGenerator *html_generator = NULL;
 PDFOutputGenerator *pdf_generator = NULL;
 
-// configuration variables
-static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
-static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
-//static string DAQ_UDL = "cMsg://gluon44/cMsg";                // for testing
-//static string ROOTSPY_UDL = "cMsg://gluon44/cMsg/rootspy";    // for testing
-static string CMSG_NAME = "<not set here. see below>";
-static string OUTPUT_FILENAME = "current_run.root";
+//static vector<pthread_t> thread_ids;
 
-static TFile *CURRENT_OUTFILE = NULL;
-static double POLL_DELAY = 30;   // time between polling runs, default 1 min?
-//const double MIN_POLL_DELAY = 10;
-const double MIN_POLL_DELAY = 0;
+namespace config {
+  // configuration variables
+  static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
+  static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
+  static string CMSG_NAME = "<not set here. see below>";
+  static string SESSION = "";
 
-// run management 
+  static string OUTPUT_FILENAME = "current_run.root";
+  static TFile *CURRENT_OUTFILE = NULL;
+  static string ARCHIVE_PATHNAME = "<nopath>";
 
-//bool KEEP_RUNNING = true;
-static bool FORCE_START = false;
+  static double POLL_DELAY = 30;   // time between polling runs, default 1 min?
+  //const double MIN_POLL_DELAY = 10;
+  const double MIN_POLL_DELAY = 0;
+  
+  // run management 
+  //bool KEEP_RUNNING = true;
+  static bool FORCE_START = false;
+  
+  bool DONE = false;
+  bool RUN_IN_PROGRESS = false;
+  // int RUN_NUMBER = 1;   // we take the run number from cMsg
+  bool FINALIZE = false;
 
-//static bool DONE = false;
-//static bool RUN_IN_PROGRESS = false;
-//static  int RUN_NUMBER = 1;
-//static bool FINALIZE = false;
+  static bool HTML_OUTPUT = false;
+  static string HTML_BASE_DIR = "<nopath>";
+  static bool PDF_OUTPUT = false;
+  
+}
 
-bool DONE = false;
-bool RUN_IN_PROGRESS = false;
-// int RUN_NUMBER = 1;
-bool FINALIZE = false;
-
-//string ARCHIVE_PATHNAME = "/u/home/sdobbs/test_archives";  // DEFAULT FOR TESTING
-static string ARCHIVE_PATHNAME = "<nopath>";
-
-//static bool HTML_OUTPUT = false;
-//static string HTML_BASE_DIR = "<nopath>";
-static bool HTML_OUTPUT = true;
-static string HTML_BASE_DIR = ".";
-static bool PDF_OUTPUT = true;
-//static string NAME = "RSArchiver";
-static string SESSION = "";
-
-// communication variables
-//static bool SWITCH_FILES = false;
-//static bool FINALIZE = false;
-
-static vector<pthread_t> thread_ids;
+using namespace config;
 
 // ---------------------------------------------------------------------------------
 
+// CODA Object interface
 #include "rs_archiver_runcontrol.h"
 
 // ---------------------------------------------------------------------------------
@@ -92,7 +79,7 @@ static vector<pthread_t> thread_ids;
 void MainLoop(rs_archiver &c);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
-void SaveDirectory( TDirectory *the_dir, TFile *the_file );
+//void SaveDirectory( TDirectory *the_dir, TFile *the_file );
 void WriteArchiveFile( TDirectory *sum_dir );
 //void SaveTrees( TDirectoryFile *the_file );
 
@@ -176,7 +163,6 @@ int main(int narg, char *argv[])
     char hostname[256];
     gethostname(hostname, 256);
     char str[512];
-    //sprintf(str, "RootSpy Archiver %s-%d", hostname, getpid());
     //sprintf(str, "RSArchiver_%d", getpid());
     sprintf(str, "RSArchiver");
     CMSG_NAME = string(str);
@@ -231,15 +217,13 @@ void MainLoop(rs_archiver &c)
 
     while(!DONE) {
 	
-	cout << "Running main event loop..." << endl;
-
-
+	_DBG_ << "Running main event loop..." << endl;
 	_DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
 	
 	// keeps the connections alive, and keeps the list of servers up-to-date
 	RS_CMSG->PingServers();
 	
-	// End-of-run logic
+	// end-of-run processing
 	if(FINALIZE) {
 	  _DBG_ << "in finalize logic..." << endl;
 
@@ -318,12 +302,12 @@ void MainLoop(rs_archiver &c)
 
 	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
-
+	
 	if(HTML_OUTPUT) {
 	  html_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "html");
 	  pdf_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR + "/html");
 	}
-
+	
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
 
@@ -372,16 +356,7 @@ void signal_stop_handler(int signum)
     // let main loop know that it's time to stop
     //KEEP_RUNNING = false;
     DONE = true;
-
-    //pthread_rwlock_unlock(ROOT_MUTEX);   // is this okay??
 }
-
-/*
-void signal_switchfile_handler(int signum)
-{
-    SWITCH_FILES = true;
-}
-*/
 
 void signal_finalize_handler(int signum)
 {
@@ -501,34 +476,6 @@ void Usage(void)
 }
 
 /**
-// write out a directory of ROOT objects to an archived file
-// do we need this?
-void WriteArchiveFile( TDirectory *sum_dir )
-{
-    stringstream ss;
-    ss << ARCHIVE_PATHNAME << "/" << "run" << RUN_NUMBER << "_output.root";
-    
-    pthread_rwlock_wrlock(ROOT_MUTEX);
-    //RS_INFO->Lock();	    
-    
-    TFile *archive_file = new TFile(ss.str().c_str(), "create");
-    if(IsGoodTFile(archive_file)) {
-	//archive_file->mkdir("rootspy", "");
-	SaveDirectory( sum_dir, archive_file );
-	
-	archive_file->Close();
-	delete archive_file;
-    } // else {
-    //cout << "could not create archive file: " << ss.str() << endl;
-    //}
-
-    //RS_INFO->Unlock();
-    pthread_rwlock_unlock(ROOT_MUTEX);
-
-}
-**/
-
-
 // recursively copy/save a directory to a file
 void SaveDirectory( TDirectory *the_dir, TFile *the_file )
 {
@@ -555,7 +502,7 @@ void SaveDirectory( TDirectory *the_dir, TFile *the_file )
     }
 
 }
-
+**/
 
 
 /** -- working on this --
@@ -629,7 +576,6 @@ void SaveTrees( TDirectoryFile *the_file )
 
 // function for saving end-of-run histograms
 // use server info map to keep track of which histograms we're waiting for
-//void *ArchiveFile(void * ptr) 
 void ArchiveFile(int run_number, map<string,server_info_t> *the_servers) 
 {
     // map of the set of servers and histograms that we want to save

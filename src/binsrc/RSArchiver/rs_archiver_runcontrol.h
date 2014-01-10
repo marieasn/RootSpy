@@ -124,7 +124,7 @@ public:
 
 //-----------------------------------------------------------------------------
 
-  ~rs_archiver(void) throw() override {
+  ~rs_archiver(void) throw()  {
     DONE=true;
   }
   
@@ -132,7 +132,7 @@ public:
 //-----------------------------------------------------------------------------
 
 /*
-  bool userConfigure(const string& s) throw(CodaException) override {
+  bool userConfigure(const string& s) throw(CodaException)  {
     paused=false;
     return(true);
   }
@@ -141,7 +141,7 @@ public:
 //-----------------------------------------------------------------------------
 
 /*
-  bool userDownload(const string& s) throw(CodaException) override {
+  bool userDownload(const string& s) throw(CodaException)  {
     paused=false;
     return(true);
   }
@@ -150,7 +150,7 @@ public:
 //-----------------------------------------------------------------------------
 
 /*
-  bool userPrestart(const string& s) throw(CodaException) override {
+  bool userPrestart(const string& s) throw(CodaException)  {
     paused=false;
     return(true);
   }
@@ -159,7 +159,7 @@ public:
 //-----------------------------------------------------------------------------
 
 
-  bool userGo(const string& s) throw(CodaException) override {
+  bool userGo(const string& s) throw(CodaException)  {
       //PAUSED=false;
     RUN_IN_PROGRESS=true;
     return(true);
@@ -169,7 +169,7 @@ public:
 //-----------------------------------------------------------------------------
 
 /*
-  bool userPause(const string& s) throw(CodaException) override {
+  bool userPause(const string& s) throw(CodaException)  {
     paused=true;
     return(true);
   }
@@ -178,7 +178,7 @@ public:
 //-----------------------------------------------------------------------------
 
 /*
-  bool userResume(const string& s) throw(CodaException) override {
+  bool userResume(const string& s) throw(CodaException)  {
     paused=false;
     return(true);
   }
@@ -187,7 +187,7 @@ public:
 //-----------------------------------------------------------------------------
 
 
-  bool userEnd(const string& s) throw(CodaException) override {
+  bool userEnd(const string& s) throw(CodaException)  {
       //paused=false;
     cout << "rs_archiver received end run command" << endl;
       FINALIZE=true;
@@ -199,7 +199,7 @@ public:
 //-----------------------------------------------------------------------------
 
 /*
-  bool userReset(const string& s) throw(CodaException) override {
+  bool userReset(const string& s) throw(CodaException)  {
     paused=false;
     run_in_progress=false;
     return(true);
@@ -209,7 +209,7 @@ public:
 //-----------------------------------------------------------------------------
 
 
-  void exit(const string& s) throw(CodaException) override {
+  void exit(const string& s) throw(CodaException)  {
     cout << "rs_archiver received exit command" << endl;
     RUN_IN_PROGRESS=false;
     DONE=true;
@@ -219,8 +219,9 @@ public:
 //-----------------------------------------------------------------------------
 
 
-  void userMsgHandler(cMsgMessage *msgp, void *userArg) throw(CodaException) override {
-    unique_ptr<cMsgMessage> msg(msgp);
+  //void userMsgHandler(cMsgMessage *msgp, void *userArg) throw(CodaException)  {
+  void userMsgHandler(cMsgMessage *msg, void *userArg) throw(CodaException)  {
+    //unique_ptr<cMsgMessage> msg(msgp);
     cerr << "?et2evio...received unknown message subject,type: "
          << msg->getSubject() << "," << msg->getType() << endl << endl;
   }

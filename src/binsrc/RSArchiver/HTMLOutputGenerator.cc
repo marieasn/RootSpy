@@ -127,7 +127,7 @@ void HTMLOutputGenerator::GenerateOutput(TDirectory *root_dir, string basedir, s
 	    if(!do_mkdir(basedir + "/" + subdir + "/" + name, 0755))
 		continue;
 	    
-	    //GenerateOutput(the_dir, basedir, subdir+"/"+name);   // make sure this works
+	    GenerateOutput(the_dir, basedir, subdir+"/"+name);   // make sure this works
 	}
 
 
