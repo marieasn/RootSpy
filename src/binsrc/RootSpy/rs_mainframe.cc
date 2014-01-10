@@ -692,6 +692,16 @@ void rs_mainframe::DoSetArchiveFile(void) {
 	    archive_file->Close();
 
 	archive_file = new TFile(fileinfo->fFilename);
+	// check for errors?
+
+	// update display on GUI
+	stringstream ss;
+	ss << "Archive file: " << fileinfo->fFilename;
+	//archive_filename->SetTitle(ss.str().c_str());
+	archive_filename->SetText(ss.str().c_str());
+	//archive_filename->Resize(300,30);
+
+	cout << "loaded archiver file = " << ss.str() << endl;
 }
 
 //-------------------
@@ -1133,12 +1143,18 @@ void rs_mainframe::CreateGUI(void)
    fGroupFrame711->Resize(133,78);
    fHorizontalFrame1060->AddFrame(fGroupFrame711, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
-   TGTextButton *fTextButton1075 = new TGTextButton(fHorizontalFrame1060,"Quit");
+
+   TGVerticalFrame *fVerticalFrame3673 = new TGVerticalFrame(fHorizontalFrame1060,400,78,kVerticalFrame);
+   TGHorizontalFrame *fHorizontalFrame2060 = new TGHorizontalFrame(fVerticalFrame3673,400,30,kHorizontalFrame);
+
+   //TGTextButton *fTextButton1075 = new TGTextButton(fHorizontalFrame1060,"Quit");
+   TGTextButton *fTextButton1075 = new TGTextButton(fHorizontalFrame2060,"Quit");
    fTextButton1075->SetTextJustify(36);
    fTextButton1075->SetMargins(0,0,0,0);
    fTextButton1075->SetWrapLength(-1);
    fTextButton1075->Resize(97,22);
-   fHorizontalFrame1060->AddFrame(fTextButton1075, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   //fHorizontalFrame1060->AddFrame(fTextButton1075, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   fHorizontalFrame2060->AddFrame(fTextButton1075, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
    /**
    TGTextButton *fTextButtonTB = new TGTextButton(fHorizontalFrame1060,"TBrowser");
    fTextButtonTB->SetTextJustify(36);
@@ -1148,12 +1164,14 @@ void rs_mainframe::CreateGUI(void)
    fHorizontalFrame1060->AddFrame(fTextButtonTB, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
    **/
    //Save Canvas button added by Justinb 6.10.10
-   TGTextButton *fTextButtonSave = new TGTextButton(fHorizontalFrame1060,"Save Canvas");
+   //TGTextButton *fTextButtonSave = new TGTextButton(fHorizontalFrame1060,"Save Canvas");
+   TGTextButton *fTextButtonSave = new TGTextButton(fHorizontalFrame2060,"Save Canvas");
    fTextButtonSave->SetTextJustify(36);
    fTextButtonSave->SetMargins(0,0,0,0);
    fTextButtonSave->SetWrapLength(-1);
    fTextButtonSave->Resize(200,22);
-   fHorizontalFrame1060->AddFrame(fTextButtonSave, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   //fHorizontalFrame1060->AddFrame(fTextButtonSave, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   fHorizontalFrame2060->AddFrame(fTextButtonSave, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
    /**
    //Save Hists button added by Justinb 6.10.10
    TGTextButton *fTextButtonSaveHists = new TGTextButton(fHorizontalFrame1060,"Save Hists");
@@ -1178,12 +1196,32 @@ void rs_mainframe::CreateGUI(void)
    fTextButton1297->Resize(97,22);
    fHorizontalFrame1060->AddFrame(fTextButton1297, new TGLayoutHints(kLHintsNormal));
    **/
-   TGTextButton *fTextButtonSetArchive = new TGTextButton(fHorizontalFrame1060,"Set Archive");
+   //TGTextButton *fTextButtonSetArchive = new TGTextButton(fHorizontalFrame1060,"Set Archive");
+   TGTextButton *fTextButtonSetArchive = new TGTextButton(fHorizontalFrame2060,"Set Archive");
    fTextButtonSetArchive->SetTextJustify(36);
    fTextButtonSetArchive->SetMargins(0,0,0,0);
    fTextButtonSetArchive->SetWrapLength(-1);
    fTextButtonSetArchive->Resize(300,22);
-   fHorizontalFrame1060->AddFrame(fTextButtonSetArchive, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   //fHorizontalFrame1060->AddFrame(fTextButtonSetArchive, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   fHorizontalFrame2060->AddFrame(fTextButtonSetArchive, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+
+   TGHorizontalFrame *fHorizontalFrame3060 = new TGHorizontalFrame(fVerticalFrame3673,400,30,kHorizontalFrame);
+
+   //TGLabel *fLabel2030 = new TGLabel(fHorizontalFrame1060,"");
+   TGLabel *fLabel2030 = new TGLabel(fHorizontalFrame3060,"");
+   fLabel2030->SetMargins(0,0,0,0);
+   fLabel2030->SetWrapLength(-1);
+   fLabel2030->SetTextJustify(kTextTop | kTextRight);
+   //fLabel2030->Resize(300,30);
+   //fHorizontalFrame1060->AddFrame(fLabel2030, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   //fHorizontalFrame3060->AddFrame(fLabel2030, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   fHorizontalFrame3060->AddFrame(fLabel2030, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
+
+
+   fVerticalFrame3673->AddFrame(fHorizontalFrame2060, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandX,2,2,2,2));
+   fVerticalFrame3673->AddFrame(fHorizontalFrame3060, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandX,2,2,2,2));
+   
+   fHorizontalFrame1060->AddFrame(fVerticalFrame3673, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandX,2,2,2,2));
 
 
    fVerticalFrame662->AddFrame(fHorizontalFrame1060, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
@@ -1235,6 +1273,7 @@ void rs_mainframe::CreateGUI(void)
 	selected_server = fLabel670;
 	selected_hist = fLabel671;
 	retrieved_lab = fLabel672;
+	archive_filename = fLabel2030;
 	delay = fComboBox684;
 	canvas = fRootEmbeddedCanvas698->GetCanvas();
 	auto_refresh = fCheckButton679;
@@ -1693,6 +1732,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	} else {
 	    // set axis ranges so that we can sensibly overlay the histograms
 	    double hist_ymax = 1.1*hist->GetMaximum();
+	    //double hist_ymax = hist->GetMaximum();
 	    double hist_ymin = hist->GetMinimum();
 	    // make sure we at least go down to zero, so that we are displaying the whole
 	    // distribution - assumes we are just looking at frequency histograms
@@ -1707,20 +1747,20 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    
 	    // scale down archived histogram and display it to set the scale
 	    float scale = hist_ymax/overlay_ymax;
-	    //_DBG_ << gPad->GetUymax() << " " << overlay_ymax << " " << scale << endl;
 
 	    overlay_hist->Scale(scale);
 	    overlay_hist->Draw();
 
 	    // now print the current histogram on top of it
 	    hist->Draw("SAME E1");
-	    //hist->Draw("AXIS");
 
 	    // add axis to the right for scale of archived histogram
 	    if(overlay_yaxis != NULL)
 		delete overlay_yaxis;
-	    overlay_yaxis = new TGaxis(gPad->GetUxmax(),hist_ymin,
-				       gPad->GetUxmax(),hist_ymax,
+	    //overlay_yaxis = new TGaxis(gPad->GetUxmax(),hist_ymin,
+				       //gPad->GetUxmax(),hist_ymax,
+	    overlay_yaxis = new TGaxis(gPad->GetUxmax(),gPad->GetUymin(),
+				       gPad->GetUxmax(),gPad->GetUymax(),
 				       overlay_ymin,overlay_ymax,510,"+L");
 	    overlay_yaxis->SetLabelFont( hist->GetLabelFont() );
 	    overlay_yaxis->SetLabelSize( hist->GetLabelSize() );

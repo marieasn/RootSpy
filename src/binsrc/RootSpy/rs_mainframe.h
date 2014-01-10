@@ -97,6 +97,7 @@ class rs_mainframe:public TGMainFrame {
 		TGLabel *selected_server;
 		TGLabel *selected_hist;
 		TGLabel *retrieved_lab;
+		TGLabel *archive_filename;
 		TGComboBox *delay;
 		TCanvas *canvas;
 		TGCheckButton *auto_refresh;
