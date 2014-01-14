@@ -8,12 +8,10 @@
 #include <unistd.h>
 
 #include <iostream>
-#include<sstream>
+#include <sstream>
 #include <cmath>
 #include <algorithm>
 using namespace std;
-
-#include <boost/algorithm/string/join.hpp>
 
 #include <TDirectoryFile.h>
 #include <TMessage.h>
@@ -31,6 +29,23 @@ using namespace std;
 //public:
 //   MyTMessage(void *buf, Int_t len) : TMessage(buf, len) { }
 //};
+
+
+// templated join for a string vector - could be templated?
+// uses stringstreams 
+string join( vector<string>::const_iterator begin, vector<string>::const_iterator end, string delim )
+{
+  stringstream ss;
+
+  vector<string>::const_iterator it = begin;
+  while( it != end ) {
+    ss << *(it++);
+    if(it != end) 
+      ss << delim;
+  }
+
+  return ss.str();
+}
 
 
 //---------------------------------
@@ -606,7 +621,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
       if(hdef->path == "/")
 	hist_sum_dir = RS_INFO->sum_dir;
       else {
-	sum_path = boost::algorithm::join(hdef->dirs, "/");
+	sum_path = join(hdef->dirs.begin(), hdef->dirs.end(), "/");
 	hist_sum_dir = RS_INFO->sum_dir->GetDirectory(sum_path.c_str());
 	//hist_sum_dir = RS_INFO->sum_dir->GetDirectory(hdef->path.c_str());
       }
