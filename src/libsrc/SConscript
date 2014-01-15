@@ -6,7 +6,7 @@
 
 
 Import('*')
-from rootspy_lib import define_dependencies, buildLib
+from halld_lib import define_dependencies, buildLib
 
  
 #  set package dependencies
