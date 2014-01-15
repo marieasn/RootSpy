@@ -1,10 +1,3 @@
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <cmath>
-#include <fstream>
-using namespace std;
-
 
 #include "RootSpy.h"
 #include "rs_mainframe.h"
@@ -41,6 +34,16 @@ using namespace std;
 #include <TFrame.h>
 
 #include <KeySymbols.h>
+
+#include <unistd.h>
+
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <cmath>
+#include <fstream>
+using namespace std;
+
 
 
 extern string ROOTSPY_UDL;
@@ -656,7 +659,7 @@ void rs_mainframe::DoPrev(void)
 					hinfo_it = hdef_iter->second.hists.end();
 				}
 		} else {
-			hinfo_it == hdef_iter->second.hists.begin();
+			hinfo_it = hdef_iter->second.hists.begin();
 		}
 		hinfo_it->second.setDisplayed(true);	
 	} else {

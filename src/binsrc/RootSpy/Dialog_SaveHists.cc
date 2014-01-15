@@ -578,7 +578,7 @@ void Dialog_SaveHists::SaveHistograms(void){
 	for(; histtosave_iter != histtosave.end(); histtosave_iter++) {
 		hdef_t histodef = RS_INFO->histdefs[histtosave_iter->first];
 		TH1* sumhistSave = histodef.sum_hist;
-		cerr<<_DBG__;
+		_DBG__;
 		sumhistSave->Write();
 	}
 	displaybar = false;
