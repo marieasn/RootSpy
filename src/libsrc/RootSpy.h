@@ -11,9 +11,9 @@ class rs_mainframe;
 class rs_cmsg;
 class rs_info;
 
-extern rs_mainframe *RSMF __attribute__((weak_import));
-extern rs_cmsg *RS_CMSG __attribute__((weak_import));
-extern rs_info *RS_INFO __attribute__((weak_import));
+extern rs_mainframe *RSMF;
+extern rs_cmsg *RS_CMSG;
+extern rs_info *RS_INFOl
 
 #include <pthread.h>
 extern pthread_rwlock_t *ROOT_MUTEX;
