@@ -3,18 +3,19 @@
 #ifndef _ROOTSPY_H_
 #define _ROOTSPY_H_
 
-#include <iostream>
-#include <iomanip>
-using namespace std;
-
+//#include <iostream>
+//#include <iomanip>
+//using namespace std;
 
 class rs_mainframe;
 class rs_cmsg;
 class rs_info;
 
-extern rs_mainframe *RSMF;
-extern rs_cmsg *RS_CMSG;
-extern rs_info *RS_INFO;
+extern rs_mainframe *RSMF __attribute__((weak_import));
+extern rs_cmsg *RS_CMSG __attribute__((weak_import));
+extern rs_info *RS_INFO __attribute__((weak_import));
+
+#include <pthread.h>
 extern pthread_rwlock_t *ROOT_MUTEX;
 
 

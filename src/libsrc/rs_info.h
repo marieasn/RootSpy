@@ -8,6 +8,11 @@
 #ifndef _rs_info_
 #define _rs_info_
 
+#include "hinfo_t.h"
+#include "hdef_t.h"
+#include "server_info_t.h"
+#include "final_hist_t.h"
+
 #include <vector>
 #include <list>
 #include <map>
@@ -19,11 +24,6 @@
 
 //#include <cMsg.hxx>
 //using namespace cmsg;
-
-#include "hdef_t.h"
-#include "hinfo_t.h"
-#include "server_info_t.h"
-#include "final_hist_t.h"
 
 class TH1;
 

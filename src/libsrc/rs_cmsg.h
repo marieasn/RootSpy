@@ -8,6 +8,8 @@
 #ifndef _rs_cmsg_
 #define _rs_cmsg_
 
+#include "hinfo_t.h"
+
 #include <vector>
 #include <string>
 

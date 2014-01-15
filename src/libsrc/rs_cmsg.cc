@@ -7,6 +7,11 @@
 
 #include <unistd.h>
 
+#include "RootSpy.h"
+#include "rs_cmsg.h"
+#include "rs_info.h"
+#include "tree_info_t.h"
+
 #include <iostream>
 #include <sstream>
 #include <cmath>
@@ -17,11 +22,6 @@ using namespace std;
 #include <TMessage.h>
 #include <TH1.h>
 #include <TTree.h>
-
-#include "RootSpy.h"
-#include "rs_cmsg.h"
-#include "rs_info.h"
-#include "tree_info_t.h"
 
 
 //// See http://www.jlab.org/Hall-D/software/wiki/index.php/Serializing_and_deserializing_root_objects

@@ -5,13 +5,13 @@
 // Creator: davidl (on Darwin Amelia.local 9.8.0 i386)
 //
 
+#include "rs_info.h"
+
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
 using namespace std;
 
-
-#include "rs_info.h"
 
 extern rs_info *RS_INFO;
 
