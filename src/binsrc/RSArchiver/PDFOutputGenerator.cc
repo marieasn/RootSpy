@@ -11,7 +11,7 @@ void PDFOutputGenerator::collect_hists(TDirectory *the_dir, vector<TH1 *> &hists
   // collect information on histograms and directories
   TIter next(the_dir->GetListOfKeys());
   TObject *keyobj;  
-  while (keyobj = next()) {
+  while ((keyobj = next())) {
     TKey *key = (TKey *)keyobj;
     string name = key->GetName();
     

@@ -109,7 +109,7 @@ void HTMLOutputGenerator::GenerateOutput(TDirectory *root_dir, string basedir, s
     // collect information on histograms and directories
     TIter next(root_dir->GetListOfKeys());
     TObject *keyobj;  
-    while (keyobj = next()) {
+    while ((keyobj = next())) {
 	TKey *key = (TKey *)keyobj;
         //const char *name = key.GetName()
         string name = key->GetName();
