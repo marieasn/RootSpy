@@ -13,8 +13,9 @@ class rs_info;
 
 extern rs_mainframe *RSMF;
 extern rs_cmsg *RS_CMSG;
-extern rs_info *RS_INFOl
+extern rs_info *RS_INFO;
 
+#include <time.h>
 #include <pthread.h>
 extern pthread_rwlock_t *ROOT_MUTEX;
 
