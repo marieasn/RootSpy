@@ -11,7 +11,7 @@ from halld_lib import define_dependencies, buildBin
 
 #  define package dependencies
 define_dependencies(binEnv,'root codaobject cmsg')
-binEnv.AppendUnique(LIBS = 'boost_program_options')
+
 
 #  build programs
 buildBin(binEnv)
