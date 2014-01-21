@@ -1687,7 +1687,8 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
     float overlay_ymin=0., overlay_ymax=0.;
     
     
-    if(hdim == hdef_t::histdimension_t::oneD) {
+    if(hdim == hdef_t::oneD) {
+      //if(hdim == hdef_t::histdimension_t::oneD) {
 	bool do_overlay = false;
 	//TH1 *archived_hist = NULL;
 
@@ -1770,7 +1771,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    overlay_yaxis->Draw();
 	}
 
-    } else if(hdim == hdef_t::histdimension_t::twoD) {
+    } else if(hdim == hdef_t::twoD) {
 
 	// handle drawing 2D histograms differently
 	// probably don't want to overlay them
