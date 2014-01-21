@@ -1,5 +1,6 @@
 
 #include <unistd.h>
+#include <getopt.h>
 #include <pthread.h>
 #include <signal.h>
 #include <time.h>
@@ -26,6 +27,7 @@
 #include "rs_cmsg.h"
 #include "rs_info.h"
 
+
 // GLOBALS
 rs_cmsg *RS_CMSG = NULL;
 rs_info *RS_INFO = NULL;
@@ -36,8 +38,8 @@ PDFOutputGenerator *pdf_generator = NULL;
 
 //static vector<pthread_t> thread_ids;
 
+// configuration variables
 namespace config {
-  // configuration variables
   static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
   static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
   static string CMSG_NAME = "<not set here. see below>";
@@ -47,9 +49,8 @@ namespace config {
   static TFile *CURRENT_OUTFILE = NULL;
   static string ARCHIVE_PATHNAME = "<nopath>";
 
-  static double POLL_DELAY = 30;   // time between polling runs, default 1 min?
-  //const double MIN_POLL_DELAY = 10;
-  const double MIN_POLL_DELAY = 0;
+  static double POLL_DELAY = 60;   // time between polling runs
+  static double MIN_POLL_DELAY = 10;
   
   // run management 
   //bool KEEP_RUNNING = true;
@@ -62,8 +63,7 @@ namespace config {
 
   static bool HTML_OUTPUT = false;
   static string HTML_BASE_DIR = "<nopath>";
-  static bool PDF_OUTPUT = false;
-  
+  static bool PDF_OUTPUT = false;  
 }
 
 using namespace config;
@@ -104,8 +104,8 @@ bool IsGoodTFile(TFile *the_file)
 //-------------------
 int main(int narg, char *argv[])
 {
-    // Parse the command line arguments
-    ParseCommandLineArguments(narg, argv);
+  // Parse the command line arguments
+  ParseCommandLineArguments(narg, argv);
 
     if(ARCHIVE_PATHNAME == "<nopath>") {
 	char *cwd_buf = getcwd(NULL, 0);
@@ -363,6 +363,130 @@ void signal_finalize_handler(int signum)
     FINALIZE = true;
 }
 
+
+//-----------
+// ParseCommandLineArguments
+// configuration priorities (low to high):
+//    config file -> environmental variables -> command line
+//-----------
+void ParseCommandLineArguments(int &narg, char *argv[])
+{
+  _DBG_ << "In ParseCommandLineArguments().." << endl;
+
+
+  // read from configuration file
+
+
+  // allow for environmental variables
+  const char *ptr = getenv("ROOTSPY_UDL");
+  if(ptr)ROOTSPY_UDL = ptr;
+  
+  const char *ptr2 = getenv("ROOTSPY_ARCHIVE_PATHNAME");
+  if(ptr2)ARCHIVE_PATHNAME = ptr2;
+  
+  const char *ptr3 = getenv("ROOTSPY_DAQ_UDL");
+  if(ptr3)DAQ_UDL = ptr3;
+    
+
+  // check command line options
+  static struct option long_options[] = {
+        {"help",           no_argument,       0,  'h' },
+        {"force",          no_argument,       0,  'f' },
+        {"poll-delay",     required_argument, 0,  'p' },
+        {"min-poll-delay", required_argument, 0,  'm' },
+        {"udl",            required_argument, 0,  'u' },
+        {"daq-udl",        required_argument, 0,  'q' },
+        {"server",         required_argument, 0,  's' },
+        {"archive-path",   required_argument, 0,  'A' },
+        {"output-file",    required_argument, 0,  'F' },
+        {"cmsg-name",      required_argument, 0,  'n' },
+	
+        {"pdf-output",     no_argument,       0,  'P' },
+        {"html-output",    no_argument,       0,  'H' },
+        {"session-name",   no_argument,       0,  'S' },
+        //{"", required_argument, 0,  '' },
+
+        {0, 0, 0, 0  }
+    };
+
+  int opt = 0;
+  int long_index = 0;
+  while ((opt = getopt_long(narg, argv,"hfpmuqsAFn", 
+			    long_options, &long_index )) != -1) {
+    switch (opt) {
+    case 'f' : 
+      FORCE_START = true;
+      break;
+    case 'p' : 
+      if(optarg == NULL) Usage();
+      POLL_DELAY = atoi(optarg);
+      break;
+    case 'm' :
+      if(optarg == NULL) Usage();
+      MIN_POLL_DELAY = atoi(optarg);
+      break;
+    case 'u' :
+      if(optarg == NULL) Usage();
+      ROOTSPY_UDL = optarg;
+      break;
+    case 'q' :
+      if(optarg == NULL) Usage();
+      DAQ_UDL = optarg;
+      break;
+    case 's' :
+      if(optarg == NULL) Usage();
+      ROOTSPY_UDL = "cMsg://";
+      ROOTSPY_UDL += optarg;
+      ROOTSPY_UDL += "/cMsg/rootspy";
+      break;
+    case 'A' :
+      if(optarg == NULL) Usage();
+      ARCHIVE_PATHNAME = optarg;
+      break;
+    case 'F' :
+      if(optarg == NULL) Usage();
+      OUTPUT_FILENAME = optarg;
+      break;
+    case 'n' :
+      if(optarg == NULL) Usage();
+      CMSG_NAME = optarg;
+      break;
+    case 'P' :
+      PDF_OUTPUT = true;
+      break;
+    case 'H' :
+      HTML_OUTPUT = true;
+      break;
+    case 'S' :
+      SESSION = optarg;
+      break;
+
+    case 'h':
+    default: Usage(); break;
+    }
+  }  
+  
+
+  // check any values
+  if(POLL_DELAY < MIN_POLL_DELAY)
+    POLL_DELAY = MIN_POLL_DELAY;
+
+  /**
+  namespace po = boost::program_options; 
+  
+  po::options_description desc("Options"); 
+  desc.add_options() 
+    ("help,h", "Print help messages") 
+    ("force", "Start program assuming run is already in progress") 
+    ("poll-time,p", po::value<double>(&config::POLL_DELAY), 
+     "Time (in seconds) to wait in between polling cycles") 
+    ("min-poll-time", po::value<double>(&config::MIN_POLL_DELAY), 
+     "Lower limit on allowed polling times")
+    ("config-file", po::value<string>(), "Name of configuration file");
+  **/  
+}
+
+/**
 //-----------
 // ParseCommandLineArguments
 //-----------
@@ -446,6 +570,8 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	}
     }
 }
+**/
+
 
 //-----------
 // Usage
@@ -474,6 +600,7 @@ void Usage(void)
     
     exit(0);
 }
+
 
 /**
 // recursively copy/save a directory to a file
