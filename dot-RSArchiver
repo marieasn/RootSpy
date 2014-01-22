@@ -1,0 +1,13 @@
+[main]
+rootspy_udl = cMsg://127.0.0.1/cMsg/rootspy
+daq_udl = cMsg://127.0.0.1/cMsg
+#session_name =   ## empty by default
+poll_delay = 60
+min_poll_delay = 10
+output_filename = current_run.root
+archive_pathname = <nopath>
+
+[output]
+html_output = false
+pdf_output = false
+html_base_dir = <nopath>
