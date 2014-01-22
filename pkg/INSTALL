@@ -1,0 +1,15 @@
+RootSpy uses an scons-based build system. 
+
+To configure the build system, please add $ROOTSPY/build
+to your PYTHONPATH and PERL5LIB environment variables
+
+To build both the client library and the RootSpy GUI program, 
+just do the following:
+
+  scons install
+
+
+RootSpy requires cMsg3.0 or greater and ROOT 5.18.00 or greater.
+The CMSROOT and ROOTSYS environment variables must be set correctly.
+
+We also allow for installing in other directories somehow.

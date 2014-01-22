@@ -1,0 +1,33 @@
+#  main SConstruct for building entire release
+
+#  invokes SConstruct file in each subdir
+
+#  ejw, 8-may-2013
+
+
+import os
+import glob
+import sys
+
+
+## setup environmental variables
+#sys.path.append(os.getcwd() + "/build")
+sys.path.insert(0,os.getcwd() + "/build")
+
+if "PERL5LIB" in os.environ:
+    os.environ["PERL5LIB"] = os.getcwd() + "/build:" + os.environ["PERL5LIB"]
+else:
+    os.environ["PERL5LIB"] = os.getcwd() + "/build:"
+if "PATH" in os.environ:
+    os.environ["PATH"] = os.getcwd() + "/build:" + os.environ["PATH"]
+else:
+    os.environ["PATH"] = os.getcwd() + "/build:"
+
+
+#  invoke SConstruct in each immediate subdir of packages dir
+for dir in glob.glob('./*'):
+    if(os.path.isdir(dir)):
+        if dir not in ['./build','./scripts']:
+            print 'Processing package: ' + dir
+            SConscript(dir + '/SConstruct')
+print ''
