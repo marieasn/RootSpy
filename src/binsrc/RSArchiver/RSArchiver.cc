@@ -305,10 +305,11 @@ void MainLoop(rs_archiver &c)
 	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
 	
-	if(HTML_OUTPUT) {
+	if(HTML_OUTPUT)
 	  html_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "html");
+	if(PDF_OUTPUT)
 	  pdf_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR + "/html");
-	}
+	
 	
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
@@ -427,7 +428,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         {"help",           no_argument,       0,  'h' },
         {"force",          no_argument,       0,  'f' },
         {"poll-delay",     required_argument, 0,  'p' },
-        {"min-poll-delay", required_argument, 0,  'm' },
+        //{"min-poll-delay", required_argument, 0,  'm' },
         {"udl",            required_argument, 0,  'u' },
         {"daq-udl",        required_argument, 0,  'q' },
         {"server",         required_argument, 0,  's' },
@@ -438,6 +439,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         {"pdf-output",     no_argument,       0,  'P' },
         {"html-output",    no_argument,       0,  'H' },
         {"session-name",   no_argument,       0,  'S' },
+	{"summary-dir",    required_argument, 0,  'R' },
         //{"", required_argument, 0,  '' },
 
         {0, 0, 0, 0  }
@@ -455,10 +457,10 @@ void ParseCommandLineArguments(int &narg, char *argv[])
       if(optarg == NULL) Usage();
       POLL_DELAY = atoi(optarg);
       break;
-    case 'm' :
-      if(optarg == NULL) Usage();
-      MIN_POLL_DELAY = atoi(optarg);
-      break;
+      //case 'm' :
+      //if(optarg == NULL) Usage();
+      //MIN_POLL_DELAY = atoi(optarg);
+      //break;
     case 'u' :
       if(optarg == NULL) Usage();
       ROOTSPY_UDL = optarg;
@@ -480,6 +482,10 @@ void ParseCommandLineArguments(int &narg, char *argv[])
     case 'F' :
       if(optarg == NULL) Usage();
       OUTPUT_FILENAME = optarg;
+      break;
+    case 'R' :
+      if(optarg == NULL) Usage();
+      HTML_BASE_DIR = optarg;
       break;
       //case 'n' :
       //if(optarg == NULL) Usage();
@@ -528,7 +534,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 
 
 //-----------
-// Usage4
+// Usage
 //-----------
 void Usage(void)
 {
@@ -539,17 +545,24 @@ void Usage(void)
     cout<<endl;
     cout<<"Options:"<<endl;
     cout<<endl;
-    cout<<"   -h        Print this message"<<endl;
-    cout<<"   -u udl    UDL of cMsg RootSpy server (def. "<<ROOTSPY_UDL<<")"<<endl;
-    cout<<"   -q udl    UDL of cMsg CODA server (def. "<<DAQ_UDL<<")"<<endl;
-    cout<<"   -n name   Specify name this program registers with cMsg server"<<endl;
-    cout<<"             (def. "<<CMSG_NAME<<")"<<endl;
-    cout<<"   -force    Start assuming run is already in progress"<<endl;
-    cout<<"   -A path   Root directory of archives (def. ?)" <<endl;
-    cout<<"   -f fn     Name of ROOT file to store cumulative output in"
-	<<"(def. "<<OUTPUT_FILENAME<<")"<<endl;
-    cout<<"   -p time   Time (in seconds) to wait in between polling cycles"
-	<<"( def. "<<POLL_DELAY<<"?)"<<endl;
+    cout<<"   -h,--help                 Print this message"<<endl;
+    cout<<"   -u,--udl udl              UDL of cMsg RootSpy server"<<endl;
+    cout<<"   -q,--daq-udl udl          UDL of cMsg CODA server"<<endl;
+    cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
+    cout<<"   -S,--session-name name    Name of CODA session"<<endl; 
+    //cout<<"   -n name   Specify name this program registers with cMsg server"<<endl;
+    //cout<<"             (def. "<<CMSG_NAME<<")"<<endl;
+
+    cout<<"   -f,--force                Start program assuming run is already in progress"<<endl;
+    cout<<"   -p,--poll-delay time      Time (in seconds) to wait between polling seconds" << endl;
+    //cout<<"   -m,--min-poll-delay time  Time"<<endl;
+
+    cout<<"   -F,--output-file file     Name of ROOT file used to store output of" 
+	<<"                             current run" << endl;
+    cout<<"   -A,--archive-dir path     Directory used to store archived ROOT files" << endl;
+    cout<<"   -P,--pdf-output           Enable output of summary PDF"<<endl;
+    cout<<"   -H,--html-output          Enable output of summary web pages"<<endl;
+    cout<<"   -R,--summary-dir path     Directory used to store summary files"<<endl;
     cout<<endl;
     
     exit(0);
