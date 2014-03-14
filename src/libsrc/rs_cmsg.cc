@@ -11,6 +11,7 @@
 #include "rs_cmsg.h"
 #include "rs_info.h"
 #include "tree_info_t.h"
+#include "cMsg.h"
 
 #include <iostream>
 #include <sstream>
@@ -111,6 +112,52 @@ rs_cmsg::~rs_cmsg()
     }
 }
 
+
+//---------------------------------
+// BuildRequestHists
+//---------------------------------
+void rs_cmsg::BuildRequestHists(cMsgMessage &msg, string servername)
+{
+    msg.setSubject(servername);
+    msg.setType(myname);
+    msg.setText("list hists");
+}
+
+//---------------------------------
+// BuildRequestHistogram
+//---------------------------------
+void rs_cmsg::BuildRequestHistogram(cMsgMessage &msg, string servername, string hnamepath)
+{
+    msg.setSubject(servername);
+    msg.setType(myname);
+    msg.setText("get hist");
+    msg.add("hnamepath", hnamepath);
+}
+
+//---------------------------------
+// BuildRequestTreeInfo
+//---------------------------------
+void rs_cmsg::BuildRequestTreeInfo(cMsgMessage &msg, string servername)
+{
+    msg.setSubject(servername);
+    msg.setType(myname);
+    msg.setText("tree info");
+}
+
+//---------------------------------
+// BuildRequestTree
+//---------------------------------
+void rs_cmsg::BuildRequestTree(cMsgMessage &msg, string servername, string tree_name, string tree_path, int64_t num_entries)
+{
+    msg.setSubject(servername);
+    msg.setType(myname);
+    msg.setText("get tree");
+    msg.add("tree_name", tree_name);
+    msg.add("tree_path", tree_path);
+    msg.add("num_entries", num_entries);
+}
+
+
 //---------------------------------
 // PingServers
 //---------------------------------
@@ -130,10 +177,7 @@ void rs_cmsg::PingServers(void)
 void rs_cmsg::RequestHists(string servername)
 {
 	cMsgMessage listHists;
-	listHists.setSubject(servername);
-	listHists.setType(myname);
-	listHists.setText("list hists");
-	
+	BuildRequestHists(listHists, servername);	
 	cMsgSys->send(&listHists);
 }
 
@@ -143,11 +187,7 @@ void rs_cmsg::RequestHists(string servername)
 void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 {
 	cMsgMessage requestHist;
-	requestHist.setSubject(servername);
-	requestHist.setType(myname);
-	requestHist.setText("get hist");
-	requestHist.add("hnamepath", hnamepath);
-
+	BuildRequestHistogram(requestHist, servername, hnamepath);
 	cMsgSys->send(&requestHist);
 }
 
@@ -157,27 +197,97 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 void rs_cmsg::RequestTreeInfo(string servername)
 {
 	cMsgMessage treeinfo;
-	treeinfo.setSubject(servername);
-	treeinfo.setType(myname);
-	treeinfo.setText("tree info");
-
+	BuildRequestTreeInfo(treeinfo, servername);
 	cMsgSys->send(&treeinfo);
 }
 
 //---------------------------------
 // RequestTree
 //---------------------------------
-void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path)
+void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path, int64_t num_entries = -1)
 {
 	cMsgMessage requestTree;
-	requestTree.setSubject(servername);
-	requestTree.setType(myname);
-	requestTree.setText("get tree");
-	requestTree.add("tree_name", tree_name);
-	requestTree.add("tree_path", tree_path);
-
+	BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
 	cMsgSys->send(&requestTree);
 }
+
+
+//---------------------------------
+// RequestHistogramSync
+//---------------------------------
+void rs_cmsg::RequestHistsSync(string servername, timespec_t &myTimeout)
+{
+    cMsgMessage requestHist;
+    BuildRequestHists(requestHist, servername);
+    cMsgMessage response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
+
+    string sender = response.getType();
+    RegisterHistList(sender, &response);
+}
+
+//---------------------------------
+// RequestHistogramSync
+//---------------------------------
+void rs_cmsg::RequestHistogramSync(string servername, string hnamepath, timespec_t &myTimeout)
+{
+    cMsgMessage requestHist;
+    BuildRequestHistogram(requestHist, servername, hnamepath);
+    cMsgMessage response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
+
+    string sender = response.getType();
+    RegisterHistogram(sender, &response);
+}
+
+//---------------------------------
+// RequestTreeInfoSync
+//---------------------------------
+void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
+{
+    cMsgMessage treeinfo;
+    BuildRequestTreeInfo(treeinfo, servername);
+    cMsgMessage response = cMsgSys->sendAndGet(treeinfo, &myTimeout);  // check for exception?
+
+    string sender = response.getType();
+    RegisterTreeInfo(sender, &response);
+}
+
+//---------------------------------
+// RequestTreeSync
+//---------------------------------
+void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_path, timespec_t &myTimeout, int64_t num_entries = -1)
+{
+    _DBG_ << "In rs_cmsg::RequestTreeSync()..." << endl;
+
+    cMsgMessage requestTree;
+    BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
+
+    _DBG_ << " Sending message..." << endl;
+    cMsgMessage *response = cMsgSys->sendAndGet(requestTree, &myTimeout);  // check for exception?
+    //cMsgMessage response = cMsgSys->sendAndGet(requestTree, NULL);
+    _DBG_ <<"Received message --  Subject:"<<response->getSubject()
+	  <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
+    
+    string sender = response->getType();
+    //_DBG_ << " received response from  " << sender << endl;
+
+    /*
+    void *response;
+    struct timespec myTimeoutTest = {10,0}; 
+    int stat = cMsgSendAndGet(domainId, &requestTree, &myTimeoutTest, &response);
+    if (stat!=CMSG_OK) {
+	cout << "Error contacting server in rs_cmsg::RequestTreeSync()!" << endl;
+	return;
+    }
+    */
+
+    RS_INFO->Unlock();
+    //RegisterTree(sender, &response);
+    RegisterTree(sender, response);
+    RS_INFO->Lock();
+}
+
+
+
 
 //---------------------------------
 // FinalHistogram
@@ -250,12 +360,12 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	}
 	//===========================================================
 	if(cmd == "tree info") {
-		RegisterTreeInfo(sender, msg);
+	        RegisterTreeInfo(sender, msg);
 		handled_message = true;
 	}
 	//===========================================================
 	if(cmd == "tree") {
-		RegisterTree(sender, msg);
+	        RegisterTree(sender, msg);
 		handled_message = true;
 	}
 	//===========================================================
@@ -484,8 +594,8 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 	return;
     }
     
-    //_DBG_ << "unpacked tree!" << endl;
-    //T->Print();
+    _DBG_ << "unpacked tree!" << endl;
+    T->Print();
 
     // Update tree_info
     tree_info->received = time(NULL);
