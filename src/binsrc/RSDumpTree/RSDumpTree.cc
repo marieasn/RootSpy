@@ -41,7 +41,10 @@ namespace config {
     static string OUTPUT_FILENAME = "output.root";
     static string IN_TREE_NAMES = "";
     
-    static double POLL_DELAY = 30;
+    static double POLL_DELAY = 5;            // delay for initial discovery of servers  (in sec)
+    static long NUM_REQUESTED_EVENTS = -1;
+    //static timespec_t SYNC_TIMEOUT = {30,0};  // timeout for synchronous requests  (in sec)
+    static timespec_t SYNC_TIMEOUT = {10,0};  // timeout for synchronous requests
 }
 
 using namespace config;
@@ -130,6 +133,7 @@ int main(int narg, char *argv[])
     RS_INFO->Lock();
     for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
 	server_it != RS_INFO->servers.end(); server_it++) {
+	//RS_CMSG->RequestTreeInfoSync(server_it->first, SYNC_TIMEOUT);
 	RS_CMSG->RequestTreeInfo(server_it->first);
     }
     RS_INFO->Unlock();
@@ -138,7 +142,10 @@ int main(int narg, char *argv[])
     sleep(POLL_DELAY);
 
     // collect trees 
-    RS_INFO->Lock();
+    // the handler that receives the tree that we request already locks RS_INFO, 
+    // so don't lock it here for now... this isn't the most thread-safe way, 
+    // though maybe it doesn't matter too much?
+    //RS_INFO->Lock();
     for( map<string,server_info_t>::iterator server_itr = RS_INFO->servers.begin();
 	 server_itr!=RS_INFO->servers.end(); server_itr++) { 
 	_DBG_ << "checking " << server_itr->first << "..." << endl;
@@ -148,14 +155,15 @@ int main(int narg, char *argv[])
 	    _DBG_ << tree_itr->tnamepath << endl;
 	    
 	    if(find(tree_names.begin(), tree_names.end(), tree_itr->name) != tree_names.end()) {
-		RS_CMSG->RequestTree( server_itr->first, tree_itr->name, tree_itr->path );
+		RS_CMSG->RequestTreeSync( server_itr->first, tree_itr->name, tree_itr->path, 
+					  SYNC_TIMEOUT, NUM_REQUESTED_EVENTS );
 	    }
 	}
     }
-    RS_INFO->Unlock();
+    //RS_INFO->Unlock();
 
     // for now do the simplest thing, and just wait for the responses to roll in
-    sleep(POLL_DELAY);
+    //sleep(POLL_DELAY);
 
     // get the trees we want and save them
     pthread_rwlock_wrlock(ROOT_MUTEX);
@@ -193,6 +201,8 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         {"server",         required_argument, 0,  's' },
         {"output-file",    required_argument, 0,  'F' },
         {"tree-names",     required_argument, 0,  'T' },
+	{"num-events",     required_argument, 0,  'n' },
+	{"sync-timeout",   required_argument, 0,  'c' },
 
         {0, 0, 0, 0  }
     };
@@ -224,6 +234,13 @@ void ParseCommandLineArguments(int &narg, char *argv[])
       if(optarg == NULL) Usage();
       OUTPUT_FILENAME = optarg;
       break;
+    case 'n':
+	if(optarg == NULL) Usage();
+	NUM_REQUESTED_EVENTS = atoi(optarg);
+	break;
+    case 'c':
+	if(optarg == NULL) Usage();
+	SYNC_TIMEOUT.tv_sec = atoi(optarg);
     case 'h':
     default: Usage(); break;
     }
@@ -241,17 +258,18 @@ void Usage(void)
     cout<<"Usage:"<<endl;
     cout<<"       RSDumpTree [options]"<<endl;
     cout<<endl;
-    cout<<"something something" << endl;
+    cout<<"Saves remote TTree(s) in ROOT file." << endl;
     cout<<endl;
     cout<<"Options:"<<endl;
     cout<<endl;
     cout<<"   -h,--help                 Print this message"<<endl;
     cout<<"   -T,--tree-names trees     Names of TTrees to read out"<<endl;
+    cout<<"   -F,--output-file file     Name of ROOT file used to store output"<<endl; 
+    cout<<"   -n,--num-events N         Save only the latest N events of the TTree(s)"<<endl;
     cout<<"   -u,--udl udl              UDL of cMsg RootSpy server"<<endl;
     cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
-    cout<<"   -p,--poll-delay time      Time (in seconds) to wait between polling seconds" << endl;
-
-    cout<<"   -F,--output-file file     Name of ROOT file used to store output"<<endl; 
+    cout<<"   -p,--poll-delay time      Time (in seconds) to wait between polling servers" << endl;
+    cout<<"   -c,--sync-timeout         Time (in seconds) to wait when requesting TTree data" << endl;
     cout<<endl;
     
     exit(0);
