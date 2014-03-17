@@ -214,45 +214,53 @@ void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path,
 
 //---------------------------------
 // RequestHistogramSync
+//  Note: Do not lock RS_INFO before calling this function
 //---------------------------------
 void rs_cmsg::RequestHistsSync(string servername, timespec_t &myTimeout)
 {
     cMsgMessage requestHist;
     BuildRequestHists(requestHist, servername);
-    cMsgMessage response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
+    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
 
-    string sender = response.getType();
-    RegisterHistList(sender, &response);
+    string sender = response->getType();
+    RegisterHistList(sender, response);
 }
 
 //---------------------------------
 // RequestHistogramSync
+//  Note: Do not lock RS_INFO before calling this function
 //---------------------------------
 void rs_cmsg::RequestHistogramSync(string servername, string hnamepath, timespec_t &myTimeout)
 {
     cMsgMessage requestHist;
     BuildRequestHistogram(requestHist, servername, hnamepath);
-    cMsgMessage response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
+    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
 
-    string sender = response.getType();
-    RegisterHistogram(sender, &response);
+    string sender = response->getType();
+    RegisterHistogram(sender, response);
 }
 
 //---------------------------------
 // RequestTreeInfoSync
+//  Note: Do not lock RS_INFO before calling this function
 //---------------------------------
 void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
 {
     cMsgMessage treeinfo;
     BuildRequestTreeInfo(treeinfo, servername);
-    cMsgMessage response = cMsgSys->sendAndGet(treeinfo, &myTimeout);  // check for exception?
 
-    string sender = response.getType();
-    RegisterTreeInfo(sender, &response);
+    _DBG_ << " Sending getTreeInfo message..." << endl;
+    cMsgMessage *response = cMsgSys->sendAndGet(treeinfo, &myTimeout);  // check for exception?
+    _DBG_ <<"Received message --  Subject:"<<response->getSubject()
+	  <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
+
+    string sender = response->getType();
+    RegisterTreeInfoSync(sender, response);
 }
 
 //---------------------------------
 // RequestTreeSync
+//  Note: Do not lock RS_INFO before calling this function
 //---------------------------------
 void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_path, timespec_t &myTimeout, int64_t num_entries = -1)
 {
@@ -261,29 +269,14 @@ void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_p
     cMsgMessage requestTree;
     BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
 
-    _DBG_ << " Sending message..." << endl;
+    _DBG_ << " Sending getTree message..." << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(requestTree, &myTimeout);  // check for exception?
-    //cMsgMessage response = cMsgSys->sendAndGet(requestTree, NULL);
     _DBG_ <<"Received message --  Subject:"<<response->getSubject()
 	  <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
     
     string sender = response->getType();
     //_DBG_ << " received response from  " << sender << endl;
-
-    /*
-    void *response;
-    struct timespec myTimeoutTest = {10,0}; 
-    int stat = cMsgSendAndGet(domainId, &requestTree, &myTimeoutTest, &response);
-    if (stat!=CMSG_OK) {
-	cout << "Error contacting server in rs_cmsg::RequestTreeSync()!" << endl;
-	return;
-    }
-    */
-
-    RS_INFO->Unlock();
-    //RegisterTree(sender, &response);
     RegisterTree(sender, response);
-    RS_INFO->Lock();
 }
 
 
@@ -494,7 +487,7 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 	} 
 	RS_INFO->Unlock();
 
-	//Test: check RS_INFO for trees
+//Test: check RS_INFO for trees
 //	RS_INFO->Lock();
 //	map<string, server_info_t>::iterator server_iter = RS_INFO->servers.begin();
 //	for(; server_iter != RS_INFO->servers.end(); server_iter++) {
@@ -508,6 +501,40 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 //		}
 //	}
 //	RS_INFO->Unlock();
+}
+
+
+//---------------------------------
+// RegisterTreeInfo
+//---------------------------------
+//TODO: documentation comment.
+void rs_cmsg::RegisterTreeInfoSync(string server, cMsgMessage *msg) {
+
+	//TODO: (maybe) test that the msg is valid.
+	RS_INFO->Lock();
+	vector<tree_info_t> &rs_trees = RS_INFO->servers[server].trees;
+
+	vector<string> names = *(msg->getStringVector("tree_names"));
+	vector<string> paths = *(msg->getStringVector("tree_paths"));
+
+	for( size_t numtree = 0; numtree < names.size(); numtree++) {
+	    vector<tree_info_t>::iterator veciter = rs_trees.begin();
+	    bool duplicate = false;
+	    for(; veciter != rs_trees.end(); veciter ++) {
+		if(veciter->name.compare(names[numtree]) == 0) duplicate = true;
+	    }
+	    if(!duplicate) {
+		// assume that branches are defined at initialization
+		// and don't change during running
+		_DBG_ << "tree info from " << server << " Tree " << names[numtree] << " in " << paths[numtree] << endl;
+		
+		// use blank branch info
+		vector<string> branch_info;
+		rs_trees.push_back(tree_info_t(server, names[numtree], paths[numtree], branch_info));
+	    } 
+	}
+
+	RS_INFO->Unlock();
 }
 
 //---------------------------------

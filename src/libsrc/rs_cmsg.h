@@ -52,6 +52,7 @@ class rs_cmsg:public cMsgCallback{
 		void RegisterHistogram(string server, cMsgMessage *msg);
 		void RegisterFinalHistogram(string server, cMsgMessage *msg);
 		void RegisterTreeInfo(string server, cMsgMessage *msg);
+		void RegisterTreeInfoSync(string server, cMsgMessage *msg);
 		void RegisterTree(string server, cMsgMessage *msg);
 
                 void BuildRequestHists(cMsgMessage &msg, string servername);
