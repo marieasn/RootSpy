@@ -130,16 +130,16 @@ int main(int narg, char *argv[])
     sleep(POLL_DELAY);
 
     // figure out who has what trees
-    RS_INFO->Lock();
+    //RS_INFO->Lock();
     for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
 	server_it != RS_INFO->servers.end(); server_it++) {
-	//RS_CMSG->RequestTreeInfoSync(server_it->first, SYNC_TIMEOUT);
-	RS_CMSG->RequestTreeInfo(server_it->first);
+	RS_CMSG->RequestTreeInfoSync(server_it->first, SYNC_TIMEOUT);
+	//RS_CMSG->RequestTreeInfo(server_it->first);
     }
-    RS_INFO->Unlock();
+    //RS_INFO->Unlock();
 
     // wait for the requests to finish up
-    sleep(POLL_DELAY);
+    //sleep(POLL_DELAY);
 
     // collect trees 
     // the handler that receives the tree that we request already locks RS_INFO, 
