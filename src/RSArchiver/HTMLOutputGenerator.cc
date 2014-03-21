@@ -28,7 +28,7 @@ void HTMLOutputGenerator::write_html_header(ofstream &f, string thedir)
     //cout << "printing out for " << thedir << " with " 
     // std::to_string(dirs.size()) << " elements" << endl;
 
-    for(int i=0; i<dirs.size(); i++) {
+    for(unsigned int i=0; i<dirs.size(); i++) {
         if(i == 0)
             header_str += "/";
         else

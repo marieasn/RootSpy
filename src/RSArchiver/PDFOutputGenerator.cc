@@ -56,7 +56,7 @@ void PDFOutputGenerator::collect_hists(TDirectory *the_dir, vector<TH1 *> &hists
 void PDFOutputGenerator::GenerateOutput(TDirectory *root_dir, string basedir)
 {
     vector<TH1 *> hists;
-    int nhist = 0;
+    unsigned int nhist = 0;
 
     string pdf_filename = basedir + "/summed_hists.pdf";
 

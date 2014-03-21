@@ -1,0 +1,11 @@
+
+This directory contains source for a simple
+program that can be used to generate histograms
+that the RootSpy client can spy on as they are
+being filled. It is meant primarily as an easy
+way to test an installation of RootSPY is 
+working, but also serves as a simple example
+of how to make a producer program. (The 
+RootSpy part is really just 2 lines in the
+source plus what's needed in the Makefile).
+

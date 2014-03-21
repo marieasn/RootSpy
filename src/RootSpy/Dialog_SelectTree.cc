@@ -205,7 +205,7 @@ void Dialog_SelectTree::updateListTree(vector<vector<tree_info_t> > &tree_ids) {
 		vector<tree_info_t> tree = *vec_iter;
 		vector<tree_info_t>::iterator tree_iter = tree.begin();
 		const char* servername = tree_iter->servername.c_str();
-		TGListTreeItem *server_item = list_tree->AddItem(NULL, servername);
+		list_tree->AddItem(NULL, servername);
 		for(; tree_iter != tree.end(); tree_iter++) {
 //			cout<<tree_iter->path<<endl;
 		}

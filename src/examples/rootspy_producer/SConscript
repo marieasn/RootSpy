@@ -10,10 +10,8 @@ from halld_lib import define_dependencies, buildBin
 
 
 #  define package dependencies
-define_dependencies(binEnv,'root codaobject cmsg')
+define_dependencies(binEnv,'cmsg root')
 
 
 #  build programs
 buildBin(binEnv)
-
-

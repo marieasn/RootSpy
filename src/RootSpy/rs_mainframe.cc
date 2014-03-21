@@ -156,7 +156,7 @@ void rs_mainframe::DoQuit(void)
 void rs_mainframe::MakeTB(void)
 {
 	cout<<"Making new TBrowser"<<endl;
-	TBrowser *TB = new TBrowser();
+	new TBrowser();
 		
 	//Outputs a new TBrowser, which will help with DeBugging.
 }
@@ -679,7 +679,7 @@ void rs_mainframe::DoPrev(void)
 //Save the current canvas as an image file.
 void rs_mainframe::DoSave(void) {
 	TGFileInfo* fileinfo = new TGFileInfo();
-	TGFileDialog* filedialog = new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDSave, fileinfo);
+	new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDSave, fileinfo);
 	canvas->SaveAs(fileinfo->fFilename, "");	
 }
 
@@ -689,7 +689,7 @@ void rs_mainframe::DoSave(void) {
 //add comment
 void rs_mainframe::DoSetArchiveFile(void) {
 	TGFileInfo* fileinfo = new TGFileInfo();
-	TGFileDialog* filedialog = new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDOpen, fileinfo);
+	new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDOpen, fileinfo);
 
 	if(archive_file)
 	    archive_file->Close();
@@ -1413,7 +1413,7 @@ void rs_mainframe::DoLoadHistsList(void)
 
   // write them to disk outside of the mutex
   TGFileInfo* fileinfo = new TGFileInfo();
-  TGFileDialog* filedialog = new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDOpen, fileinfo);
+  new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDOpen, fileinfo);
 
   ///////// CHECK FOR ERRORS ///////////////
   
@@ -1603,7 +1603,7 @@ void rs_mainframe::DoSaveHistsList(void)
   
   // write them to disk outside of the mutex
   TGFileInfo* fileinfo = new TGFileInfo();
-  TGFileDialog* filedialog = new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDSave, fileinfo);
+  new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDSave, fileinfo);
 
   ///////// CHECK FOR ERRORS ///////////////
   

@@ -1,12 +1,98 @@
-#  Generic SConstruct for Hall D online packages
-#
-#  ejw, 8-may-2013
+
+import os
+import sys
+import subprocess
+import glob
+
+# Add SBMS directory to PYTHONPATH
+sbmsdir = "%s/SBMS" % (os.getcwd())
+sys.path.append(sbmsdir)
+
+import sbms
+
+# Get command-line options
+SHOWBUILD = ARGUMENTS.get('SHOWBUILD', 0)
+OPTIMIZATION = ARGUMENTS.get('OPTIMIZATION', 3)
+DEBUG = ARGUMENTS.get('DEBUG', 1)
+
+# Get platform-specific name
+osname = os.getenv('BMS_OSNAME', subprocess.Popen(["%s/osrelease.pl" % sbmsdir], stdout=subprocess.PIPE).communicate()[0].strip())
+
+# Get architecture name
+arch = ROOT_CFLAGS = subprocess.Popen(["uname"], stdout=subprocess.PIPE).communicate()[0].strip()
+
+# Setup initial environment
+installdir = "#%s" %(osname)
+include = "%s/include" % (installdir)
+bin = "%s/bin" % (installdir)
+lib = "%s/lib" % (installdir)
+plugins = "%s/plugins" % (installdir)
+examples = "%s/examples" % (installdir)
+env = Environment(    CPPPATH = [include],
+                      LIBPATH = [lib],
+                  variant_dir = "src/.%s" % (osname))
+
+# These are SBMS-specific variables (i.e. not default scons ones)
+env.Replace(INSTALLDIR    = installdir,
+				OSNAME        = osname,
+				INCDIR        = include,
+				BINDIR        = bin,
+				LIBDIR        = lib,
+				PLUGINSDIR    = plugins,
+				ALL_SOURCES   = [],        # used so we can add generated sources
+            SHOWBUILD     = SHOWBUILD,
+				OPTIMIZATION  = OPTIMIZATION,
+				DEBUG         = DEBUG,
+	  COMMAND_LINE_TARGETS = COMMAND_LINE_TARGETS)
+
+# Use terse output unless otherwise specified
+if SHOWBUILD==0:
+	env.Replace(CCCOMSTR       = "Compiling  [$SOURCE]",
+				  CXXCOMSTR       = "Compiling  [$SOURCE]",
+				  FORTRANPPCOMSTR = "Compiling  [$SOURCE]",
+				  FORTRANCOMSTR   = "Compiling  [$SOURCE]",
+				  SHCCCOMSTR      = "Compiling  [$SOURCE]",
+				  SHCXXCOMSTR     = "Compiling  [$SOURCE]",
+				  LINKCOMSTR      = "Linking    [$TARGET]",
+				  SHLINKCOMSTR    = "Linking    [$TARGET]",
+				  INSTALLSTR      = "Installing [$TARGET]",
+				  ARCOMSTR        = "Archiving  [$TARGET]",
+				  RANLIBCOMSTR    = "Ranlib     [$TARGET]")
 
 
-from halld_lib import init_halld_env, build_halld
+# Get compiler from environment variables (if set)
+env.Replace( CXX = os.getenv('CXX', 'g++'),
+             CC  = os.getenv('CC' , 'gcc'),
+             FC  = os.getenv('FC' , 'gfortran') )
 
-#  create standard environment based on command-line variables
-env = init_halld_env(Variables())
+# Add libraries and libraries/include to include search path
+env.PrependUnique(CPPPATH = ['#', '#src/libRootSpy', '#src/libRootSpy-client'])
 
-#  build everything based on environment
-build_halld(env)
+# Standard flags (optimization level and warnings)
+env.PrependUnique(      CFLAGS = ['-O%s' % OPTIMIZATION, '-fPIC', '-Wall'])
+env.PrependUnique(    CXXFLAGS = ['-O%s' % OPTIMIZATION, '-fPIC', '-Wall'])
+env.PrependUnique(FORTRANFLAGS = ['-O%s' % OPTIMIZATION, '-fPIC', '-Wall'])
+
+# Turn on debug symbols unless user told us not to
+if not DEBUG=='0':
+	env.PrependUnique(      CFLAGS = ['-g'])
+	env.PrependUnique(    CXXFLAGS = ['-g'])
+	env.PrependUnique(FORTRANFLAGS = ['-g'])
+
+# Apply any platform/architecture specific settings
+sbms.ApplyPlatformSpecificSettings(env, arch)
+sbms.ApplyPlatformSpecificSettings(env, osname)
+
+# Include SConscript in src
+SConscript('src/SConscript', variant_dir="src/.%s" % (osname), exports='env osname', duplicate=0)
+
+# Make install target
+env.Alias('install', installdir)
+
+# Create setenv if user explicitly specified "install" target
+#build_targets = map(str,BUILD_TARGETS)
+#if len(build_targets)>0:
+#	if 'install' in build_targets:
+#		import sbms_setenv
+#		sbms_setenv.mk_setenv(env)
+

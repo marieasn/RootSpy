@@ -124,6 +124,8 @@ hid_t rs_info::FindNextActive(hid_t &current)
 	}else{
 		return active_hids[(current_index+1)%active_hids.size()];
 	}
+
+	return hid_t("none", "none");  // avoid compiler warning
 }
 
 //---------------------------------
@@ -159,4 +161,6 @@ hid_t rs_info::FindPreviousActive(hid_t &current)
 	}else{
 		return active_hids[(active_hids.size()+current_index-1)%active_hids.size()];
 	}
+	
+	return hid_t("none", "none");  // avoid compiler warning
 }

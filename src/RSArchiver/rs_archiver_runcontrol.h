@@ -3,7 +3,7 @@
 
 #ifdef NO_CODAOBJECTROOT
 
-#pragma message ("Using cMsg interface...")
+//#pragma message ("Using cMsg interface...")
 
 #include <cMsg.hxx>
 using namespace cmsg;
