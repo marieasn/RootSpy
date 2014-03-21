@@ -1,0 +1,9 @@
+
+Import('*')
+
+subdirs = ['libRootSpy', 'libRootSpy-client']
+subdirs.extend(['RootSpy', 'RSArchiver', 'RSDumpTree'])
+#subdirs.extend(['examples'])
+
+SConscript(dirs=subdirs, exports='env osname', duplicate=0)
+
