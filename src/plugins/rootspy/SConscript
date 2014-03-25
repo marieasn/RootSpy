@@ -1,19 +1,13 @@
-#  SConscript for plugin
-#
-#  *** rename this file to SConscript and place in every plugin directory ***
-#
-#  to customize fill in package dependencies
-#
-#  ejw, 16-apr-2013
 
 
+import sbms
+
+# get env object and clone it
 Import('*')
-from halld_lib import define_dependencies, buildPlugin
+env = env.Clone()
 
- 
-#  set package dependencies
-define_dependencies(pluginEnv,'cmsg root')
+sbms.AddROOT(env)
+sbms.AddCMSG(env)
+sbms.plugin(env)
 
 
-#  build the lib
-buildPlugin(pluginEnv)
