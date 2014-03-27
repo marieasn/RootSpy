@@ -310,6 +310,21 @@ void SaveTrees( TFile *the_file )
 	  tree_list_itr != tree_lists.end(); tree_list_itr++) {
 	
 	TTree *sum_tree = TTree::MergeTrees( tree_list_itr->second );
+	if(!sum_tree){
+		_DBG_ << "NULL sum_tree pointer for " << tree_list_itr->first << "! (" << hex << tree_list_itr->second << dec << ")" << endl;
+		_DBG_ << "This can happen if all of the trees have zero entries." << endl;
+
+		TList *li = tree_list_itr->second;
+		TIter next(li);
+		TObject *obj;
+		if((obj=next())){
+			if(!obj->InheritsFrom(TTree::Class())) continue;
+			_DBG_ << "Writing empty tree to file..." << endl;
+			sum_tree = ((TTree*)obj)->CloneTree();
+		}else{
+			continue;
+		}
+	}
 	_DBG_ << "saving " << sum_tree->GetName() << endl;
 	sum_tree->SetDirectory(the_file);
 	sum_tree->Write();
