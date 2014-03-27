@@ -1,0 +1,7 @@
+
+Import('*')
+
+subdirs = ['rootspy_producer']
+
+SConscript(dirs=subdirs, exports='env osname', duplicate=0)
+

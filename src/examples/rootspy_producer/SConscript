@@ -1,17 +1,14 @@
-#  SConscript for binsrc
-#
-#  to customize fill in package dependencies
-#
-#  ejw, 16-apr-2013
 
 
+import sbms
+
+# get env object and clone it
 Import('*')
-from halld_lib import define_dependencies, buildBin
+env = env.Clone()
+
+sbms.AddROOT(env)
+sbms.AddCMSG(env)
+env.AppendUnique(LIBS='RootSpy')
+sbms.executable(env)
 
 
-#  define package dependencies
-define_dependencies(binEnv,'cmsg root')
-
-
-#  build programs
-buildBin(binEnv)

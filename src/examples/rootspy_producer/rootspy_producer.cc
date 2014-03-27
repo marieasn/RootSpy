@@ -14,7 +14,7 @@ using namespace std;
 
 int main(int narg, char *argv[])
 {
-	DRootSpy *spy = new DRootSpy();
+	new DRootSpy();
 
 	
 	// Define some histograms to file
