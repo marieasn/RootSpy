@@ -86,6 +86,8 @@ int main(int narg, char *argv[])
 		h_E->Fill(E);
 		h_Mass->Fill(Mass);
 		
+		T->Fill();
+		
 		if(((++Nevents) % 100)==0){
 		  //gDirectory->ls();
 		  
