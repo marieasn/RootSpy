@@ -15,12 +15,15 @@
 
 #include <TObject.h>
 #include <TH1.h>
+#include <TTree.h>
 
 extern "C" {
-bool InitRootSpy(void);
-void rsHelp(void);
-TH1* rsGet(const char *hnamepath);
-void rsList(void);
+bool    InitRootSpy(void);
+bool    rsHelpShort(void);
+void    rsHelp(void);
+void    rsList(void);
+TH1*    rsGet(const char *hnamepath);
+TTree*  rsGetTree(const char *name, const char *path, unsigned long Nentries, const char *server);
 };
 
 class RScint:public TObject
@@ -32,6 +35,12 @@ class RScint:public TObject
 		static void Help(void){ rsHelp(); }
 		void List(void){ rsList(); }
 		TH1* Get(const char *hnamepath){ return rsGet(hnamepath); }
+		TTree* GetTree(const char *name
+		             , const char *path
+						 , unsigned long Nentries=0
+						 , const char *server=""){
+				return rsGetTree(name, path, Nentries, server);
+		}
 
 	private:
 		bool initialized;
