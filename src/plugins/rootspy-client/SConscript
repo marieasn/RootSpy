@@ -1,0 +1,15 @@
+
+
+import sbms
+
+# get env object and clone it
+Import('*')
+env = env.Clone()
+
+env.AppendUnique(LIBS=['RootSpy-client'])
+
+sbms.AddROOT(env)
+sbms.AddCMSG(env)
+sbms.plugin(env)
+
+

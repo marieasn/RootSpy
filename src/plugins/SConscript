@@ -1,7 +1,7 @@
 
 Import('*')
 
-subdirs = ['rootspy']
+subdirs = ['rootspy', 'rootspy-client']
 
 SConscript(dirs=subdirs, exports='env osname', duplicate=0)
 
