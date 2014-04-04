@@ -13,6 +13,8 @@ using namespace std;
 #include <TTree.h>
 #include <TFile.h>
 
+#define MAX_TREE_EVENTS 10000
+
 bool DONE =false;
 
 void sigHandler(int sig) { DONE = true; }
@@ -89,7 +91,14 @@ int main(int narg, char *argv[])
 		h_E->Fill(E);
 		h_Mass->Fill(Mass);
 		
-		T->Fill();
+		
+		// Limit how large the TTree can get
+		if(Nevents<MAX_TREE_EVENTS){
+			T->Fill();
+		}else if(Nevents == MAX_TREE_EVENTS){
+			cout << MAX_TREE_EVENTS/1000 << "k events in tree. Only histograms will be filled from here on." << endl;
+		}
+
 		
 		if(((++Nevents) % 100)==0){
 		  //gDirectory->ls();
@@ -99,7 +108,6 @@ int main(int narg, char *argv[])
 		  //cout<<" "<<Nevents<<" events simulated "<<"\r";
 		  //cout.flush();
 		}
-
 
 		// sleep a bit in order to limit how fast the histos are filled
 		usleep(5000);
