@@ -168,6 +168,7 @@ int main(int narg, char *argv[])
     // get the trees we want and save them
     pthread_rwlock_wrlock(ROOT_MUTEX);
     SaveTrees(output_file);
+    output_file->Write();
     output_file->Close();
     pthread_rwlock_unlock(ROOT_MUTEX);
 
@@ -308,8 +309,23 @@ void SaveTrees( TFile *the_file )
     // now merge all the trees into new trees and put them in the proper place in the file
     for(  map< string, TList* >::iterator tree_list_itr = tree_lists.begin();
 	  tree_list_itr != tree_lists.end(); tree_list_itr++) {
-	
-	TTree *sum_tree = TTree::MergeTrees( tree_list_itr->second );
+
+		cout << "Will merge the following tree sizes for: " << tree_list_itr->first << endl;
+		TIter next(tree_list_itr->second);
+		TObject *obj;
+		while( (obj=next()) ){
+			TTree *tree = (TTree*)obj;
+			Long64_t nentries = tree->GetEntries();
+			cout << "   " << nentries << " entries" << endl;
+		}
+
+		TTree *sum_tree = NULL;
+		if(tree_list_itr->second->GetSize() == 1){
+			sum_tree = (TTree*)tree_list_itr->second->At(0);
+		} else {
+			sum_tree = TTree::MergeTrees( tree_list_itr->second );
+		}
+
 	if(!sum_tree){
 		_DBG_ << "NULL sum_tree pointer for " << tree_list_itr->first << "! (" << hex << tree_list_itr->second << dec << ")" << endl;
 		_DBG_ << "This can happen if all of the trees have zero entries." << endl;
@@ -325,7 +341,7 @@ void SaveTrees( TFile *the_file )
 			continue;
 		}
 	}
-	_DBG_ << "saving " << sum_tree->GetName() << endl;
+	_DBG_ << "Saving " << sum_tree->GetName() << "  (" << sum_tree->GetEntries() << " entries)" << endl;
 	sum_tree->SetDirectory(the_file);
 	sum_tree->Write();
 
