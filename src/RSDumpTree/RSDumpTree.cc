@@ -148,11 +148,11 @@ int main(int narg, char *argv[])
     //RS_INFO->Lock();
     for( map<string,server_info_t>::iterator server_itr = RS_INFO->servers.begin();
 	 server_itr!=RS_INFO->servers.end(); server_itr++) { 
-	_DBG_ << "checking " << server_itr->first << "..." << endl;
+	//_DBG_ << "checking " << server_itr->first << "..." << endl;
 
 	for( vector<tree_info_t>::iterator tree_itr = server_itr->second.trees.begin();
 	     tree_itr != server_itr->second.trees.end(); tree_itr++ ) {
-	    _DBG_ << tree_itr->tnamepath << endl;
+	    //_DBG_ << tree_itr->tnamepath << endl;
 	    
 	    if(find(tree_names.begin(), tree_names.end(), tree_itr->name) != tree_names.end()) {
 		RS_CMSG->RequestTreeSync( server_itr->first, tree_itr->name, tree_itr->path, 
@@ -187,7 +187,7 @@ int main(int narg, char *argv[])
 //-----------
 void ParseCommandLineArguments(int &narg, char *argv[])
 {
-  _DBG_ << "In ParseCommandLineArguments().." << endl;
+  //_DBG_ << "In ParseCommandLineArguments().." << endl;
 
 
   // allow for environmental variables
@@ -280,7 +280,7 @@ void Usage(void)
 // assumes calling function locks the mutex
 void SaveTrees( TFile *the_file )
 {
-    _DBG_ << "In SaveTrees()..." << endl;
+    //_DBG_ << "In SaveTrees()..." << endl;
 
     // we have to keep TLists of the various trees so that we can merge them in the end.
     // the key is the full path of the tree
@@ -290,11 +290,11 @@ void SaveTrees( TFile *the_file )
     for( map<string,server_info_t>::iterator server_itr = RS_INFO->servers.begin();
 	 server_itr!=RS_INFO->servers.end(); server_itr++) { 
 
-	_DBG_ << "checking " << server_itr->first << "..." << endl;
+	//_DBG_ << "checking " << server_itr->first << "..." << endl;
 
 	for( vector<tree_info_t>::iterator tree_itr = server_itr->second.trees.begin();
 	     tree_itr != server_itr->second.trees.end(); tree_itr++ ) {
-	    _DBG_ << tree_itr->tnamepath << endl;
+	    //_DBG_ << tree_itr->tnamepath << endl;
 
 	    if(tree_itr->tree) {
 		if(tree_lists.find( tree_itr->tnamepath ) == tree_lists.end() )
@@ -304,7 +304,7 @@ void SaveTrees( TFile *the_file )
 	}
     }
 
-    _DBG_ << "merging trees" << endl;
+    //_DBG_ << "merging trees" << endl;
 
     // now merge all the trees into new trees and put them in the proper place in the file
     for(  map< string, TList* >::iterator tree_list_itr = tree_lists.begin();
@@ -341,7 +341,7 @@ void SaveTrees( TFile *the_file )
 			continue;
 		}
 	}
-	_DBG_ << "Saving " << sum_tree->GetName() << "  (" << sum_tree->GetEntries() << " entries)" << endl;
+	cout << "Saving " << sum_tree->GetName() << "  (" << sum_tree->GetEntries() << " entries)" << endl;
 	sum_tree->SetDirectory(the_file);
 	sum_tree->Write();
 

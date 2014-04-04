@@ -251,10 +251,10 @@ void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
     cMsgMessage treeinfo;
     BuildRequestTreeInfo(treeinfo, servername);
 
-    _DBG_ << " Sending getTreeInfo message..." << endl;
+    //_DBG_ << " Sending getTreeInfo message..." << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(treeinfo, &myTimeout);  // check for exception?
-    _DBG_ <<"Received message --  Subject:"<<response->getSubject()
-	  <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
+    //_DBG_ <<"Received message --  Subject:"<<response->getSubject()
+	 // <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
 
     string sender = response->getType();
     RegisterTreeInfoSync(sender, response);
@@ -266,15 +266,15 @@ void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
 //---------------------------------
 void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_path, timespec_t &myTimeout, int64_t num_entries = -1)
 {
-    _DBG_ << "In rs_cmsg::RequestTreeSync()..." << endl;
+    //_DBG_ << "In rs_cmsg::RequestTreeSync()..." << endl;
 
     cMsgMessage requestTree;
     BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
 
-    _DBG_ << " Sending getTree message..." << endl;
+    //_DBG_ << " Sending getTree message..." << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(requestTree, &myTimeout);  // check for exception?
-    _DBG_ <<"Received message --  Subject:"<<response->getSubject()
-	  <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
+    //_DBG_ <<"Received message --  Subject:"<<response->getSubject()
+	 // <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
     
     string sender = response->getType();
     //_DBG_ << " received response from  " << sender << endl;
