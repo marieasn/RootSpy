@@ -101,13 +101,22 @@ DRootSpy::DRootSpy(string myUDL) {
 	cMsgSys->send(&ImAlive);
 
 	// semaphore for handling sending final histograms
-	sem_init(&RootSpy_final_sem, 0, 1);
+	int err = sem_init(&RootSpy_final_sem, 0, 1);
 	
 	finalhists = NULL;
 
 	//create a thread to simulate what the environment of using the
-	//finalHist msg and vector would be like. 
-	pthread_create(&mythread, NULL, ReturnFinalsC, this);
+	//finalHist msg and vector would be like. Note that if an error
+	// occurs in the sem_init call above, then we should NOT launch
+	// the thread here because the semaphore will be unavailable.
+	// This is always the case for Mac OS X which does not support
+	// unnamed semaphores, but does define the sem_init function
+	// such that it always returns -1.
+	if(err == 0){
+		pthread_create(&mythread, NULL, ReturnFinalsC, this);
+	}else{
+		cout << "Unable to create semephore. Final Histograms feature disabled." << endl;
+	}
 }
 
 //---------------------------------
