@@ -23,6 +23,8 @@ using namespace std;
 #include <TTree.h>
 #include <TBranch.h>
 #include <TLeaf.h>
+#include <TFile.h>
+#include <TMemFile.h>
 
 #include "DRootSpy.h"
 #ifndef _DBG_
@@ -148,8 +150,9 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	if(msg->isGetRequest()) {
 	    _DBG_ << "responding to direct message..." << endl;
 	    response = msg->response();
-	} else
+	} else {
 	    response = new cMsgMessage();
+	}
 	response->setSubject(sender);
 	response->setType(myname);
 
@@ -248,18 +251,14 @@ void DRootSpy::listHists(cMsgMessage &response) {
 				response.add("hist_titles", hist_titles);
 
 			} else if(hinfos.size()==0){
-				// No histograms found. Send back empty lists
-				vector<string> hist_names;
-				vector<string> hist_types;
-				vector<string> hist_paths;
-				vector<string> hist_titles;
 
-				//seg fault here.
-				_DBG__;
-				response.add("hist_names", hist_names);
-				response.add("hist_types", hist_types);
-				response.add("hist_paths", hist_paths);
-				response.add("hist_titles", hist_titles);
+				// cMsg insists there be at least one entry in 
+				// a vector<string> payload, otherwise it will
+				// throw an exception. If we get here, then don't
+				// add the empty payloads. Note that by sending
+				// empty payloads, this will result in a 
+				// message on the client complaining about a
+				// mal-formed response.
 			}
 
 			response.setText("hists list");
@@ -309,37 +308,94 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	savedir->cd();
 	if(!obj)return;
 
+   // Make sure this is a TTree
+	if(strcmp(obj->ClassName(), "TTree")){
+		cout << "Request for tree \""<<name<<"\" but that's not a TTree (it's a "<<obj->ClassName()<<")" << endl;
+		return;
+	}
+
+	// Cast object as TTree and decide how many entries to copy into the tree we're going
+	// to package up and send.
+	TTree *tree = static_cast<TTree *>(obj);
+	int64_t nentries_in_tree = tree->GetEntries();
+   int64_t firstentry = nentries_in_tree - nentries_to_save;
+	if(firstentry<0 || nentries_to_save<=0) firstentry=0;
+	int64_t nentries = nentries_in_tree - firstentry;
+	cout << "Sending TTree " << tree->GetName() << "  (entries: " << nentries_in_tree << "  sending: " << nentries << ")" << endl;
+
+	// Copy TTree
+	TTree *tree_copy = tree;
+
+	// Sending the TTree object seemed to have problems if
+	// the tree contained an array (e.g. "data[100]/F" in
+   // the branch definition). We write the tree to a TMemFile
+   // and then serialize and send that object. This follows the
+	// treeClient.C and fastMergeServer.C ROOT tutorials.
+	savedir = gDirectory;
+	TMemFile *f = new TMemFile(".rootspy_tmp.root", "RECREATE");
+	
+	tree_copy = tree->CloneTree(0);
+
+	savedir->cd();
+
+	if(!tree_copy){
+		cout << "Unable to make temporary copy of tree for transport!" << endl;
+		if(f) { f->Close(); delete f; f = NULL;}
+		return;
+	}
+
+	for(int64_t i=0; i<nentries; i++) {
+		tree->GetEntry(firstentry + i);
+		tree_copy->Fill();
+	}
+
+
+#if 0
 	// if we're given a positive number of events to save
 	// then save the last N events in the tree
 	if( nentries_to_save > 0 ) {
-	    _DBG_ << "only saving " << nentries_to_save << " entries!" << endl;
 
-	    TTree *oldtree = static_cast<TTree *>(obj);
-	    TTree *newtree = oldtree->CloneTree(0);
+	    TTree *newtree = tree->CloneTree(0);
 	    
-	    int64_t nentries = oldtree->GetEntries();
-	    for(int64_t i=nentries-nentries_to_save; i<nentries; i++) {
-		oldtree->GetEntry(i);
+	    int64_t istart = nentries-nentries_to_save;
+	    if(istart<0) istart=0;
+	    cout << "  (only sending " << nentries_to_save - istart << " entries by request)" << endl;
+	    for(int64_t i=istart; i<nentries; i++) {
+		tree->GetEntry(i);
 		newtree->Fill();
 	    }
 	    obj = (TObject*)newtree;
 	}
+#endif
 
 	// Serialize object and put it into a response message
-	TMessage *tm = new TMessage(kMESS_OBJECT);
-	tm->WriteObject(obj);
+	//TMessage *tm = new TMessage(kMESS_OBJECT);
+	//tm->WriteObject(tree_copy);
+
+	TMessage *tm = new TMessage(kMESS_ANY);
+	f->Write();
+	tm->WriteTString(f->GetName());
+	tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
+	f->CopyTo(*tm);
+
 	response.setByteArrayNoCopy(tm->Buffer(),tm->Length());
-        response.add("tree_name", name);
-        response.add("tree_path", path);
+	response.add("tree_name", name);
+	response.add("tree_path", path);
 	response.setText("tree");
 	cMsgSys->send(&response);
 
-/*
-	// clean up any new trees made
-	if( nentries_to_save > 0 ) {
-	    delete newtree;
+	// clean up temporary copy of tree
+	if( tree_copy != tree ) {
+		// see source for TTree::MergeTrees
+		tree->GetListOfClones()->Remove(tree_copy);
+		tree_copy->ResetBranchAddresses();
+		delete tree_copy;
 	}
-*/
+	if(f) {
+		f->Close();
+		delete f;
+		f = NULL;
+	}
 }
 
 //---------------------------------
@@ -359,11 +415,23 @@ void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
     hist_dir = gDirectory;
     vector<string> tree_names, tree_titles, tree_paths;
     findTreeNamesForMsg(hist_dir, tree_names, tree_titles, tree_paths);
+
+	// Look for any open files and search those as well
+	TSeqCollection *coll = gROOT->GetListOfFiles();
+	for(int i=0; i<coll->GetSize(); i++){
+		TObject *obj = coll->At(i);
+		TDirectory *dir = dynamic_cast<TDirectory*>(obj);
+		if(!dir) continue;
+		if(dir==hist_dir) continue; // already handled
+		findTreeNamesForMsg(dir, tree_names, tree_titles, tree_paths);
+	}
     
     // build message
+	if(!tree_names.empty()){
     response.add("tree_names", tree_names);
     response.add("tree_titles", tree_titles);
     response.add("tree_paths", tree_paths);
+	}
     response.setText("tree info");
     cMsgSys->send(&response);
 }
@@ -406,6 +474,8 @@ void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 void DRootSpy::findTreeNamesForMsg(TDirectory *dir, vector<string> &tree_names, 
 				   vector<string> &tree_titles, vector<string> &tree_paths) 
 {
+	_DBG_ << "Looking for trees in: " << dir->GetName() << endl;
+
     TList *list = dir->GetList();
     TIter next(list);
     //search through root directories for a tree object.

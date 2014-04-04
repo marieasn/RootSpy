@@ -23,6 +23,8 @@ using namespace std;
 #include <TMessage.h>
 #include <TH1.h>
 #include <TTree.h>
+#include <TMemFile.h>
+#include <TKey.h>
 
 
 //// See http://www.jlab.org/Hall-D/software/wiki/index.php/Serializing_and_deserializing_root_objects
@@ -514,8 +516,16 @@ void rs_cmsg::RegisterTreeInfoSync(string server, cMsgMessage *msg) {
 	RS_INFO->Lock();
 	vector<tree_info_t> &rs_trees = RS_INFO->servers[server].trees;
 
-	vector<string> names = *(msg->getStringVector("tree_names"));
-	vector<string> paths = *(msg->getStringVector("tree_paths"));
+	vector<string> names;
+	vector<string> paths;
+
+	try{
+		names = *(msg->getStringVector("tree_names"));
+		paths = *(msg->getStringVector("tree_paths"));
+	}catch(cMsgException e){
+		// get here if tree_names or tree_paths doesn't exist
+		_DBG_ << "Remote process reports no trees." << endl;
+	}
 
 	for( size_t numtree = 0; numtree < names.size(); numtree++) {
 	    vector<tree_info_t>::iterator veciter = rs_trees.begin();
@@ -526,7 +536,7 @@ void rs_cmsg::RegisterTreeInfoSync(string server, cMsgMessage *msg) {
 	    if(!duplicate) {
 		// assume that branches are defined at initialization
 		// and don't change during running
-		_DBG_ << "tree info from " << server << " Tree " << names[numtree] << " in " << paths[numtree] << endl;
+		//_DBG_ << "tree info from " << server << " Tree " << names[numtree] << " in " << paths[numtree] << endl;
 		
 		// use blank branch info
 		vector<string> branch_info;
@@ -604,7 +614,29 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     _DBG_ << "unpacking tree..." << endl;
 
     MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
-    TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
+    Long64_t length;
+    TString filename;
+    myTM->ReadTString(filename);
+    myTM->ReadLong64(length);
+    TDirectory *savedir = gDirectory;
+    TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
+    savedir->cd();
+
+ 	TNamed *namedObj = NULL;
+
+	TIter iter(f->GetListOfKeys());
+	TKey *key;
+	while( (key = (TKey*)iter()) ) {
+		string objname(key->GetName());
+
+		cout << "TMemFile object: " << objname << endl;
+		if(objname == name) {
+			TObject *obj = key->ReadObj();
+			TNamed *nobj = dynamic_cast<TNamed*>(obj);
+			if(nobj != NULL) namedObj = nobj;
+		}
+	}
+
     if(!namedObj){
 	_DBG_<<"No valid object returned in histogram message."<<endl;
 	pthread_rwlock_unlock(ROOT_MUTEX);
@@ -620,7 +652,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 	RS_INFO->Unlock();
 	return;
     }
-    
+
     _DBG_ << "unpacked tree!" << endl;
     T->Print();
 
@@ -634,11 +666,15 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     // update branch info?
 
     // Set pointer to hist in hinfo to new histogram
-    tree_info->tree = T;
+    tree_info->tree = T->CloneTree();
     
     // Change ROOT TDirectory of new histogram to server's
     tree_info->tree->SetDirectory(server_info->dir);
-    
+
+	if(f){
+		f->Close();
+		delete f;
+	}
 
     // Unlock mutexes
     pthread_rwlock_unlock(ROOT_MUTEX);
