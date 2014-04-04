@@ -1,5 +1,6 @@
 
 #include <unistd.h>
+#include <signal.h>
 #include <iostream>
 #include <cmath>
 using namespace std;
@@ -10,12 +11,17 @@ using namespace std;
 #include <TH1.h>
 #include <TRandom.h>
 #include <TTree.h>
+#include <TFile.h>
 
+bool DONE =false;
+
+void sigHandler(int sig) { DONE = true; }
 
 int main(int narg, char *argv[])
 {
 	new DRootSpy();
 
+	signal(SIGINT, sigHandler);
 	
 	// Define some histograms to file
 
@@ -36,6 +42,8 @@ int main(int narg, char *argv[])
 
 
 	double px,py,pz,E,Mass;
+	float data[100];
+	for(int i=0; i< 100; i++) data[i] = (float)i;
 
 	// Define some trees to save
 	TTree *T = new TTree("T", "Event Info");
@@ -44,6 +52,7 @@ int main(int narg, char *argv[])
 	T->Branch("pz", &pz, "pz/D");
 	T->Branch("E", &E, "E/D");
 	T->Branch("Mass", &Mass, "Mass/D");
+	T->Branch("data", &data, "data[100]/F");
 
 	// Set nice labels for X-axes
 	h_px->SetXTitle("p_{x} (GeV/c)");
@@ -58,7 +67,7 @@ int main(int narg, char *argv[])
 	// Loop forever while filling the hists
 	cout<<endl<<"Filling histograms ..."<<endl;
 	unsigned int Nevents=0;
-	while(true){
+	while(!DONE){
 		
 		// Randomly choose values to put into an x and y coordinate on some plane 6 meters away from
 		double x = (ran.Rndm()-0.5)*2.0;
@@ -67,12 +76,6 @@ int main(int narg, char *argv[])
 		double p = ran.Landau(0.5, 0.075); // total momentum
 		double m = 0.134;
 		double Etot = sqrt(p*p + m*m) + ran.Gaus(0.0, 0.005);
-
-		//px->Fill(p*x/z);
-		//py->Fill(p*y/z);
-		//pz->Fill(sqrt(p*p*(1.0 - (x*x+y*y)/(z*z))));
-		//E->Fill(Etot);
-		//Mass->Fill(sqrt(Etot*Etot - p*p));
 		
 		px = p*x/z;
 		py = p*y/z;
@@ -101,6 +104,9 @@ int main(int narg, char *argv[])
 		// sleep a bit in order to limit how fast the histos are filled
 		usleep(5000);
 	}
+
+	cout << endl;
+	cout << "Ending" << endl;
 
 	return 0;
 }
