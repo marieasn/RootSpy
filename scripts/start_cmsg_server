@@ -1,0 +1,23 @@
+#!/bin/sh
+
+#
+# This script will help you start a cMsg server. For it to work,
+# you must have cMsg installed and your CMSGROOT environment
+# variable must point to it. Specifically, a file:
+#
+#   $CMSGROOT/jar/cMsg-*.jar
+#
+# must exist. If more than one file match the wildcard, the command
+# will fail.
+#
+# You can download the cMsg source from here:
+#
+#   https://coda.jlab.org/wiki/index.php/CMsg_-_Publish/Subcribe_messaging
+#
+
+if [[ -z "$CMSGROOT" ]]; then
+	echo "You must set your CMSGROOT environment variable for this to work!"
+	echo "(i.e.   a file \$CMSGROOT/jar/cMsg-*.jar must exist )"
+else
+	java -cp $CMSGROOT/jar/cMsg-*.jar org/jlab/coda/cMsg/cMsgDomain/server/cMsgNameServer
+fi
