@@ -19,10 +19,14 @@
 #include <pthread.h>
 using namespace cmsg;
 
+extern pthread_mutex_t *gROOTSPY_MUTEX;
+
 
 class DRootSpy:public cMsgCallback{
  public:
-    DRootSpy(string udl="<default>");
+    DRootSpy(string udl);
+    DRootSpy(pthread_mutex_t *mutex=NULL, string udl="<default>");
+    void Initialize(pthread_mutex_t *mutex, string udl);
     virtual ~DRootSpy();
     
     class hinfo_t{
@@ -53,6 +57,7 @@ class DRootSpy:public cMsgCallback{
  private:
     //class variables
     cMsg *cMsgSys;
+	bool own_gROOTSPY_MUTEX;
     TDirectory *hist_dir; // save value of gDirectory used when forming response to "list hist" request
     string myname;
     std::vector<void*> subscription_handles;

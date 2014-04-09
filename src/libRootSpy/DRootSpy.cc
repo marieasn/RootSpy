@@ -35,15 +35,55 @@ void *ReturnFinalsC(void * ptr);
 
 // --------- GLOBALS ----------------
 sem_t RootSpy_final_sem;
+pthread_mutex_t *gROOTSPY_MUTEX = NULL;
 
 //---------------------------------
 // DRootSpy    (Constructor)
 //---------------------------------
 //TODO: documentation comment.
-DRootSpy::DRootSpy(string myUDL) {
+DRootSpy::DRootSpy(string udl)
+{
+	Initialize(NULL, udl);
+}
+
+//---------------------------------
+// DRootSpy    (Constructor)
+//---------------------------------
+//TODO: documentation comment.
+DRootSpy::DRootSpy(pthread_mutex_t *mutex, string udl)
+{
+	Initialize(mutex, udl);
+}
+
+//---------------------------------
+// Initialize
+//
+/// This is called from the constructors and should not be
+/// called from anywhere else.
+//---------------------------------
+void DRootSpy::Initialize(pthread_mutex_t *mutex, string myUDL)
+{
+
+	// Initialize the gROOTSPY_MUTEX global either with the user
+	// supplied mutex or by allocating our own.
+	if(mutex){
+		// User provided mutex for locking ROOT global
+		gROOTSPY_MUTEX = mutex;
+		own_gROOTSPY_MUTEX = false;
+	}else{
+		// Create our own mutex. Make it error checking.
+		pthread_mutexattr_t attr;
+		pthread_mutexattr_init(&attr);
+		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+		gROOTSPY_MUTEX = new pthread_mutex_t;
+		pthread_mutex_init(gROOTSPY_MUTEX, &attr);
+		own_gROOTSPY_MUTEX = true;
+	}
 
 	// Initialize member data
+	pthread_mutex_lock(gROOTSPY_MUTEX);
 	hist_dir = gDirectory;
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
 	
 	// Create a unique name for ourself
 	char hostname[256];
@@ -133,6 +173,11 @@ DRootSpy::~DRootSpy()
 	cMsgSys->stop();
 
 	sem_destroy(&RootSpy_final_sem);
+	
+	if(own_gROOTSPY_MUTEX && gROOTSPY_MUTEX!=NULL){
+		delete gROOTSPY_MUTEX;
+		gROOTSPY_MUTEX = NULL;
+	}
 }
 
 //---------------------------------
@@ -235,11 +280,17 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 // at least will for the simplest cases.
 void DRootSpy::listHists(cMsgMessage &response) {
 
+			// Lock access to ROOT global while we access it
+			pthread_mutex_lock(gROOTSPY_MUTEX);
+
 			hist_dir = gDirectory;
 
 			// Add histograms to list, recursively traversing ROOT directories
 			vector<hinfo_t> hinfos;
 			addRootObjectsToList(hist_dir, hinfos);
+			
+			// Release lock on ROOT global
+			pthread_mutex_unlock(gROOTSPY_MUTEX);
 
 			// If any histograms were found, copy their info into the message
 			if(hinfos.size()>0) {
@@ -286,21 +337,34 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
 	string path = hnamepath.substr(0, pos);
 	if(path[path.length()-1]==':')path += "/";
 
-	// This seems to work, but is certainly not very thread safe.
-	// perhaps there's a better way...?
+	// Lock access to ROOT global while we access it
+	pthread_mutex_lock(gROOTSPY_MUTEX);
+
+	// Get pointer to ROOT object
 	TDirectory *savedir = gDirectory;
 	hist_dir->cd(path.c_str()); // use directory from last time "list hist" request was serviced
 	TObject *obj = gROOT->FindObject(hname.c_str());
 	savedir->cd();
-	if(!obj)return;
+	
+	// If object not found, release lock on ROOT global and return
+	if(!obj){
+		pthread_mutex_unlock(gROOTSPY_MUTEX);
+		return;
+	}
 
 	// Serialize object and put it into a response message
 	TMessage *tm = new TMessage(kMESS_OBJECT);
 	tm->WriteObject(obj);
-	response.setByteArrayNoCopy(tm->Buffer(),tm->Length());
+	response.setByteArray(tm->Buffer(),tm->Length());
 	response.add("hnamepath", hnamepath);
 	response.setText("histogram");
-	cMsgSys->send(&response);
+
+	// Finished with TMessage object. Free it and release lock on ROOT global
+	delete tm;
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
+
+	// Send message containing histogram (asynchronously)
+	cMsgSys->send(&response);	
 }
 
 //---------------------------------
@@ -309,17 +373,25 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
 //TODO: documentation comment.
 void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_t nentries_to_save) {
 
-	// This seems to work, but is certainly not very thread safe.
-	// perhaps there's a better way...?
+	// Lock access to ROOT global while we access it
+	pthread_mutex_lock(gROOTSPY_MUTEX);
+
+	// Get pointer to tree
 	TDirectory *savedir = gDirectory;
 	hist_dir->cd(path.c_str()); // use directory from last time "list hist" request was serviced
 	TObject *obj = gROOT->FindObject(name.c_str());
 	savedir->cd();
-	if(!obj)return;
+
+	// If object not found, release lock on ROOT global and return
+	if(!obj){
+		pthread_mutex_unlock(gROOTSPY_MUTEX);
+		return;
+	}
 
    // Make sure this is a TTree
 	if(strcmp(obj->ClassName(), "TTree")){
 		cout << "Request for tree \""<<name<<"\" but that's not a TTree (it's a "<<obj->ClassName()<<")" << endl;
+		pthread_mutex_unlock(gROOTSPY_MUTEX);
 		return;
 	}
 
@@ -350,6 +422,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	if(!tree_copy){
 		cout << "Unable to make temporary copy of tree for transport!" << endl;
 		if(f) { f->Close(); delete f; f = NULL;}
+		pthread_mutex_unlock(gROOTSPY_MUTEX);
 		return;
 	}
 
@@ -387,11 +460,10 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
 	f->CopyTo(*tm);
 
-	response.setByteArrayNoCopy(tm->Buffer(),tm->Length());
+	response.setByteArray(tm->Buffer(),tm->Length());
 	response.add("tree_name", name);
 	response.add("tree_path", path);
 	response.setText("tree");
-	cMsgSys->send(&response);
 
 	// clean up temporary copy of tree
 	if( tree_copy != tree ) {
@@ -405,6 +477,13 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 		delete f;
 		f = NULL;
 	}
+
+	// Finished with TMessage object. Free it and release lock on ROOT global
+	delete tm;
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
+
+	cMsgSys->send(&response);
+
 }
 
 //---------------------------------
@@ -412,8 +491,15 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 //---------------------------------
 //TODO: documentation comment.
 void DRootSpy::treeInfo(string sender) {
+
+	// Lock access to ROOT global while we access it
+	pthread_mutex_lock(gROOTSPY_MUTEX);
+
 	hist_dir = gDirectory;
 	findTreeObjForMsg(hist_dir, sender);
+
+	// Release ROOT global
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
 }
 
 //---------------------------------
@@ -421,6 +507,10 @@ void DRootSpy::treeInfo(string sender) {
 //---------------------------------
 //TODO: documentation comment.
 void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
+
+	// Lock access to ROOT global while we access it
+	pthread_mutex_lock(gROOTSPY_MUTEX);
+
     hist_dir = gDirectory;
     vector<string> tree_names, tree_titles, tree_paths;
     findTreeNamesForMsg(hist_dir, tree_names, tree_titles, tree_paths);
@@ -434,6 +524,9 @@ void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
 		if(dir==hist_dir) continue; // already handled
 		findTreeNamesForMsg(dir, tree_names, tree_titles, tree_paths);
 	}
+	
+	// Release ROOT global
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
     
     // build message
 	if(!tree_names.empty()){
@@ -450,6 +543,8 @@ void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
 //---------------------------------
 //This method recursively traverses through histogram directories making hinfo_t 
 //objects out of individual histograms and then adds the info_t objects to a list.
+// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// lock it here.
 void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 	string path = dir->GetPath();
 
@@ -480,6 +575,8 @@ void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 // findTreeNamesForMsg
 //---------------------------------
 //TODO: documentation comment.
+// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// lock it here.
 void DRootSpy::findTreeNamesForMsg(TDirectory *dir, vector<string> &tree_names, 
 				   vector<string> &tree_titles, vector<string> &tree_paths) 
 {
@@ -511,6 +608,8 @@ void DRootSpy::findTreeNamesForMsg(TDirectory *dir, vector<string> &tree_names,
 // findTreeObjForMsg
 //---------------------------------
 //TODO: documentation comment.
+// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// lock it here.
 void DRootSpy::findTreeObjForMsg(TDirectory *dir, string sender) {
 	TList *list = dir->GetList();
 	TIter next(list);
@@ -548,6 +647,8 @@ void DRootSpy::findTreeObjForMsg(TDirectory *dir, string sender) {
 // traverseTree
 //---------------------------------
 //TODO: documentation comment.
+// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// lock it here.
 void DRootSpy::traverseTree(TObjArray *branch_list, vector<string>  &treeinfo){
 
 	if(!branch_list) return;
@@ -635,6 +736,9 @@ void DRootSpy::ReturnFinals(void) {
 }
 
 
+//---------------------------------
+// ReturnFinalsC
+//---------------------------------
 void *ReturnFinalsC(void * ptr) {
 	DRootSpy* rsptr = (DRootSpy *) ptr;
 	rsptr->ReturnFinals();

@@ -25,6 +25,9 @@ int main(int narg, char *argv[])
 
 	signal(SIGINT, sigHandler);
 	
+	// Lock access to ROOT global while we access it
+	pthread_mutex_lock(gROOTSPY_MUTEX);
+
 	// Define some histograms to file
 
 	TDirectory *main = gDirectory;
@@ -65,6 +68,9 @@ int main(int narg, char *argv[])
 	
 	// Random number generator
 	TRandom ran;
+			
+	// Release lock on ROOT global
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
 	
 	// Loop forever while filling the hists
 	cout<<endl<<"Filling histograms ..."<<endl;
@@ -85,6 +91,9 @@ int main(int narg, char *argv[])
 		E = Etot;
 		Mass = sqrt(Etot*Etot - p*p);
 
+		// Lock access to ROOT global while we access it
+		pthread_mutex_lock(gROOTSPY_MUTEX);
+
 		h_px->Fill(px);
 		h_py->Fill(py);
 		h_pz->Fill(pz);
@@ -99,6 +108,8 @@ int main(int narg, char *argv[])
 			cout << MAX_TREE_EVENTS/1000 << "k events in tree. Only histograms will be filled from here on." << endl;
 		}
 
+		// Release lock on ROOT global
+		pthread_mutex_unlock(gROOTSPY_MUTEX);
 		
 		if(((++Nevents) % 100)==0){
 		  //gDirectory->ls();
