@@ -9,7 +9,7 @@ env = env.Clone()
 
 sbms.AddROOT(env)
 sbms.AddCMSG(env)
-env.AppendUnique(LIBS='RootSpy-client')
+env.PrependUnique(LIBS='RootSpy-client')
 
 # This a temporary fix to avoid requiring 
 # the gcc 4.8 compiler
