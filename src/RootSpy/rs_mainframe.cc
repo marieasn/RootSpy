@@ -1686,8 +1686,11 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
     //double hist_line_width = 1.;
     float overlay_ymin=0., overlay_ymax=0.;
     
-    
+    //canvas->Divide(1);
+    canvas->cd(0);
+
     if(hdim == hdef_t::oneD) {
+	
       //if(hdim == hdef_t::histdimension_t::oneD) {
 	bool do_overlay = false;
 	//TH1 *archived_hist = NULL;
@@ -1707,7 +1710,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 		// compare to the original
 		if(overlay_hist)
 		    delete overlay_hist;
-		overlay_hist = (TH1*)(archived_hist->Clone()); 
+		overlay_hist = (TH1*)(archived_hist->Clone());   // memory leak?
 
 		overlay_hist->SetStats(0);  // we want to compare just the shape of the archived histogram
 		overlay_hist->SetFillColor(5); // draw archived histograms with shading
@@ -1773,8 +1776,24 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 
     } else if(hdim == hdef_t::twoD) {
 
+	bool do_overlay = false;
+	TH1* archived_hist = NULL;
+	canvas->Clear();
+	canvas->cd(0);
+	if(overlay_mode && (archive_file!=NULL) ) {
+	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
+	    archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
+	    
+	    if(archived_hist) { 
+		do_overlay = true;
+		canvas->Divide(2);
+		canvas->cd(2);
+		archived_hist->Draw("COLZ");
+		canvas->cd(1);
+	    }
+	}
+
 	// handle drawing 2D histograms differently
-	// probably don't want to overlay them
 	hist->Draw("COLZ");   // do some sort of pretty printing
 	
     } else {
