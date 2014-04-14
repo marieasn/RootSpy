@@ -9,6 +9,7 @@ using namespace std;
 
 
 #include <TH1.h>
+#include <TH2.h>
 #include <TRandom.h>
 #include <TTree.h>
 #include <TFile.h>
@@ -42,6 +43,7 @@ int main(int narg, char *argv[])
 	//gDirectory->cd("..");
 	TH1D *h_E = new TH1D("E", "Energy", 500, 0.0, 10.0);
 	TH1D *h_Mass = new TH1D("Mass", "Mass", 1000, 0.0, 2.0);
+	TH2D *h_Mass_E = new TH2D("MassVEnergy", "Energy v. Mass", 1000, 0.0, 2.0, 500, 0.0, 10.0);
 	
 	// Define some local variables
 
@@ -100,6 +102,7 @@ int main(int narg, char *argv[])
 		h_E->Fill(E);
 		h_Mass->Fill(Mass);
 		
+		h_Mass_E->Fill(Mass, E);
 		
 		// Limit how large the TTree can get
 		if(Nevents<MAX_TREE_EVENTS){
