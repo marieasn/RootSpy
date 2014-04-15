@@ -8,6 +8,7 @@
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectTree.h"
 #include "Dialog_ConfigMacros.h"
+#include "Dialog_AskReset.h"
 
 #include <TROOT.h>
 #include <TStyle.h>
@@ -65,7 +66,8 @@ enum MenuCommandIdentifiers {
   M_TOOLS_MACROS,
   M_TOOLS_TBROWSER,
   M_TOOLS_TREEINFO,
-  M_TOOLS_SAVEHISTS
+  M_TOOLS_SAVEHISTS,
+  M_TOOLS_RESET
 };
 
 //-------------------
@@ -98,9 +100,12 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,
 	dialog_selecttree = NULL;
 	dialog_configmacros = NULL;
 	dialog_indivhists = NULL;
+	dialog_askreset = NULL;
 	delete_dialog_selectserverhist = false;
 	delete_dialog_selecthists = false;
 	delete_dialog_savehists = false;
+	delete_dialog_configmacros = false;
+	delete_dialog_askreset = false;
 	can_view_indiv = false;
 
 	//overlay_mode = false;
@@ -220,6 +225,12 @@ void rs_mainframe::DoTimer(void) {
 	}
 	delete_dialog_configmacros = false;
 
+	//askreset_dialog
+	if(delete_dialog_askreset){
+		dialog_askreset = NULL;
+	}
+	delete_dialog_askreset = false;
+
 	// Update server label if necessary
 	if(selected_server){
 		string s = selected_server->GetTitle();
@@ -240,8 +251,10 @@ void rs_mainframe::DoTimer(void) {
 	// Update histo label if necessary
 	if(selected_hist){
 		string s = selected_hist->GetTitle();
-		if(s!=RS_INFO->current.hnamepath){
-			selected_hist->SetText(RS_INFO->current.hnamepath.c_str());
+		if(RS_INFO->current.hnamepath=="") {
+		    selected_hist->SetText("-------------------------------------------------------");
+		} else if(s!=RS_INFO->current.hnamepath){
+		    selected_hist->SetText(RS_INFO->current.hnamepath.c_str());
 		}
 	}
 	// Update histo label if necessary
@@ -358,6 +371,20 @@ void rs_mainframe::DoSelectHists(void)
 }
 
 //-------------------
+// DoResetDialog
+//-------------------
+void rs_mainframe::DoResetDialog(void)
+{
+
+	if(!dialog_savehists){
+		dialog_askreset = new Dialog_AskReset(gClient->GetRoot(), 300, 150);
+	}else{
+		dialog_askreset->RaiseWindow();
+		dialog_askreset->RequestFocus();
+	}
+}
+
+//-------------------//-------------------
 // DoSaveHists
 //-------------------
 void rs_mainframe::DoSaveHists(void)
@@ -870,7 +897,8 @@ void rs_mainframe::CreateGUI(void)
    fMenuTools->AddEntry("Start TBrowser", M_TOOLS_TBROWSER);
    fMenuTools->AddEntry("View Tree Info", M_TOOLS_TREEINFO);
    fMenuTools->AddEntry("Save Hists...",  M_TOOLS_SAVEHISTS);
-   //fMenuTools->AddSeparator();
+   fMenuTools->AddSeparator();
+   fMenuTools->AddEntry("Reset Servers...",  M_TOOLS_RESET);
    
 
    //fMenuBar = new TGMenuBar(fMenuDock, 1, 1, kHorizontalFrame);
@@ -1352,6 +1380,10 @@ void rs_mainframe::HandleMenu(Int_t id)
    case M_TOOLS_SAVEHISTS:    
      DoSaveHists();
      break;
+
+   case M_TOOLS_RESET:
+       DoResetDialog();
+       break;
    }
 }
 
@@ -1813,3 +1845,34 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
       exec_shell->Exec(ss.str().c_str());
     }
 }
+
+
+/**
+void rs_mainframe::DoReset()
+{
+    // delete histograms
+    for(map<hid_t,hinfo_t>::iterator hit = RS_INFO->hinfos.begin();
+	hit != RS_INFO->hinfos.end(); hit++) {
+	delete hit->second.hist;
+    }
+
+    // delete trees
+    for(map<string,server_info_t>::iterator servit = RS_INFO->servers.begin();
+	servit != RS_INFO->servers.end(); servit++) {
+
+	for(vector<tree_info_t>::iterator treeit = servit->second.trees.begin();
+	    treeit != servit->second.trees.end(); treeit++) {
+	    delete treeit->tree;
+	}
+
+    }
+
+    
+    // clear up RS_INFO
+    RS_INFO->servers.clear();
+    RS_INFO->histdefs.clear();
+    RS_INFO->hinfos.clear();
+
+    
+}
+**/

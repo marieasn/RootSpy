@@ -49,7 +49,7 @@ class rs_info{
 		void Lock(void){pthread_mutex_lock(&mutex);}
 		void Unlock(void){pthread_mutex_unlock(&mutex);}
 		
-		map<string,server_info_t> servers;	    // key=server	    val=server info.
+	map<string,server_info_t> servers;	    // key=server	    val=server info.
 		map<string,hdef_t> histdefs;			// key=hnamepath    val=histogram definition
 		map<hid_t,hinfo_t> hinfos;				// key=server/hist	val=histogram info
 		
@@ -62,6 +62,8 @@ class rs_info{
 		hid_t FindNextActive(hid_t &current);
 		hid_t FindPreviousActive(hid_t &current);
 		void GetActiveHIDs(vector<hid_t> &active_hids);
+
+		void Reset();
 
 		//deque<cMsgMessage> final_messages;
 		deque<final_hist_t> final_hists;

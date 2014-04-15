@@ -84,6 +84,7 @@ class rs_mainframe:public TGMainFrame {
 		void DoLoadHistsList(void);
 		void DoSaveHistsList(void);
 		void DoConfigMacros(void);
+		void DoResetDialog(void);
 
 		void HandleMenu(Int_t id);
 		Bool_t HandleKey(Event_t *event);
@@ -94,6 +95,7 @@ class rs_mainframe:public TGMainFrame {
 		TGMainFrame *dialog_indivhists;
 		TGMainFrame *dialog_selecttree;
 		TGMainFrame *dialog_configmacros;
+		TGMainFrame *dialog_askreset;
 		TGLabel *selected_server;
 		TGLabel *selected_hist;
 		TGLabel *retrieved_lab;
@@ -117,6 +119,7 @@ class rs_mainframe:public TGMainFrame {
 		bool delete_dialog_savehists;
 		bool delete_dialog_indivhists;
 		bool delete_dialog_configmacros;
+		bool delete_dialog_askreset;
 		bool can_view_indiv;
 
 		map<string,string> macro_files;

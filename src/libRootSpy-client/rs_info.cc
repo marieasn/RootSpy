@@ -164,3 +164,42 @@ hid_t rs_info::FindPreviousActive(hid_t &current)
 	
 	return hid_t("none", "none");  // avoid compiler warning
 }
+
+
+//---------------------------------
+// Reset
+//---------------------------------
+void rs_info::Reset()
+{
+
+    // delete histograms
+    for(map<hid_t,hinfo_t>::iterator hit = hinfos.begin();
+	hit != hinfos.end(); hit++) {
+	delete hit->second.hist;
+    }
+
+    // delete trees
+    for(map<string,server_info_t>::iterator servit = servers.begin();
+	servit != servers.end(); servit++) {
+
+	for(vector<tree_info_t>::iterator treeit = servit->second.trees.begin();
+	    treeit != servit->second.trees.end(); treeit++) {
+	    delete treeit->tree;
+	}
+
+    }
+
+    // delete saved histograms
+    // not entirely sure from the documentation if this is the correct 
+    // function - might need Delete()?
+    sum_dir->Clear();  
+    
+    // clear up saved info
+    servers.clear();
+    histdefs.clear();
+    hinfos.clear();
+
+    // zero out the current histogram def
+    current = hid_t();
+    //current.hnamepath = "";
+}
