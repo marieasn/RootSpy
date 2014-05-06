@@ -200,6 +200,38 @@ void Dialog_SelectHists::DoOK(void)
 }
 
 //---------------------------------
+// DoSelectSingleHist
+//---------------------------------
+void Dialog_SelectHists::DoSelectSingleHist(TGListTreeItem* entry, Int_t btn)
+{
+    char path[512];
+    listTree->GetPathnameFromItem(entry, path);
+
+    // allow double clicks to select a particular histrogram to display
+    _DBG_ << " selected entry " << entry->GetText() << " with path = " << path << endl;
+    bool found = false;
+
+    RS_INFO->Lock();
+
+    // to start with, only display histograms that correspon to the one that is clicked
+    map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
+    for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
+	if(hist_items_iter->second == entry) {
+	    found = true;
+	    RS_INFO->current = hist_items_iter->first;
+	    break;
+	}
+    }
+
+    RS_INFO->Unlock();
+
+    // Finish off like we normally would
+    if(found)
+	DoOK();
+}
+
+
+//---------------------------------
 // DoCancel
 //---------------------------------
 void Dialog_SelectHists::DoCancel(void)
@@ -530,6 +562,7 @@ void Dialog_SelectHists::CreateGUI(void)
 	ok->Connect("Clicked()","Dialog_SelectHists", this, "DoOK()");
 	cancel->Connect("Clicked()","Dialog_SelectHists", this, "DoCancel()");
 	this->listTree->Connect("Clicked(TGListTreeItem*, Int_t)","Dialog_SelectHists", this, "DoClickedEntry(TGListTreeItem*, Int_t)");
+	this->listTree->Connect("DoubleClicked(TGListTreeItem*, Int_t)","Dialog_SelectHists", this, "DoSelectSingleHist(TGListTreeItem*, Int_t)");
 	this->listTree->Connect("Checked(TObject*, Bool_t)","Dialog_SelectHists", this, "DoCheckedEntry(TObject*, Int_t)");
 	this->viewByObject->Connect("Clicked()","Dialog_SelectHists", this, "DoSetViewByObject()");
 	this->viewByServer->Connect("Clicked()","Dialog_SelectHists", this, "DoSetViewByServer()");

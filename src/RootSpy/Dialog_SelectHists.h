@@ -37,6 +37,7 @@ class Dialog_SelectHists:public TGMainFrame{
 		void DoOK(void);
 		void DoCancel(void);
 		void DoClickedEntry(TGListTreeItem* entry, Int_t btn);
+		void DoSelectSingleHist(TGListTreeItem* entry, Int_t btn);
 		void DoCheckedEntry(TObject* obj, Int_t check);
 		void DoSetViewByObject(void);
 		void DoSetViewByServer(void);
