@@ -9,6 +9,7 @@
 #include "Dialog_SelectTree.h"
 #include "Dialog_ConfigMacros.h"
 #include "Dialog_AskReset.h"
+#include "Dialog_ScaleOpts.h"
 
 #include <TROOT.h>
 #include <TStyle.h>
@@ -67,7 +68,12 @@ enum MenuCommandIdentifiers {
   M_TOOLS_TBROWSER,
   M_TOOLS_TREEINFO,
   M_TOOLS_SAVEHISTS,
-  M_TOOLS_RESET
+  M_TOOLS_RESET,
+
+  M_VIEW_LOGX,
+  M_VIEW_LOGY,
+  M_VIEW_SCALE_OPTS
+
 };
 
 //-------------------
@@ -319,7 +325,7 @@ void rs_mainframe::DoTimer(void) {
 			    //_DBG_ << "Pointer to histogram was not NULL" << endl;
 			    //hinfo_it->second.hist->Draw();
 			    DrawHist(hinfo_it->second.hist, hinfo_it->second.hnamepath,
-				     hdef_iter->second.type);  
+				     hdef_iter->second.type, hdef_iter->second.display_info);  
 			} else {
 				//_DBG_ << "Pointer to histogram was NULL" << endl;
 			}
@@ -332,7 +338,7 @@ void rs_mainframe::DoTimer(void) {
 			canvas->cd();
 			//hdef_iter->second.sum_hist->Draw();
 			DrawHist(hdef_iter->second.sum_hist, hdef_iter->second.hnamepath,
-				 hdef_iter->second.type);
+				 hdef_iter->second.type, hdef_iter->second.display_info);
 			hdef_iter->second.sum_hist_modified = false;	// set flag indicating we've drawn current version
 			canvas->Modified();
 			canvas->Update();
@@ -384,7 +390,21 @@ void rs_mainframe::DoResetDialog(void)
 	}
 }
 
-//-------------------//-------------------
+//-------------------
+// DoSetScaleOptions
+//-------------------
+void rs_mainframe::DoSetScaleOptions(void)
+{
+
+	if(!dialog_savehists){
+		dialog_scaleopts = new Dialog_ScaleOpts(gClient->GetRoot(), 300, 200);
+	}else{
+		dialog_scaleopts->RaiseWindow();
+		dialog_scaleopts->RequestFocus();
+	}
+}
+
+//-------------------
 // DoSaveHists
 //-------------------
 void rs_mainframe::DoSaveHists(void)
@@ -655,6 +675,7 @@ void rs_mainframe::DoNext(void)
 	}
 		
 	RS_INFO->Unlock();
+	DoUpdateViewMenu();
 	DoUpdate();
 }
 
@@ -695,7 +716,7 @@ void rs_mainframe::DoPrev(void)
 	}
 
 	RS_INFO->Unlock();
-
+	DoUpdateViewMenu();
 	DoUpdate();
 }
 
@@ -900,30 +921,28 @@ void rs_mainframe::CreateGUI(void)
    fMenuTools->AddSeparator();
    fMenuTools->AddEntry("Reset Servers...",  M_TOOLS_RESET);
    
+   fMenuView = new TGPopupMenu(gClient->GetRoot());
+   fMenuView->AddEntry("Log X axis", M_VIEW_LOGX);
+   fMenuView->AddEntry("Log Y axis", M_VIEW_LOGY);
+   fMenuView->AddEntry("Scale Options...", M_VIEW_SCALE_OPTS);
 
    //fMenuBar = new TGMenuBar(fMenuDock, 1, 1, kHorizontalFrame);
    fMenuBar = new TGMenuBar(this, 1, 1, kHorizontalFrame | kRaisedFrame );
    this->AddFrame(fMenuBar, fMenuBarLayout);
    //fMenuBar = new TGMenuBar(this, 1, 1, kHorizontalFrame | kRaisedFrame | kLHintsExpandX);
    //fMenuBar = new TGMenuBar(fMainFrame1435, 1, 1, kHorizontalFrame | kRaisedFrame | kLHintsExpandX);
-   fMenuBar->AddPopup("&File", fMenuFile, fMenuBarItemLayout);
+   fMenuBar->AddPopup("&File",  fMenuFile, fMenuBarItemLayout);
    fMenuBar->AddPopup("&Tools", fMenuTools, fMenuBarItemLayout);
+   fMenuBar->AddPopup("&View",  fMenuView, fMenuBarItemLayout);
 
    //fMenuDock->AddFrame(fMenuBar, fMenuBarLayout);
-
-   //fMenuDock->EnableUndock(kTRUE);
-   //fMenuDock->EnableHide(kTRUE);
-
-   // When using the DockButton of the MenuDock,
-   // the states 'enable' and 'disable' of menus have to be updated.
-   //fMenuDock->Connect("Undocked()", "TestMainFrame", this, "HandleMenu(=M_VIEW_UNDOCK)");
-
 
    // connect the menus to methods
    // Menu button messages are handled by the main frame (i.e. "this")
    // HandleMenu() method.
    fMenuFile->Connect("Activated(Int_t)", "rs_mainframe", this, "HandleMenu(Int_t)");
    fMenuTools->Connect("Activated(Int_t)", "rs_mainframe", this, "HandleMenu(Int_t)");
+   fMenuView->Connect("Activated(Int_t)", "rs_mainframe", this, "HandleMenu(Int_t)");
 
 	//======================= The following was copied for a macro made with TGuiBuilder ===============
 	   // composite frame
@@ -1384,6 +1403,15 @@ void rs_mainframe::HandleMenu(Int_t id)
    case M_TOOLS_RESET:
        DoResetDialog();
        break;
+
+   case M_VIEW_LOGX:
+   case M_VIEW_LOGY:
+       DoSetViewOptions(id);
+       break;
+
+   case M_VIEW_SCALE_OPTS:
+       DoSetScaleOptions();
+       break;
    }
 }
 
@@ -1433,6 +1461,82 @@ Bool_t rs_mainframe::HandleKey(Event_t *event)
     }
   }
   return TGMainFrame::HandleKey(event);
+}
+
+
+void rs_mainframe::DoSetViewOptions(int menu_item)
+{
+    cout << "In rs_mainframe::DoSetViewOptions()..." << endl;  
+    cout << "  menu item = " << menu_item << endl;
+
+    RS_INFO->Lock();
+
+    // make sure that there is a valid histogram loaded
+    map<string,hdef_t>::iterator hdef_itr = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
+    if( (RS_INFO->current.hnamepath == "")
+	|| (hdef_itr == RS_INFO->histdefs.end()) ) {
+	RS_INFO->Unlock();
+	return;
+    }
+	
+    // save the option info
+    switch(menu_item) {
+    case M_VIEW_LOGX:
+	if(hdef_itr->second.display_info.use_logx)
+	    hdef_itr->second.display_info.use_logx = false;
+	else
+	    hdef_itr->second.display_info.use_logx = true;
+	break;
+    case M_VIEW_LOGY:
+	if(hdef_itr->second.display_info.use_logx)
+	    hdef_itr->second.display_info.use_logy = false;
+	else
+	    hdef_itr->second.display_info.use_logy = true;
+	break;
+    }
+    
+
+    // update the GUI
+    // there should be some better way to do this?
+    if(fMenuView->IsEntryChecked(menu_item))
+	fMenuView->UnCheckEntry(menu_item);
+    else
+	fMenuView->CheckEntry(menu_item);
+
+    RS_INFO->Unlock();
+}
+
+
+void rs_mainframe::DoUpdateViewMenu(void)
+{
+    RS_INFO->Lock();
+
+    // make sure that there is a valid histogram loaded
+    map<string,hdef_t>::iterator hdef_itr = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
+    if( (RS_INFO->current.hnamepath == "")
+	|| (hdef_itr == RS_INFO->histdefs.end()) ) {
+	
+	// clear menu settings
+	fMenuView->UnCheckEntry(M_VIEW_LOGX);
+	fMenuView->UnCheckEntry(M_VIEW_LOGY);
+
+	RS_INFO->Unlock();
+	return;
+    }
+
+    // set menu items
+    if(hdef_itr->second.display_info.use_logx)
+	fMenuView->CheckEntry(M_VIEW_LOGX);
+    else
+	fMenuView->UnCheckEntry(M_VIEW_LOGX);
+    if(hdef_itr->second.display_info.use_logy)
+	fMenuView->CheckEntry(M_VIEW_LOGY);
+    else
+	fMenuView->UnCheckEntry(M_VIEW_LOGY);
+    
+	
+    RS_INFO->Unlock();
+
 }
 
 
@@ -1711,15 +1815,25 @@ static void add_to_draw_hist_args(string &args, string toadd)
 
 // wrapper for histogram drawing
 void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
-			    hdef_t::histdimension_t hdim )
+			    hdef_t::histdimension_t hdim,
+			    hdisplay_info_t &display_info)
 {
     string histdraw_args = "";
-    bool overlay_mode = (show_archived_hists->GetState()==kButtonDown);
+    bool overlay_enabled = (show_archived_hists->GetState()==kButtonDown);
     //double hist_line_width = 1.;
     float overlay_ymin=0., overlay_ymax=0.;
     
     //canvas->Divide(1);
     canvas->cd(0);
+
+    if(display_info.use_logx)
+	canvas->SetLogx();
+    else
+	canvas->SetLogx(0);
+    if(display_info.use_logy)
+	canvas->SetLogy();
+    else
+	canvas->SetLogy(0);
 
     if(hdim == hdef_t::oneD) {
 	
@@ -1729,7 +1843,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 
 	// check for archived histograms and load them if they exist and we are overlaying
 	// we do this first to determine the parameters needed to overlay the histograms
-	if(overlay_mode && (archive_file!=NULL) ) {
+	if(overlay_enabled && (archive_file!=NULL) ) {
 	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
 	    TH1* archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
 	    
@@ -1750,10 +1864,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 		overlay_ymin = overlay_hist->GetMinimum();
 		overlay_ymax = 1.1*overlay_hist->GetMaximum();
 
-		//_DBG_ << " overlay max, min " << overlay_ymax << ", " << overlay_ymin << endl;
-
 		gStyle->SetStatX(0.85);
-		//cerr << gStyle->GetStatX() << "  " << gStyle->GetStatY() << endl;
 	    } else {
 		gStyle->SetStatX(0.95);
 	    }
@@ -1777,6 +1888,9 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    // distribution - assumes we are just looking at frequency histograms
 	    if(hist_ymin > 0)
 		hist_ymin = 0;
+	    // add in a fix for logarithmic y axes
+	    if(display_info.use_logy && hist_ymin == 0)
+		hist_ymin = 0.1;
 	    
 	    hist->GetYaxis()->SetRangeUser(hist_ymin, hist_ymax); 
 
@@ -1785,9 +1899,25 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	    hist->SetMarkerSize(0.7);
 	    
 	    // scale down archived histogram and display it to set the scale
-	    float scale = hist_ymax/overlay_ymax;
+	    // appropriately scale the overlay histogram
+	    //overlay_hist->Scale(scale);
+	    if(display_info.overlay_scale_mode == 1) {   
+		// scale both to same overall peak value
+		float scale = hist_ymax/overlay_ymax;
+		overlay_hist->Scale(scale);
+	    } else if(display_info.overlay_scale_mode == 2) {
+		// scale to same integral over specified bin range (lo bin # - hi bin #)
+		float scale = hist->Integral(display_info.scale_range_low, display_info.scale_range_hi)
+		    / overlay_hist->Integral(display_info.scale_range_low, display_info.scale_range_hi);
+		overlay_hist->Scale(scale);
+	    } else if(display_info.overlay_scale_mode == 3) {
+		// scale to same integral over specified bin range (lo % of range - hi % of range)
+		int lo_bin = static_cast<int>( (double)(hist->GetNbinsX()) * display_info.scale_range_low/100. );
+		int hi_bin = static_cast<int>( (double)(hist->GetNbinsX()) * display_info.scale_range_hi/100. );
+		float scale = hist->Integral(lo_bin, hi_bin) / overlay_hist->Integral(lo_bin, hi_bin);
+		overlay_hist->Scale(scale);
+	    }
 
-	    overlay_hist->Scale(scale);
 	    overlay_hist->Draw();
 
 	    // now print the current histogram on top of it
@@ -1812,7 +1942,7 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 	TH1* archived_hist = NULL;
 	canvas->Clear();
 	canvas->cd(0);
-	if(overlay_mode && (archive_file!=NULL) ) {
+	if(overlay_enabled && (archive_file!=NULL) ) {
 	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
 	    archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
 	    

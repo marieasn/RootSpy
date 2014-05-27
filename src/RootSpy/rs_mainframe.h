@@ -85,6 +85,9 @@ class rs_mainframe:public TGMainFrame {
 		void DoSaveHistsList(void);
 		void DoConfigMacros(void);
 		void DoResetDialog(void);
+		void DoSetViewOptions(int menu_item);
+		void DoUpdateViewMenu(void);
+		void DoSetScaleOptions(void);
 
 		void HandleMenu(Int_t id);
 		Bool_t HandleKey(Event_t *event);
@@ -96,6 +99,7 @@ class rs_mainframe:public TGMainFrame {
 		TGMainFrame *dialog_selecttree;
 		TGMainFrame *dialog_configmacros;
 		TGMainFrame *dialog_askreset;
+		TGMainFrame *dialog_scaleopts;
 		TGLabel *selected_server;
 		TGLabel *selected_hist;
 		TGLabel *retrieved_lab;
@@ -110,7 +114,7 @@ class rs_mainframe:public TGMainFrame {
 
 		TGDockableFrame    *fMenuDock;
 		TGMenuBar  *fMenuBar;
-		TGPopupMenu  *fMenuFile, *fMenuTools;
+		TGPopupMenu  *fMenuFile, *fMenuTools, *fMenuView;
 		TGLayoutHints      *fMenuBarLayout, *fMenuBarItemLayout, *fMenuBarHelpLayout;
 
 		bool delete_dialog_selectserverhist;
@@ -120,6 +124,7 @@ class rs_mainframe:public TGMainFrame {
 		bool delete_dialog_indivhists;
 		bool delete_dialog_configmacros;
 		bool delete_dialog_askreset;
+		bool delete_dialog_scaleopts;
 		bool can_view_indiv;
 
 		map<string,string> macro_files;
@@ -128,7 +133,8 @@ class rs_mainframe:public TGMainFrame {
 	protected:
 			viewStyle_t_rs viewStyle_rs;
 			void DrawHist(TH1 *hist, string hnamepath,
-				      hdef_t::histdimension_t hdim );
+				      hdef_t::histdimension_t hdim,
+				      hdisplay_info_t &display_info);
 	private:
 	
 		TTimer *timer;

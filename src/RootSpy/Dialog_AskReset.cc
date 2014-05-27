@@ -27,6 +27,8 @@ using namespace std;
 #include <unistd.h>
 #include <TGFileDialog.h>
 
+extern rs_mainframe *RSMF;
+
 const string NEW_ENTRY_STR = "<new entry>";
 
 //---------------------------------
@@ -71,6 +73,8 @@ void Dialog_AskReset::CloseWindow(void) {
 void Dialog_AskReset::DoOK(void)
 {	
     RS_INFO->Reset();
+    RSMF->canvas->Clear();
+    RSMF->canvas->Update();
     CloseWindow();
 
 }
