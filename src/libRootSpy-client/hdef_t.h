@@ -39,6 +39,25 @@ class TH1;
 /// To accomodate simpler code for finding the right hinfo_t structure,
 /// the hinfo_t class is made to derive from hinfoid_t.
 
+class hdisplay_info_t {
+public:
+    bool use_logx;
+    bool use_logy;
+    
+    int overlay_scale_mode;  // 0=none, 1=full range, 2=bin range, 3=percent range
+    double scale_range_low, scale_range_hi;
+
+
+    hdisplay_info_t() {
+	use_logx = false;
+	use_logy = false;
+
+	overlay_scale_mode = 1;
+	scale_range_low = 0;
+	scale_range_hi = 100;
+    }
+};
+
 
 class hdef_t{
 	public:
@@ -89,6 +108,8 @@ class hdef_t{
 		map<string, bool> save_servers;
 		bool active;				// include histos with this definition in display?
 		bool save_active;
+
+		hdisplay_info_t display_info;    // various options that modify how the histogram is displayed
 };
 
 //typedef hdef_t::histdimension_t histdimension_t;
