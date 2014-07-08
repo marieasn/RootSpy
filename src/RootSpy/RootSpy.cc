@@ -4,6 +4,7 @@
 
 #include "RootSpy.h"
 #include "rs_mainframe.h"
+//#include "rs_mainframe_multi.h"
 #include "rs_cmsg.h"
 #include "rs_info.h"
 
@@ -15,6 +16,8 @@ pthread_rwlock_t *ROOT_MUTEX = NULL;
 
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 string CMSG_NAME = "<not set here. see below>";
+
+bool MULTIFRAME_MODE = false;
 
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
@@ -49,7 +52,10 @@ int main(int narg, char *argv[])
 	//cout<<__FILE__<<__LINE__<<" "<<gClient->ClassName();
 
 	// Create the GUI window
-	RSMF = new rs_mainframe(gClient->GetRoot(), 10, 10);
+	//if(MULTIFRAME_MODE) {
+	//  RSMF = new rs_mainframe_multi(gClient->GetRoot(), 10, 10, true);
+	//} else
+	RSMF = new rs_mainframe(gClient->GetRoot(), 10, 10, true);
 	
 	// Hand control to the ROOT "event" loop
 	app.SetReturnFromRun(true);
@@ -101,6 +107,16 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 					ROOTSPY_UDL += "/cMsg/rootspy";
 				}
 				break;
+		        case 'm':
+			    if(strcmp("-multi",argv[i])==0) { 
+				MULTIFRAME_MODE = true;
+				if(i>=(narg-1)){
+				    cerr<<"-multi option requires an argument"<<endl;
+				}else{
+				    ;  // load filename
+				}
+				break;
+			    }
 		}
 	}
 }
@@ -122,6 +138,7 @@ void Usage(void)
 	cout<<"   -u udl    UDL of cMsg server(def. "<<ROOTSPY_UDL<<")"<<endl;
 	cout<<"   -n name   Specify name this program registers with cMsg server"<<endl;
 	cout<<"             (def. "<<CMSG_NAME<<")"<<endl;
+	//cout<<""; // multimode
 	cout<<endl;
 
 	exit(0);

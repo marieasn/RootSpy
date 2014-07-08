@@ -43,7 +43,7 @@
 class rs_mainframe:public TGMainFrame {
 
 	public:
-		rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h);
+    rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h, bool build_gui);
 		~rs_mainframe(){};
 		
 		enum viewStyle_t_rs{
@@ -132,7 +132,7 @@ class rs_mainframe:public TGMainFrame {
 
 	protected:
 			viewStyle_t_rs viewStyle_rs;
-			void DrawHist(TH1 *hist, string hnamepath,
+			void DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
 				      hdef_t::histdimension_t hdim,
 				      hdisplay_info_t &display_info);
 	private:

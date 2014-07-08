@@ -79,16 +79,19 @@ enum MenuCommandIdentifiers {
 //-------------------
 // Constructor
 //-------------------
-rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
+rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gui):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
 {
 	//Define all of the -graphics objects. 
-	CreateGUI();
-	// Set up timer to call the DoTimer() method repeatedly
-	// so events can be automatically advanced.
-	timer = new TTimer();
-	timer->Connect("Timeout()", "rs_mainframe", this, "DoTimer()");
-	sleep_time = 250;
-	timer->Start(sleep_time, kFALSE);
+        if(build_gui) {
+	    CreateGUI();
+
+	    // Set up timer to call the DoTimer() method repeatedly
+	    // so events can be automatically advanced.
+	    timer = new TTimer();
+	    timer->Connect("Timeout()", "rs_mainframe", this, "DoTimer()");
+	    sleep_time = 250;
+	    timer->Start(sleep_time, kFALSE);
+	}
 
 	time_t now = time(NULL);
 	last_called=now-1;
@@ -148,6 +151,7 @@ void rs_mainframe::CloseWindow(void) {
 //	DestroyWindow();
 	gApplication->Terminate(0);
 }
+
 //-------------------
 // DoQuit
 //-------------------
@@ -324,7 +328,7 @@ void rs_mainframe::DoTimer(void) {
 			if(hinfo_it->second.hist != NULL) {
 			    //_DBG_ << "Pointer to histogram was not NULL" << endl;
 			    //hinfo_it->second.hist->Draw();
-			    DrawHist(hinfo_it->second.hist, hinfo_it->second.hnamepath,
+			    DrawHist(canvas, hinfo_it->second.hist, hinfo_it->second.hnamepath,
 				     hdef_iter->second.type, hdef_iter->second.display_info);  
 			} else {
 				//_DBG_ << "Pointer to histogram was NULL" << endl;
@@ -337,7 +341,7 @@ void rs_mainframe::DoTimer(void) {
 		if(hdef_iter->second.sum_hist_modified && hdef_iter->second.sum_hist!=NULL){
 			canvas->cd();
 			//hdef_iter->second.sum_hist->Draw();
-			DrawHist(hdef_iter->second.sum_hist, hdef_iter->second.hnamepath,
+			DrawHist(canvas, hdef_iter->second.sum_hist, hdef_iter->second.hnamepath,
 				 hdef_iter->second.type, hdef_iter->second.display_info);
 			hdef_iter->second.sum_hist_modified = false;	// set flag indicating we've drawn current version
 			canvas->Modified();
@@ -896,9 +900,6 @@ void rs_mainframe::CreateGUI(void)
    // make a menubar
    // Create menubar and popup menus. The hint objects are used to place
    // and group the different menu widgets with respect to eachother.
-	//fMenuDock = new TGDockableFrame(fMainFrame1435, -1, kRaisedFrame );
-	//fMainFrame1435->AddFrame(fMenuDock, new TGLayoutHints(kLHintsExpandX, 0, 0, 1, 0));
-	//fMenuDock->SetWindowName("RootSpy Menu");
 
    fMenuBarLayout = new TGLayoutHints(kLHintsTop | kLHintsExpandX);
    fMenuBarItemLayout = new TGLayoutHints(kLHintsTop | kLHintsLeft, 0, 4, 0, 0);
@@ -999,7 +1000,7 @@ void rs_mainframe::CreateGUI(void)
    fTextButtonIndiv->SetTextJustify(36);
    fTextButtonIndiv->SetMargins(0,0,0,0);
    fTextButtonIndiv->SetWrapLength(-1);
-   fTextButtonIndiv->Resize(200,22);
+   fTextButtonIndiv->Resize(100,22);
    fVerticalFrame665->AddFrame(fTextButtonIndiv, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
 /*
@@ -1010,7 +1011,8 @@ void rs_mainframe::CreateGUI(void)
    fRadioButton019->SetWrapLength(-1);
    fVerticalFrame665->AddFrame(fRadioButton019, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 */
-   fGroupFrame664->AddFrame(fVerticalFrame665, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   //fGroupFrame664->AddFrame(fVerticalFrame665, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kFitWidth,2,2,2,2));
+   fGroupFrame664->AddFrame(fVerticalFrame665, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
 
    // vertical frame
    TGVerticalFrame *fVerticalFrame669 = new TGVerticalFrame(fGroupFrame664,29,60,kVerticalFrame);
@@ -1030,7 +1032,7 @@ void rs_mainframe::CreateGUI(void)
    fLabel672->SetWrapLength(-1);
    fVerticalFrame669->AddFrame(fLabel672, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
-   fGroupFrame664->AddFrame(fVerticalFrame669, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   fGroupFrame664->AddFrame(fVerticalFrame669, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
 
    // vertical frame
    TGVerticalFrame *fVerticalFrame673 = new TGVerticalFrame(fGroupFrame664,97,78,kVerticalFrame);
@@ -1067,6 +1069,7 @@ void rs_mainframe::CreateGUI(void)
    fTextButton676->SetWrapLength(-1);
    fTextButton676->Resize(87,22);
    fHorizontalFrame803->AddFrame(fTextButton676, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+
    fVerticalFrame673->AddFrame(fHorizontalFrame803, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 //   TGTextButton *fSelectTree = new TGTextButton(fVerticalFrame673, "Tree Info");
 //   fSelectTree->SetTextJustify(36);
@@ -1079,7 +1082,7 @@ void rs_mainframe::CreateGUI(void)
 
    fGroupFrame664->SetLayoutManager(new TGHorizontalLayout(fGroupFrame664));
    fGroupFrame664->Resize(232,114);
-   fHorizontalFrame663->AddFrame(fGroupFrame664, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   fHorizontalFrame663->AddFrame(fGroupFrame664, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
 
    // "fGroupFrame746" group frame
    TGGroupFrame *fGroupFrame746 = new TGGroupFrame(fHorizontalFrame663,"Continuous Update options",kHorizontalFrame);
@@ -1146,7 +1149,7 @@ void rs_mainframe::CreateGUI(void)
    Int_t wfRootEmbeddedCanvas698 = fRootEmbeddedCanvas698->GetCanvasWindowId();
    TCanvas *c125 = new TCanvas("c125", 10, 10, wfRootEmbeddedCanvas698);
    fRootEmbeddedCanvas698->AdoptCanvas(c125);
-   fVerticalFrame662->AddFrame(fRootEmbeddedCanvas698, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
+   fVerticalFrame662->AddFrame(fRootEmbeddedCanvas698, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
    fRootEmbeddedCanvas698->MoveResize(2,124,704,432);
 
    // horizontal frame
@@ -1274,25 +1277,26 @@ void rs_mainframe::CreateGUI(void)
    fHorizontalFrame1060->AddFrame(fVerticalFrame3673, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandX,2,2,2,2));
 
 
-   fVerticalFrame662->AddFrame(fHorizontalFrame1060, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-   fHorizontalFrame1060->MoveResize(2,560,704,82);
+   //fVerticalFrame662->AddFrame(fHorizontalFrame1060, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
+   fVerticalFrame662->AddFrame(fHorizontalFrame1060, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
+   //fHorizontalFrame1060->MoveResize(2,560,704,82);
 
-   fCompositeFrame661->AddFrame(fVerticalFrame662, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   fVerticalFrame662->MoveResize(2,2,708,640);
+   fCompositeFrame661->AddFrame(fVerticalFrame662, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
+   //fVerticalFrame662->MoveResize(2,2,708,640);
 
-   fCompositeFrame660->AddFrame(fCompositeFrame661, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
-   fCompositeFrame661->MoveResize(0,0,833,700);
+   fCompositeFrame660->AddFrame(fCompositeFrame661, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
+   //fCompositeFrame661->MoveResize(0,0,833,700);
 
-   fCompositeFrame659->AddFrame(fCompositeFrame660, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
-   fCompositeFrame660->MoveResize(0,0,833,700);
+   fCompositeFrame659->AddFrame(fCompositeFrame660, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
+   //fCompositeFrame660->MoveResize(0,0,833,700);
 
-   fCompositeFrame658->AddFrame(fCompositeFrame659, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
+   fCompositeFrame658->AddFrame(fCompositeFrame659, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
 
-   fCompositeFrame657->AddFrame(fCompositeFrame658, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
+   fCompositeFrame657->AddFrame(fCompositeFrame658, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
 
-   fMainFrame656->AddFrame(fCompositeFrame657, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
+   fMainFrame656->AddFrame(fCompositeFrame657, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
 
-   fMainFrame1435->AddFrame(fMainFrame656, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
+   fMainFrame1435->AddFrame(fMainFrame656, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
 
    fMainFrame1435->SetMWMHints(kMWMDecorAll,
                         kMWMFuncAll,
@@ -1301,8 +1305,7 @@ void rs_mainframe::CreateGUI(void)
 
    fMainFrame1435->Resize(fMainFrame1435->GetDefaultSize());
    fMainFrame1435->MapWindow();
-   fMainFrame1435->Resize(833,700);
-
+   //fMainFrame1435->Resize(833,700);
 
 
    //==============================================================================================
@@ -1814,26 +1817,27 @@ static void add_to_draw_hist_args(string &args, string toadd)
 **/
 
 // wrapper for histogram drawing
-void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
+void rs_mainframe::DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
 			    hdef_t::histdimension_t hdim,
 			    hdisplay_info_t &display_info)
 {
     string histdraw_args = "";
     bool overlay_enabled = (show_archived_hists->GetState()==kButtonDown);
+    //bool overlay_enabled = false;
     //double hist_line_width = 1.;
     float overlay_ymin=0., overlay_ymax=0.;
     
-    //canvas->Divide(1);
-    canvas->cd(0);
+    //the_canvas->Divide(1);
+    the_canvas->cd(0);
 
     if(display_info.use_logx)
-	canvas->SetLogx();
+	the_canvas->SetLogx();
     else
-	canvas->SetLogx(0);
+	the_canvas->SetLogx(0);
     if(display_info.use_logy)
-	canvas->SetLogy();
+	the_canvas->SetLogy();
     else
-	canvas->SetLogy(0);
+	the_canvas->SetLogy(0);
 
     if(hdim == hdef_t::oneD) {
 	
@@ -1940,18 +1944,18 @@ void rs_mainframe::DrawHist(TH1 *hist, string hnamepath,
 
 	bool do_overlay = false;
 	TH1* archived_hist = NULL;
-	canvas->Clear();
-	canvas->cd(0);
+	the_canvas->Clear();
+	the_canvas->cd(0);
 	if(overlay_enabled && (archive_file!=NULL) ) {
 	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
 	    archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
 	    
 	    if(archived_hist) { 
 		do_overlay = true;
-		canvas->Divide(2);
-		canvas->cd(2);
+		the_canvas->Divide(2);
+		the_canvas->cd(2);
 		archived_hist->Draw("COLZ");
-		canvas->cd(1);
+		the_canvas->cd(1);
 	    }
 	}
 
