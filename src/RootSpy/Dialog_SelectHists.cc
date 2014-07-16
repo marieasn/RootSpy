@@ -47,6 +47,8 @@ Dialog_SelectHists::Dialog_SelectHists(const TGWindow *p, UInt_t w, UInt_t h):TG
 	last_called = now;
 	last_ping_time = now;
 	last_hist_time = now;
+
+	filter_str = "";
 	
 	//viewStyle = rs_info::kViewByServer;
 	viewStyle = rs_info::kViewByObject;
@@ -328,6 +330,23 @@ void Dialog_SelectHists::DoSetViewByServer(void)
 	}
 }
 
+
+
+//---------------------------------
+// DoFilterHists
+//---------------------------------
+void Dialog_SelectHists::DoFilterHists(void)
+{
+    // save string to filter against
+    filter_str = filterTextBox->GetText();
+
+    vector<hid_t> hids, good_hids;
+    GetAllHistos(hids);
+    UpdateListTree(hids);
+}
+
+
+
 //---------------------------------
 // GetAllHistos
 //---------------------------------
@@ -363,6 +382,21 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 	}
 	server_items.clear();
 	hist_items.clear();
+
+	// optionally filter histograms
+	if(filter_str != "") {
+	    vector<hid_t> good_hids;
+
+	    // only keep the histograms that match the filter text
+	    for(vector<hid_t>::iterator hid_itr = hids.begin();
+		hid_itr != hids.end(); hid_itr++) {
+		if( hid_itr->hnamepath.find(filter_str) != string::npos )
+		    good_hids.push_back( *hid_itr );
+	    }
+
+	    hids = good_hids;
+	}
+
 
 	// Loop over histograms
 	for(unsigned int i=0; i<hids.size(); i++){
@@ -448,7 +482,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		hist_items[hid_t(server,hnamepath)] = hist_item;
 	}
 	
-	// Remember the his list so we can easily check for changes
+	// Remember the this list so we can easily check for changes
 	last_hids = hids;
 	
 	// This is needed to force the list tree to draw its contents
@@ -466,14 +500,35 @@ void Dialog_SelectHists::CreateGUI(void)
 {
 	TGMainFrame *fMainFrame984 = this;
 
+	TGFont *ufont;         // will reflect user font changes
+	TGFont *ufont_bold;         // will reflect user font changes
+	ufont = gClient->GetFont("-*-helvetica-medium-r-*-*-12-*-*-*-*-*-iso8859-1");
+	ufont_bold = gClient->GetFont("-*-helvetica-bold-r-*-*-12-*-*-*-*-*-iso8859-1");
+
+	TGGC   *uGC;           // will reflect user GC changes
+	// graphics context changes
+	GCValues_t valEntry689;
+	valEntry689.fMask = kGCForeground | kGCBackground | kGCFillStyle | kGCFont | kGCGraphicsExposures;
+	gClient->GetColorByName("#000000",valEntry689.fForeground);
+	gClient->GetColorByName("#e0e0e0",valEntry689.fBackground);
+	valEntry689.fFillStyle = kFillSolid;
+	valEntry689.fFont = ufont->GetFontHandle();
+	valEntry689.fGraphicsExposures = kFALSE;
+	uGC = gClient->GetGC(&valEntry689, kTRUE);
+
+
    // composite frame
-   TGCompositeFrame *fMainFrame800 = new TGCompositeFrame(fMainFrame984,400,290,kVerticalFrame);
+   TGCompositeFrame *fMainFrame800 = new TGCompositeFrame(fMainFrame984,300,390,kVerticalFrame);
 
    // vertical frame
-   TGVerticalFrame *fVerticalFrame801 = new TGVerticalFrame(fMainFrame800,396,286,kVerticalFrame);
+   TGVerticalFrame *fVerticalFrame801 = new TGVerticalFrame(fMainFrame800,396,386,kVerticalFrame);
 
    // vertical frame
-   TGVerticalFrame *fVerticalFrame802 = new TGVerticalFrame(fVerticalFrame801,96,42,kVerticalFrame);
+   TGHorizontalFrame *fHorizontalFrame802 = new TGHorizontalFrame(fVerticalFrame801,200,42,kHorizontalFrame);
+   //TGHorizontalFrame *fHorizontalFrame802 = new TGHorizontalFrame(fVerticalFrame801,96,42,kHorizontalFrame);
+
+   //TGVerticalFrame *fVerticalFrame802 = new TGVerticalFrame(fVerticalFrame801,96,42,kVerticalFrame);
+   TGVerticalFrame *fVerticalFrame802 = new TGVerticalFrame(fHorizontalFrame802,96,42,kVerticalFrame);
    TGRadioButton *fRadioButton803 = new TGRadioButton(fVerticalFrame802,"View By Object");
    fRadioButton803->SetState(kButtonDown);
    //fRadioButton803->SetState(kButtonUp);
@@ -488,8 +543,28 @@ void Dialog_SelectHists::CreateGUI(void)
    fRadioButton804->SetMargins(0,0,0,0);
    fRadioButton804->SetWrapLength(-1);
    fVerticalFrame802->AddFrame(fRadioButton804, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   fHorizontalFrame802->AddFrame(fVerticalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
-   fVerticalFrame801->AddFrame(fVerticalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   TGTextEntry *fTextEntry689 = new TGTextEntry(fHorizontalFrame802, new TGTextBuffer(14),-1,uGC->GetGC(),ufont->GetFontStruct(),kSunkenFrame | kDoubleBorder | kOwnBackground);
+   fTextEntry689->SetMaxLength(4096);
+   fTextEntry689->SetAlignment(kTextLeft);
+   fTextEntry689->SetText("");
+   fTextEntry689->Resize(150,fTextEntry689->GetDefaultHeight());
+   //fHorizontalFrame802->AddFrame(fTextEntry689, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kFitWidth,2,2,2,2));
+   fHorizontalFrame802->AddFrame(fTextEntry689, new TGLayoutHints(kLHintsLeft | kLHintsCenterY | kLHintsExpandX | kFitWidth,2,2,2,2));
+
+   TGTextButton *fTextButton685 = new TGTextButton(fHorizontalFrame802,"Filter");
+   fTextButton685->SetTextJustify(36);
+   fTextButton685->SetMargins(0,0,0,0);
+   fTextButton685->SetWrapLength(-1);
+   fTextButton685->Resize(97,22);
+   //fHorizontalFrame802->AddFrame(fTextButton685, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   fHorizontalFrame802->AddFrame(fTextButton685, new TGLayoutHints(kLHintsLeft | kLHintsCenterY,2,2,2,2));
+   
+   fVerticalFrame801->AddFrame(fHorizontalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kFitWidth,2,2,2,2));
+
+   //fVerticalFrame801->AddFrame(fVerticalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   //fVerticalFrame801->AddFrame(fHorizontalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
    // canvas widget
    TGCanvas *fCanvas805 = new TGCanvas(fVerticalFrame801,384,200);
@@ -514,32 +589,35 @@ void Dialog_SelectHists::CreateGUI(void)
    fListTree815->MapSubwindows();
    fCanvas805->SetContainer(fListTree815);
    fCanvas805->MapSubwindows();
-   fVerticalFrame801->AddFrame(fCanvas805, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   fVerticalFrame801->AddFrame(fCanvas805, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
 
    // horizontal frame
-   TGHorizontalFrame *fHorizontalFrame816 = new TGHorizontalFrame(fVerticalFrame801,392,32,kHorizontalFrame);
-   fHorizontalFrame816->SetLayoutBroken(kTRUE);
+   //TGHorizontalFrame *fHorizontalFrame816 = new TGHorizontalFrame(fVerticalFrame801,392,32,kHorizontalFrame);
+   TGHorizontalFrame *fHorizontalFrame816 = new TGHorizontalFrame(fVerticalFrame801,302,32,kHorizontalFrame);
+   //fHorizontalFrame816->SetLayoutBroken(kTRUE);
    TGTextButton *fTextButton817 = new TGTextButton(fHorizontalFrame816,"Cancel");
    fTextButton817->SetTextJustify(36);
    fTextButton817->SetMargins(0,0,0,0);
    fTextButton817->SetWrapLength(-1);
    fTextButton817->Resize(56,22);
    fHorizontalFrame816->AddFrame(fTextButton817, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   fTextButton817->MoveResize(2,2,56,22);
+   //fTextButton817->MoveResize(2,2,56,22);
    TGTextButton *fTextButton818 = new TGTextButton(fHorizontalFrame816,"OK");
    fTextButton818->SetTextJustify(36);
    fTextButton818->SetMargins(0,0,0,0);
    fTextButton818->SetWrapLength(-1);
-   fTextButton818->Resize(55,22);
-   fHorizontalFrame816->AddFrame(fTextButton818, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   fTextButton818->MoveResize(320,0,55,22);
+   //fTextButton818->Resize(55,22);
+   fTextButton818->Resize(100,22);
+   fHorizontalFrame816->AddFrame(fTextButton818, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
+   //fHorizontalFrame816->AddFrame(fTextButton818, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   //fTextButton818->MoveResize(320,0,55,22);
 
-   fVerticalFrame801->AddFrame(fHorizontalFrame816, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   fVerticalFrame801->AddFrame(fHorizontalFrame816, new TGLayoutHints(kLHintsLeft | kLHintsTop | kFitWidth,2,2,2,2));
 
-   fMainFrame800->AddFrame(fVerticalFrame801, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+   fMainFrame800->AddFrame(fVerticalFrame801, new TGLayoutHints(kLHintsLeft | kLHintsTop | kFitWidth | kFitHeight,2,2,2,2));
 
-   fMainFrame984->AddFrame(fMainFrame800, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
-   fMainFrame800->MoveResize(0,0,400,290);
+   fMainFrame984->AddFrame(fMainFrame800, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
+   //fMainFrame800->MoveResize(0,0,400,290);
 
    fMainFrame984->SetMWMHints(kMWMDecorAll,
                         kMWMFuncAll,
@@ -548,16 +626,18 @@ void Dialog_SelectHists::CreateGUI(void)
 
    fMainFrame984->Resize(fMainFrame984->GetDefaultSize());
    fMainFrame984->MapWindow();
-   fMainFrame984->Resize(490,372);
+   //fMainFrame984->Resize(490,372);
 	//==============================================================================================
 
 	// Connect GUI elements to methods
 	TGTextButton* &ok = fTextButton818;
 	TGTextButton* &cancel = fTextButton817;
+	TGTextButton* &filter_button = fTextButton685;
 	this->canvas = fCanvas805;
 	this->listTree = fListTree815;
 	this->viewByObject = fRadioButton803;
 	this->viewByServer = fRadioButton804;
+	this->filterTextBox = fTextEntry689;
 	
 	ok->Connect("Clicked()","Dialog_SelectHists", this, "DoOK()");
 	cancel->Connect("Clicked()","Dialog_SelectHists", this, "DoCancel()");
@@ -567,7 +647,8 @@ void Dialog_SelectHists::CreateGUI(void)
 	this->viewByObject->Connect("Clicked()","Dialog_SelectHists", this, "DoSetViewByObject()");
 	this->viewByServer->Connect("Clicked()","Dialog_SelectHists", this, "DoSetViewByServer()");
 	//Connect("CloseWindow()", "Dialog_SelectHists", this, "DoCancel()");	
-	
+	filter_button->Connect("Clicked()","Dialog_SelectHists", this, "DoFilterHists()");
+
 	folder_t = pclose;
 	ofolder_t = popen;
 	h1_s = gClient->GetPicture("h1_s.xpm");

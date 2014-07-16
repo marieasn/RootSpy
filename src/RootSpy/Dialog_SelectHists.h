@@ -14,6 +14,7 @@
 #include <TGButton.h>
 #include <TGListTree.h>
 #include <TGPicture.h>
+#include <TGTextEntry.h>
 #include <TVirtualStreamerInfo.h>
 #include <vector>
 #include <map>
@@ -43,6 +44,7 @@ class Dialog_SelectHists:public TGMainFrame{
 		void DoSetViewByServer(void);
 		void GetAllHistos(vector<hid_t> &hids);
 		void CloseWindow(void);
+		void DoFilterHists(void);
 		//void GetHistsFromListTree(vector<hid_t> &hists); // first=server, second=hnamepath
 		//void AddBranchToHists(TGListTreeItem *item, multimap<string,string> &hists);
 
@@ -72,6 +74,7 @@ class Dialog_SelectHists:public TGMainFrame{
 		TGListTree *listTree;
 		TGRadioButton *viewByObject;
 		TGRadioButton *viewByServer;
+		TGTextEntry *filterTextBox;
 		
 		const TGPicture *folder_t;
 		const TGPicture *ofolder_t;
@@ -90,6 +93,8 @@ class Dialog_SelectHists:public TGMainFrame{
 		bool tosave; 
 		//Justin B. For DoSave().
 		TGFileInfo* fileinfo;
+
+		string filter_str;
 
 		ClassDef(Dialog_SelectHists,1)
 };
