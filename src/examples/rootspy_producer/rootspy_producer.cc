@@ -80,8 +80,10 @@ int main(int narg, char *argv[])
 	while(!DONE){
 		
 		// Randomly choose values to put into an x and y coordinate on some plane 6 meters away from
-		double x = (ran.Rndm()-0.5)*2.0;
-		double y = (ran.Rndm()-0.5)*2.0;
+		//double x = (ran.Rndm()-0.5)*2.0;
+		//double y = (ran.Rndm()-0.5)*2.0;
+		double x = (ran.Rndm()-0.5)*3.0;
+		double y = (ran.Rndm()-0.5)*3.0;
 		double z = 6.0;
 		double p = ran.Landau(0.5, 0.075); // total momentum
 		double m = 0.134;

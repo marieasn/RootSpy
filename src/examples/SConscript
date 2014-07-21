@@ -1,7 +1,7 @@
 
 Import('*')
 
-subdirs = ['rootspy_producer', 'rootspy_filepub']
+subdirs = ['rootspy_producer', 'rootspy_filepub', 'rootspy_macrotest']
 
 SConscript(dirs=subdirs, exports='env osname', duplicate=0)
 
