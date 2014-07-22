@@ -14,6 +14,8 @@
 
 #include <vector>
 
+#include "macro_info_t.h"
+
 #include <TDirectory.h>
 #include <cMsg.hxx>
 #include <pthread.h>
@@ -45,6 +47,12 @@ class DRootSpy:public cMsgCallback{
     };
     void ReturnFinals(void);
 
+    // macro functions
+    bool RegisterMacro(string name, string path, string macro_data);
+    bool AddMacroHistogram(string name, string path, TH1 *the_hist);
+    bool AddMacroHistogram(string name, string path, vector<TH1*> the_hists);
+    bool SetMacroVersion(string name, string path, int version_number);
+
  protected:
     
     void callback(cMsgMessage *msg, void *userObject);
@@ -57,14 +65,16 @@ class DRootSpy:public cMsgCallback{
  private:
     //class variables
     cMsg *cMsgSys;
-	bool own_gROOTSPY_MUTEX;
+    bool own_gROOTSPY_MUTEX;
     TDirectory *hist_dir; // save value of gDirectory used when forming response to "list hist" request
     string myname;
     std::vector<void*> subscription_handles;
     vector<string> *finalhists;
     pthread_t mythread;
     string finalsender;
-    
+
+    map<string,macro_info_t> macros;
+
     //methods
     void traverseTree(TObjArray *branch_list, vector<string> &treeinfo);
     void listHists(cMsgMessage &response);
@@ -72,6 +82,9 @@ class DRootSpy:public cMsgCallback{
     void getTree(cMsgMessage &response, string &name, string &path, int64_t nentries);
     void treeInfo(string sender);
     void treeInfoSync(cMsgMessage &response, string sender);
+    void listMacros(cMsgMessage &response);
+    void getMacro(cMsgMessage &response, string &hnamepath);
+
 };
 
 #endif // _DRootSpy_

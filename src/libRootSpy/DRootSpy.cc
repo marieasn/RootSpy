@@ -247,6 +247,13 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 		delete msg;
 		return;
 	    }
+	} else 	if(cmd == "list macros") {
+		listMacros(*response);
+	} else 	if(cmd == "get macro") {
+		// Get name of requested histogram
+		string hnamepath = msg->getString("hnamepath");
+		_DBG_ << "sending out macro " << hnamepath << endl;
+		getMacro(*response, hnamepath);
 	} else 	if(cmd == "provide final") {
 		finalhists = msg->getStringVector("hnamepaths");
 		finalsender = msg->getType();
@@ -278,51 +285,52 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 // gDirectory while running so we save it here. Note that this doesn't
 // actually guarantee it will work due to multiple threads, but it
 // at least will for the simplest cases.
-void DRootSpy::listHists(cMsgMessage &response) {
+void DRootSpy::listHists(cMsgMessage &response) 
+{
 
-			// Lock access to ROOT global while we access it
-			pthread_mutex_lock(gROOTSPY_MUTEX);
+	// Lock access to ROOT global while we access it
+	pthread_mutex_lock(gROOTSPY_MUTEX);
 
-			hist_dir = gDirectory;
-
-			// Add histograms to list, recursively traversing ROOT directories
-			vector<hinfo_t> hinfos;
-			addRootObjectsToList(hist_dir, hinfos);
-			
-			// Release lock on ROOT global
-			pthread_mutex_unlock(gROOTSPY_MUTEX);
-
-			// If any histograms were found, copy their info into the message
-			if(hinfos.size()>0) {
-				// Copy elements of hinfo objects into individual vectors
-				vector<string> hist_names;
-				vector<string> hist_types;
-				vector<string> hist_paths;
-				vector<string> hist_titles;
-				for(unsigned int i=0; i<hinfos.size(); i++){
-					hist_names.push_back(hinfos[i].name);
-					hist_types.push_back(hinfos[i].type);
-					hist_paths.push_back(hinfos[i].path);
-					hist_titles.push_back(hinfos[i].title);
-				}
-				response.add("hist_names", hist_names);
-				response.add("hist_types", hist_types);
-				response.add("hist_paths", hist_paths);
-				response.add("hist_titles", hist_titles);
-
-			} else if(hinfos.size()==0){
-
-				// cMsg insists there be at least one entry in 
-				// a vector<string> payload, otherwise it will
-				// throw an exception. If we get here, then don't
-				// add the empty payloads. Note that by sending
-				// empty payloads, this will result in a 
-				// message on the client complaining about a
-				// mal-formed response.
-			}
-
-			response.setText("hists list");
-			cMsgSys->send(&response);
+	hist_dir = gDirectory;
+	
+	// Add histograms to list, recursively traversing ROOT directories
+	vector<hinfo_t> hinfos;
+	addRootObjectsToList(hist_dir, hinfos);
+	
+	// Release lock on ROOT global
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	
+	// If any histograms were found, copy their info into the message
+	if(hinfos.size()>0) {
+		// Copy elements of hinfo objects into individual vectors
+		vector<string> hist_names;
+		vector<string> hist_types;
+		vector<string> hist_paths;
+		vector<string> hist_titles;
+		for(unsigned int i=0; i<hinfos.size(); i++){
+			hist_names.push_back(hinfos[i].name);
+			hist_types.push_back(hinfos[i].type);
+			hist_paths.push_back(hinfos[i].path);
+			hist_titles.push_back(hinfos[i].title);
+		}
+		response.add("hist_names", hist_names);
+		response.add("hist_types", hist_types);
+		response.add("hist_paths", hist_paths);
+		response.add("hist_titles", hist_titles);
+		
+	} else if(hinfos.size()==0){
+		
+		// cMsg insists there be at least one entry in 
+		// a vector<string> payload, otherwise it will
+		// throw an exception. If we get here, then don't
+		// add the empty payloads. Note that by sending
+		// empty payloads, this will result in a 
+		// message on the client complaining about a
+		// mal-formed response.
+	}
+	
+	response.setText("hists list");
+	cMsgSys->send(&response);
 }
 
 //---------------------------------
@@ -367,6 +375,104 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
 	cMsgSys->send(&response);	
 }
 
+
+//---------------------------------
+// listMacros
+//---------------------------------
+void DRootSpy::listMacros(cMsgMessage &response) 
+{
+	// If any histograms were found, copy their info into the message
+	if(macros.size()>0) {
+		vector<string> macro_names;
+		vector<string> macro_paths;
+		for(map<string,macro_info_t>::iterator macro_itr = macros.begin();
+		    macro_itr != macros.end(); macro_itr++) {
+			macro_names.push_back(macro_itr->second.name);
+			macro_paths.push_back(macro_itr->second.path);
+		}
+		response.add("macro_names", macro_names);
+		response.add("macro_paths", macro_paths);
+	}
+	
+	response.setText("macros list");
+	cMsgSys->send(&response);
+}
+
+//---------------------------------
+// getMacro
+//---------------------------------
+void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath) {
+	// find the macro
+	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
+	if(the_macro_itr == macros.end()) {
+		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
+		return;
+	}
+	macro_info_t &the_macro = the_macro_itr->second;
+
+	// Lock access to ROOT global while we access it
+	pthread_mutex_lock(gROOTSPY_MUTEX);
+
+	TDirectory *savedir = gDirectory;
+	
+	// for the details on TMemFile usage, see getTree()
+	TMemFile *f = new TMemFile(".rootspy_tmp.root", "RECREATE");
+	
+	// fill the TMemFile with our payload:
+	//  1) TObjString of the macro "code"
+	//  2) TObjArray of any histograms used by the macro
+	TObjString *macro_str = new TObjString(the_macro.macro.c_str());
+	//cerr << " ======= MACRO =======" << endl;
+	//cerr << the_macro.macro << endl;
+	//cerr << " ======= TObjString MACRO =======" << endl;
+	//cerr << macro_str->GetString().Data() << endl;
+	macro_str->Write("macro");
+
+	//TObjArray *hists = new TObjArray(the_macro.histograms.size());
+	if( the_macro.histograms.size() > 0 ) {
+		//TObjArray *hists = new TObjArray();
+		//for(unsigned int i=0; i<the_macro.histograms.size(); i++)
+		//hists->AddLast(the_macro.histograms[i]);
+		//hists->Write("hists");
+		for(unsigned int i=0; i<the_macro.histograms.size(); i++)
+			the_macro.histograms[i]->Write();
+	}
+	
+	savedir->cd();
+
+	// Serialize object and put it into a response message
+	TMessage *tm = new TMessage(kMESS_ANY);
+	f->Write();
+	//tm->WriteTString(f->GetName());
+	tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
+	f->CopyTo(*tm);
+
+	_DBG_ << " TMemFile length = " << f->GetEND() << endl;
+
+	response.setByteArray(tm->Buffer(),tm->Length());
+	response.add("macro_name", the_macro.name);
+	response.add("macro_path", the_macro.path);
+	response.add("macro_version", the_macro.version);
+	response.setText("macro");
+
+	// clean up everything
+	if(f) {
+		f->Close();
+		delete f;
+		f = NULL;
+	}
+
+	// Finished with TMessage object. Free it and release lock on ROOT global
+	delete tm;
+	pthread_mutex_unlock(gROOTSPY_MUTEX);
+
+	// Send message containing histogram (asynchronously)
+	cMsgSys->send(&response);	
+}
+
+
+
+
 //---------------------------------
 // getTree
 //---------------------------------
@@ -388,7 +494,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 		return;
 	}
 
-   // Make sure this is a TTree
+	// Make sure this is a TTree
 	if(strcmp(obj->ClassName(), "TTree")){
 		cout << "Request for tree \""<<name<<"\" but that's not a TTree (it's a "<<obj->ClassName()<<")" << endl;
 		pthread_mutex_unlock(gROOTSPY_MUTEX);
@@ -399,7 +505,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	// to package up and send.
 	TTree *tree = static_cast<TTree *>(obj);
 	int64_t nentries_in_tree = tree->GetEntries();
-   int64_t firstentry = nentries_in_tree - nentries_to_save;
+	int64_t firstentry = nentries_in_tree - nentries_to_save;
 	if(firstentry<0 || nentries_to_save<=0) firstentry=0;
 	int64_t nentries = nentries_in_tree - firstentry;
 	cout << "Sending TTree " << tree->GetName() << "  (entries: " << nentries_in_tree << "  sending: " << nentries << ")" << endl;
@@ -409,8 +515,8 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 
 	// Sending the TTree object seemed to have problems if
 	// the tree contained an array (e.g. "data[100]/F" in
-   // the branch definition). We write the tree to a TMemFile
-   // and then serialize and send that object. This follows the
+	// the branch definition). We write the tree to a TMemFile
+	// and then serialize and send that object. This follows the
 	// treeClient.C and fastMergeServer.C ROOT tutorials.
 	savedir = gDirectory;
 	TMemFile *f = new TMemFile(".rootspy_tmp.root", "RECREATE");
@@ -745,3 +851,109 @@ void *ReturnFinalsC(void * ptr) {
 	
 	return NULL; // avoid compiler warnings
 }
+
+
+//---------------------------------
+// RegisterMacro
+//---------------------------------
+bool DRootSpy::RegisterMacro(string name, string path, string macro_data) 
+{
+	// validate name
+	// right now we don't do anything special...
+	if(name == "") {
+		_DBG_ << "trying to register a macro with no name!" << endl;
+		return false;
+	}
+
+	// validate path - if blank, then assume we're in the root directory
+	// right now we don't do anything else special...
+	if(path == "") {
+		path = "/";
+	}
+
+	// add the macro to our list!
+	string hnamepath = path + "/" + name;
+	macros[hnamepath] = macro_info_t(name,path);
+	macros[hnamepath].macro = macro_data;
+}
+
+//---------------------------------
+// AddMacroHistogram 
+//---------------------------------
+bool DRootSpy::AddMacroHistogram(string name, string path, TH1 *the_hist) 
+{
+	// validate name
+	// right now we don't do anything special...
+	if(name == "") {
+		_DBG_ << "trying to add a histogram to a macro with no name!" << endl;
+		return false;
+	}
+
+	// validate path - if blank, then assume we're in the root directory
+	// right now we don't do anything else special...
+	if(path == "") {
+		path = "/";
+	}
+
+	// find the macro
+	string hnamepath = path + "/" + name;
+	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
+	if(the_macro_itr == macros.end()) {
+		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
+		return false;
+	}
+
+	// add the histogram!
+	the_macro_itr->second.histograms.push_back( the_hist );
+
+	return true;
+}
+
+//---------------------------------
+// AddMacroHistogram 
+//---------------------------------
+bool DRootSpy::AddMacroHistogram(string name, string path, vector<TH1*> the_hists) 
+{
+	for(vector<TH1*>::iterator hist_itr = the_hists.begin();
+	    hist_itr != the_hists.begin(); hist_itr++) {
+		if(!AddMacroHistogram(name, path, *hist_itr)) {
+			_DBG_ << "error adding histogram to macro " << name << "/" << path << endl;
+			return false;
+		}
+	}
+
+	return true;
+}
+
+//---------------------------------
+// SetMacroVersion
+//---------------------------------
+bool DRootSpy::SetMacroVersion(string name, string path, int version_number) 
+{
+	// validate name
+	// right now we don't do anything special...
+	if(name == "") {
+		_DBG_ << "trying to add a histogram to a macro with no name!" << endl;
+		return false;
+	}
+
+	// validate path - if blank, then assume we're in the root directory
+	// right now we don't do anything else special...
+	if(path == "") {
+		path = "/";
+	}
+
+	// find the macro
+	string hnamepath = path + "/" + name;
+	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
+	if(the_macro_itr == macros.end()) {
+		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
+		return false;
+	}
+
+	// set the value!
+	the_macro_itr->second.version = version_number;
+
+	return true;
+}
+
