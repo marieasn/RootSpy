@@ -49,13 +49,14 @@ class rs_info{
 		void Lock(void){pthread_mutex_lock(&mutex);}
 		void Unlock(void){pthread_mutex_unlock(&mutex);}
 		
-	map<string,server_info_t> servers;	    // key=server	    val=server info.
+		map<string,server_info_t> servers;	    // key=server	    val=server info.
 		map<string,hdef_t> histdefs;			// key=hnamepath    val=histogram definition
 		map<hid_t,hinfo_t> hinfos;				// key=server/hist	val=histogram info
 		
 		TDirectory *sum_dir;	// holds sum histograms
 		
 		hid_t current;
+		//vector<hid_t> current_hists;            // for multi-histogram display
 		viewStyle_t viewStyle;
 		bool update;				// flag indicating rs_mainframe::DoUpdate should be called on next DoTimer call
 

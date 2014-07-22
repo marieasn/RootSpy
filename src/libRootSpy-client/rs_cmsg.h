@@ -34,6 +34,8 @@ class rs_cmsg:public cMsgCallback{
 		void FinalHistogram(string servername, vector<string> hnamepath);
 		void RequestTreeInfo(string servername);
 		void RequestTree(string servername, string tree_name, string tree_path, int64_t num_entries);
+		void RequestMacroList(string servername);
+		void RequestMacro(string servername, string hnamepath);
 
 		// synchronous requests
 		void RequestHistsSync(string servername, timespec_t &myTimeout);
@@ -42,6 +44,8 @@ class rs_cmsg:public cMsgCallback{
 		void RequestTreeInfoSync(string servername, timespec_t &myTimeout);
 		void RequestTreeSync(string servername, string tree_name, string tree_path, 
 				     timespec_t &myTimeout, int64_t num_entries);
+		void RequestMacroListSync(string servername, timespec_t &myTimeout);
+		void RequestMacroSync(string servername, string hnamepath, timespec_t &myTimeout);
 
 		bool IsOnline() { return is_online; }
 		
@@ -54,11 +58,16 @@ class rs_cmsg:public cMsgCallback{
 		void RegisterTreeInfo(string server, cMsgMessage *msg);
 		void RegisterTreeInfoSync(string server, cMsgMessage *msg);
 		void RegisterTree(string server, cMsgMessage *msg);
+		void RegisterMacroList(string server, cMsgMessage *msg);
+		void RegisterMacro(string server, cMsgMessage *msg);
 
                 void BuildRequestHists(cMsgMessage &msg, string servername);
                 void BuildRequestHistogram(cMsgMessage &msg, string servername, string hnamepath);
                 void BuildRequestTreeInfo(cMsgMessage &msg, string servername);
                 void BuildRequestTree(cMsgMessage &msg, string servername, string tree_name, string tree_path, int64_t num_entries);
+		void BuildRequestMacroList(cMsgMessage &msg, string servername);
+		void BuildRequestMacro(cMsgMessage &msg, string servername, string hnamepath);
+
 
 	private:
 		cMsg *cMsgSys;

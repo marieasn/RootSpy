@@ -14,6 +14,7 @@
 #include <map>
 #include <TDirectory.h>
 #include <TH1.h>
+#include <TMemFile.h>
 #include <string>
 
 using namespace std;
@@ -89,7 +90,6 @@ class hid_t{
 /// in hid_t, the information for each of the hists is stored,
 /// ie: name, path, type, bin limit, and some flags;
 
-
 class hinfo_t:public hid_t{
 	public:
 		
@@ -99,6 +99,8 @@ class hinfo_t:public hid_t{
 			active = true;
 			hasBeenDisplayed = false;
 			isDisplayed = false;
+			macroData = NULL;
+			macroVersion = 0;
 		}
 		hinfo_t():hid_t("",""){
 			received = 0;
@@ -106,15 +108,21 @@ class hinfo_t:public hid_t{
 			active = false;
 			hasBeenDisplayed = false;
 			isDisplayed = false;
+			macroData = NULL;
+			macroVersion = 0;
 		}
 		
 		bool operator== (const hinfo_t& hi);
 
 		time_t received;
 		TH1* hist;
-		
+
 		bool active;					// sees if the histogram is usable
 		bool hasBeenDisplayed;		// makes sure that each hist is not displayed more than once
+
+		// saved data if this is really a macro
+		TMemFile* macroData;
+		int macroVersion;
 				
 		bool getDisplayed() {return isDisplayed;}
 		void setDisplayed(bool newDisplay) {isDisplayed = newDisplay;}

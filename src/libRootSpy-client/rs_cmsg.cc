@@ -115,6 +115,10 @@ rs_cmsg::~rs_cmsg()
 }
 
 
+//////////////////////////////////////
+//// helper functions
+//////////////////////////////////////
+
 //---------------------------------
 // BuildRequestHists
 //---------------------------------
@@ -159,6 +163,31 @@ void rs_cmsg::BuildRequestTree(cMsgMessage &msg, string servername, string tree_
     msg.add("num_entries", num_entries);
 }
 
+//---------------------------------
+// BuildRequestMacroList
+//---------------------------------
+void rs_cmsg::BuildRequestMacroList(cMsgMessage &msg, string servername)
+{
+    msg.setSubject(servername);
+    msg.setType(myname);
+    msg.setText("list macros");
+}
+
+//---------------------------------
+// BuildRequestMacro
+//---------------------------------
+void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnamepath)
+{
+    msg.setSubject(servername);
+    msg.setType(myname);
+    msg.setText("get macro");
+    msg.add("hnamepath", hnamepath);
+}
+
+
+//////////////////////////////////////
+//// remote commands
+//////////////////////////////////////
 
 //---------------------------------
 // PingServers
@@ -212,6 +241,27 @@ void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path,
 	BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
 	cMsgSys->send(&requestTree);
 }
+
+//---------------------------------
+// RequestMacroList
+//---------------------------------
+void rs_cmsg::RequestMacroList(string servername)
+{
+	cMsgMessage listHists;
+	BuildRequestMacroList(listHists, servername);	
+	cMsgSys->send(&listHists);
+}
+
+//---------------------------------
+// RequestMacro
+//---------------------------------
+void rs_cmsg::RequestMacro(string servername, string hnamepath)
+{
+	cMsgMessage requestHist;
+	BuildRequestMacro(requestHist, servername, hnamepath);
+	cMsgSys->send(&requestHist);
+}
+
 
 
 //---------------------------------
@@ -279,6 +329,34 @@ void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_p
     string sender = response->getType();
     //_DBG_ << " received response from  " << sender << endl;
     RegisterTree(sender, response);
+}
+
+//---------------------------------
+// RequestMacroListSync
+//  Note: Do not lock RS_INFO before calling this function
+//---------------------------------
+void rs_cmsg::RequestMacroListSync(string servername, timespec_t &myTimeout)
+{
+    cMsgMessage requestHist;
+    BuildRequestMacroList(requestHist, servername);
+    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
+
+    string sender = response->getType();
+    RegisterMacroList(sender, response);
+}
+
+//---------------------------------
+// RequestMacroSync
+//  Note: Do not lock RS_INFO before calling this function
+//---------------------------------
+void rs_cmsg::RequestMacroSync(string servername, string hnamepath, timespec_t &myTimeout)
+{
+    cMsgMessage requestHist;
+    BuildRequestMacro(requestHist, servername, hnamepath);
+    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
+
+    string sender = response->getType();
+    RegisterMacro(sender, response);
 }
 
 
@@ -364,6 +442,16 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		handled_message = true;
 	}
 	//===========================================================
+	if(cmd == "macros list") {
+	        RegisterMacroList(sender, msg);
+		handled_message = true;
+	}
+	//===========================================================
+	if(cmd == "macro") {
+	        RegisterMacro(sender, msg);
+		handled_message = true;
+	}
+	//===========================================================
 	if(cmd=="final hists"){  // save histograms
 	    _DBG_<<"received final histograms..."<<endl;
 	    RegisterFinalHistogram(sender, msg);
@@ -383,7 +471,6 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 {
 	/// Copy list of histograms from cMsg into RS_INFO structures.
-
 	bool good_response = true;
 
 	// Get pointers to STL containers that hold the histogram information
@@ -419,6 +506,8 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		_DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
 		return;
 	}
+
+	_DBG_ << "got histogram list from " << server << endl;
 
 	// Looks like we got a good response. Loop over histograms and add them to
 	// list of hdef_t objects kept in RS_INFO. If there is already an entry
@@ -504,6 +593,97 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 //	}
 //	RS_INFO->Unlock();
 }
+
+//---------------------------------
+// RegisterMacroList
+//---------------------------------
+//TODO: documentation comment.
+void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
+{
+	/// Copy list of histograms from cMsg into RS_INFO structures.
+	bool good_response = true;
+
+	// Get pointers to STL containers that hold the histogram information
+	vector<string> *macro_names;
+	vector<string> *macro_paths;
+	try {                                    //  all args are of type string
+		macro_names = msg->getStringVector("macro_names");
+		macro_paths = msg->getStringVector("macro_paths");
+	} catch (cMsgException e) {
+		_DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+		return;
+	}
+
+	// Make sure we have valid pointers
+	if(!macro_names)good_response = false;
+	if(!macro_paths)good_response = false;
+
+	// Make sure containers all have the same number of entries
+	if(good_response){
+		if (macro_names->size() != macro_paths->size())good_response = false;
+	}
+
+	// If the response is incomplete for any reason, then alert user and return.
+	if(!good_response){
+		_DBG_<<"Poorly formed response for \"macros list\". Ignoring."<<endl;
+		return;
+	}
+
+	_DBG_ << "got macro list from " << server << endl;
+
+	// Looks like we got a good response. Loop over histograms and add them to
+	// list of hdef_t objects kept in RS_INFO. 
+	// store similarly to histograms
+	for(unsigned int i=0; i<macro_names->size(); i++){
+	
+		// Get name
+		string name = (*macro_names)[i];
+
+		// Get path without the preceeding root:
+		string path = (*macro_paths)[i];
+
+		size_t pos = path.find_first_of("/");
+		if(pos!=string::npos) path = path.substr(pos);
+		
+		// Create temporary hdef_t object
+		hdef_t macrodef(name, path);
+		macrodef.type = hdef_t::macro;
+
+		//hdef.title = (*hist_titles)[i];
+		macrodef.title = "";
+		macrodef.active = true;
+		
+		// Look for entry in RS_INFO
+		RS_INFO -> Lock();
+		if(RS_INFO->histdefs.find(macrodef.hnamepath)==RS_INFO->histdefs.end()){
+			RS_INFO->histdefs[macrodef.hnamepath]=macrodef;
+			_DBG_ << "Added macro with hnamepath = " << macrodef.hnamepath << endl;
+		}else{
+			// Need code to verify hdefs ae same!!
+			// for now do some sanity check to at least make sure it is a macro
+			if(macrodef.type != RS_INFO->histdefs[macrodef.hnamepath].type) {
+				// give up!
+				_DBG_ << "Got a macro with hnampath " << macrodef.hnamepath << " that was already defined as a histogram!" << endl
+				      << "Exited..." << endl;
+				return;
+			}
+		}
+		
+		// Make sure this server is in list of this hdef's servers
+		map<string, bool> &servers = RS_INFO->histdefs[macrodef.hnamepath].servers;
+		if(servers.find(server)==servers.end())
+			servers[server] = true;
+
+		// Make sure this hdef is in list of this servers hdef's
+		vector<string> &hnamepaths = RS_INFO->servers[server].hnamepaths;
+		if(find(hnamepaths.begin(), hnamepaths.end(), macrodef.hnamepath)==hnamepaths.end())
+			hnamepaths.push_back(macrodef.hnamepath);
+
+		RS_INFO -> Unlock();
+	}
+}
+
+
 
 
 //---------------------------------
@@ -595,8 +775,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     }
 
 
-    /**
-    
+    /**    
     tree_id_t tree_id(server, name, path);
     vector<tree_info_t>::iterator treeinfo_iter = RS_INFO->trees.find(tree_id_t);
     if(treeinfo_iter==RS_INFO->trees.end()){
@@ -619,24 +798,24 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     myTM->ReadTString(filename);
     myTM->ReadLong64(length);
     TDirectory *savedir = gDirectory;
-    TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
+    TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length, "RECREATE");
     savedir->cd();
-
- 	TNamed *namedObj = NULL;
-
-	TIter iter(f->GetListOfKeys());
-	TKey *key;
-	while( (key = (TKey*)iter()) ) {
-		string objname(key->GetName());
-
-		cout << "TMemFile object: " << objname << endl;
-		if(objname == name) {
-			TObject *obj = key->ReadObj();
-			TNamed *nobj = dynamic_cast<TNamed*>(obj);
-			if(nobj != NULL) namedObj = nobj;
-		}
-	}
-
+    
+    TNamed *namedObj = NULL;
+    
+    TIter iter(f->GetListOfKeys());
+    TKey *key;
+    while( (key = (TKey*)iter()) ) {
+	    string objname(key->GetName());
+	    
+	    cout << "TMemFile object: " << objname << endl;
+	    if(objname == name) {
+		    TObject *obj = key->ReadObj();
+		    TNamed *nobj = dynamic_cast<TNamed*>(obj);
+		    if(nobj != NULL) namedObj = nobj;
+	    }
+    }
+    
     if(!namedObj){
 	_DBG_<<"No valid object returned in histogram message."<<endl;
 	pthread_rwlock_unlock(ROOT_MUTEX);
@@ -644,7 +823,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 	return;
     }
     
-    // Cast this as a histogram pointer
+    // Cast this as a tree pointer
     TTree *T = dynamic_cast<TTree*>(namedObj);
     if(!T){
 	_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TTree type"<<endl;
@@ -780,7 +959,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
     
     // Add new histogram to sum and flag it as modified
-    _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist"<<endl;
+    _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
     if(hdef->sum_hist){
 	// Reset sum histo first if showing only one histo at a time
 	if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
@@ -821,6 +1000,163 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     //Justin B
     hdef->sum_hist_present = true;
 
+    // Unlock mutexes
+    pthread_rwlock_unlock(ROOT_MUTEX);
+    RS_INFO->Unlock();
+}
+
+
+
+//---------------------------------
+// RegisterMacro
+//---------------------------------
+//TODO: documentation comment.
+void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg) 
+{
+	_DBG_ << "In rs_cmsg::RegisterMacro()..." << endl;
+    
+    // Get hnamepath from message
+    string name = msg->getString("macro_name");
+    string path = msg->getString("macro_path");
+    int version = msg->getInt32("macro_version");
+    string hnamepath = path + "/" + name;
+    
+    // Lock RS_INFO mutex while working with RS_INFO
+    RS_INFO->Lock();
+    
+    // Get pointer to hdef_t
+    map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+    if(hdef_iter==RS_INFO->histdefs.end()){
+	_DBG_<<"No hdef_t object for hnamepath=\""<<hnamepath<<"\"!"<<endl;
+	_DBG_<<"Throwing away histogram."<<endl;
+	RS_INFO->Unlock();
+	return;
+    }
+    hdef_t *hdef = &(hdef_iter->second);
+
+    // sanity check that this is a macro
+    if(hdef->type != hdef_t::macro) {
+	    _DBG_ << " Tried to get macro with hnamepath=\"" << hnamepath
+		  << "\", but it is already defined as a histogram!" << endl;
+	RS_INFO->Unlock();
+	return;
+    }
+    
+    // Get pointer to server_info_t
+    map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
+    if(server_info_iter==RS_INFO->servers.end()){
+	_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
+	_DBG_<<"Throwing away histogram."<<endl;
+	RS_INFO->Unlock();
+	return;
+    }
+    server_info_t *server_info = &(server_info_iter->second);
+    
+    // Get pointer to hinfo_t
+    hid_t hid(server, hnamepath);
+    hinfo_t *hinfo = NULL;
+    map<hid_t,hinfo_t>::iterator hinfo_iter = RS_INFO->hinfos.find(hid);
+    if(hinfo_iter==RS_INFO->hinfos.end()){
+	// hinfo_t object doesn't exist. Add one to RS_INFO
+	RS_INFO->hinfos[hid] = hinfo_t(server, hnamepath);
+	hinfo_iter = RS_INFO->hinfos.find(hid);
+    }
+    hinfo = &(hinfo_iter->second);
+    
+    // if we already have data for this macro, then throw it away
+    // we need to do this before unpacking the new data, since we are reusing the file name
+    if(hinfo->macroData) {
+	    hinfo->macroData->Close();
+	    delete hinfo->macroData;
+	    hinfo->macroData = NULL;
+    }
+
+    // save version info
+    hinfo->macroVersion = version;
+
+    // Lock ROOT mutex while working with ROOT objects
+    pthread_rwlock_wrlock(ROOT_MUTEX);
+    
+    // extract info from message
+    _DBG_ << "unpacking macro..." << endl;
+
+    MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
+    Long64_t length;
+    myTM->ReadLong64(length);
+    TDirectory *savedir = gDirectory;
+
+    // save each macro in a different file per server
+    // we'll concatenate these later
+    stringstream tmpfile_stream;
+    tmpfile_stream << "." << server << "." << hnamepath << endl;
+    string tmpfile_name (tmpfile_stream.str());
+    for(string::iterator str_itr = tmpfile_name.begin(); str_itr != tmpfile_name.end(); str_itr++) {
+	    // clean up filename by making sure that we at least dont have any '/'s
+	    if(*str_itr == '/')     
+		    *str_itr = '_';
+    }
+    _DBG_ << " TMemFile name = " << tmpfile_name << endl;
+    _DBG_ << "     file size = " << length << endl;
+    TString filename(tmpfile_name);
+
+    TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
+    //f->ls(); // debugging
+    savedir->cd();
+    
+    hinfo->macroData = f;
+
+    //TNamed *namedObj = NULL;
+    /*
+    TIter iter(f->GetListOfKeys());
+    TKey *key;
+    while( (key = (TKey*)iter()) ) {
+	    string objname(key->GetName());
+	    
+	    cout << "TMemFile object: " << objname << endl;
+	    if(objname == name) {
+		    TObject *obj = key->ReadObj();
+		    TNamed *nobj = dynamic_cast<TNamed*>(obj);
+		    if(nobj != NULL) {
+			    // save objects from the file
+		    }
+	    }
+    }
+    */
+    /*
+    if(!namedObj){
+	_DBG_<<"No valid object returned in histogram message."<<endl;
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	RS_INFO->Unlock();
+	return;
+    }
+        
+    // Cast this as a tree pointer
+    TTree *T = dynamic_cast<TTree*>(namedObj);
+    if(!T){
+	_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TTree type"<<endl;
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	RS_INFO->Unlock();
+	return;
+    }
+    */
+    _DBG_ << "unpacked macro!" << endl;
+    //T->Print();
+    
+    // Update hinfo
+    hinfo->received = time(NULL);
+    
+    // Adds the new histogram to the hists map in hdef_t
+    map<string, hinfo_t>::iterator hinfo_it = hdef->hists.find(server);
+    
+    // first we have to check for and delete any older versions
+    // of the hist.
+    if(hinfo_it != hdef->hists.end()) {
+	hdef->hists.erase(hinfo_it);
+    }
+    
+    // Now we add the newer version to the map
+    hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
+    
     // Unlock mutexes
     pthread_rwlock_unlock(ROOT_MUTEX);
     RS_INFO->Unlock();

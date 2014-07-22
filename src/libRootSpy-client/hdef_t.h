@@ -61,7 +61,7 @@ public:
 
 class hdef_t{
 	public:
-		enum histdimension_t {noneD, oneD, twoD, threeD};		// 2D, 3D, etc.
+	enum histdimension_t {noneD, oneD, twoD, threeD,macro};		// 2D, 3D, etc.
 		
 		hdef_t(string name, string path){
 			this->name = name;
@@ -91,6 +91,11 @@ class hdef_t{
 		bool operator== (const hdef_t& hi) const {
 			return hi.hnamepath==hnamepath;
 		}
+
+		bool operator< (const hdef_t& rhs) const {
+			return hnamepath == rhs.hnamepath;
+		}
+
 
 		string name;				// the name of the hist.
 		string title;				// the title of the hist
