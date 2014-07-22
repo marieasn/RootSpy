@@ -34,6 +34,7 @@
 #include <TFile.h>
 #include <TGaxis.h>
 #include <TFrame.h>
+#include <TFileMerger.h>
 
 #include <KeySymbols.h>
 
@@ -325,20 +326,29 @@ void rs_mainframe::DoTimer(void) {
 		
 		if(hinfo_it != hdef_iter->second.hists.end() && !hinfo_it->second.hasBeenDisplayed){
 		        canvas->cd();		
-			if(hinfo_it->second.hist != NULL) {
-			    //_DBG_ << "Pointer to histogram was not NULL" << endl;
-			    //hinfo_it->second.hist->Draw();
-			    DrawHist(canvas, hinfo_it->second.hist, hinfo_it->second.hnamepath,
-				     hdef_iter->second.type, hdef_iter->second.display_info);  
+			if(hdef_iter->second.type == hdef_t::macro) {
+				//_DBG_ << "DRAW MACRO" << endl;
+				DrawMacro(canvas, hinfo_it->second);
 			} else {
-				//_DBG_ << "Pointer to histogram was NULL" << endl;
+				if(hinfo_it->second.hist != NULL) {
+				//_DBG_ << "Pointer to histogram was not NULL" << endl;
+				//hinfo_it->second.hist->Draw();
+					DrawHist(canvas, hinfo_it->second.hist, hinfo_it->second.hnamepath,
+						 hdef_iter->second.type, hdef_iter->second.display_info);  
+				} else {
+					//_DBG_ << "Pointer to histogram was NULL" << endl;
+				}
 			}
 			canvas->Modified();	
 			canvas->Update();
 			hinfo_it->second.hasBeenDisplayed = true;
 		}
 	} else if(hdef_iter!=RS_INFO->histdefs.end()){
-		if(hdef_iter->second.sum_hist_modified && hdef_iter->second.sum_hist!=NULL){
+		if(hdef_iter->second.type == hdef_t::macro) {
+			// if we're looking at a macro, always execute it
+			//_DBG_ << "DRAW MACRO" << endl;
+			DrawMacro(canvas, hdef_iter->second);
+		} else if(hdef_iter->second.sum_hist_modified && hdef_iter->second.sum_hist!=NULL){
 			canvas->cd();
 			//hdef_iter->second.sum_hist->Draw();
 			DrawHist(canvas, hdef_iter->second.sum_hist, hdef_iter->second.hnamepath,
@@ -588,7 +598,6 @@ void rs_mainframe::DoLoopOverHists(void)
 void rs_mainframe::DoUpdate(void)
 {
 	// Send a request to the server for an updated histogram
-
 	RS_INFO->Lock();
 	RS_INFO->update = false;
 	
@@ -608,7 +617,10 @@ void rs_mainframe::DoUpdate(void)
 		string &server = RS_INFO->current.serverName;
 		string &hnamepath = RS_INFO->current.hnamepath;
 		if(server!="" && hnamepath!=""){
-			RS_CMSG->RequestHistogram(server, hnamepath);
+			if(hdef_iter->second.type == hdef_t::macro)
+				RS_CMSG->RequestMacro(server, hnamepath);
+			else
+				RS_CMSG->RequestHistogram(server, hnamepath);
 			request_sent = true;
 		}
 
@@ -620,7 +632,10 @@ void rs_mainframe::DoUpdate(void)
 			map<string, bool>::iterator server_iter = servers.begin();
 			for(; server_iter!=servers.end(); server_iter++){
 				if(server_iter->second){
-					RS_CMSG->RequestHistogram(server_iter->first, RS_INFO->current.hnamepath);
+					if(hdef_iter->second.type == hdef_t::macro)
+						RS_CMSG->RequestMacro(server_iter->first, RS_INFO->current.hnamepath);
+					else
+						RS_CMSG->RequestHistogram(server_iter->first, RS_INFO->current.hnamepath);
 					request_sent = true;
 				}
 			}
@@ -630,7 +645,11 @@ void rs_mainframe::DoUpdate(void)
 		string &server = RS_INFO->current.serverName;
 		string &hnamepath = RS_INFO->current.hnamepath;
 		if(server!="" && hnamepath!=""){
-			RS_CMSG->RequestHistogram(server, hnamepath);
+			map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
+			if(hdef_iter->second.type == hdef_t::macro)
+				RS_CMSG->RequestMacro(server, hnamepath);
+			else 
+				RS_CMSG->RequestHistogram(server, hnamepath);
 			request_sent = true;
 		}
 	}
@@ -1303,9 +1322,9 @@ void rs_mainframe::CreateGUI(void)
                         kMWMInputModeless);
    fMainFrame1435->MapSubwindows();
 
-   fMainFrame1435->Resize(fMainFrame1435->GetDefaultSize());
+   //fMainFrame1435->Resize(fMainFrame1435->GetDefaultSize());
    fMainFrame1435->MapWindow();
-   //fMainFrame1435->Resize(833,700);
+   fMainFrame1435->Resize(833,700);
 
 
    //==============================================================================================
@@ -1978,6 +1997,132 @@ void rs_mainframe::DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
       
       exec_shell->Exec(ss.str().c_str());
     }
+}
+
+
+void rs_mainframe::DrawMacro(TCanvas *the_canvas, hinfo_t &the_hinfo)
+{
+	// we're given an hinfo_t which corresponds to just one server
+	// so we can go ahead and execute the script we are given
+
+	if(!the_hinfo.macroData) {
+		_DBG_ << "Trying to draw a macro with no saved data!" << endl;
+		return;
+	}
+
+	// extract the macro
+	TObjString *macro_str = (TObjString *)the_hinfo.macroData->Get("macro");
+	if(!macro_str) {
+		_DBG_ << "Could not extract macro from " << the_hinfo.macroData->GetName() << endl;
+		return;
+	}
+	string the_macro( macro_str->GetString().Data() );
+
+	//cerr << "THIS IS THE STRING WE WANT TO RUN: " << endl
+	//     << the_macro << endl;
+
+	// move to the right canvas and draw!
+	the_canvas->cd();
+	ExecuteMacro(the_hinfo.macroData, the_macro);
+}
+
+void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
+{
+	const string TMP_FILENAME = ".summed_file.root";
+
+	// We have a few different possible scenarios here
+	// The cases where there are zero or one attached servers are straightforward
+	// If there are multiple attached servers, we need to merge the data somehow
+	int num_servers = the_hdef.hists.size();
+	if( num_servers == 0 ) {
+		_DBG_ << "Trying to draw a macro with data from no servers!" << endl;
+		return;
+	} else if( num_servers == 1 ) {
+		DrawMacro(the_canvas, the_hdef.hists.begin()->second);
+	} else {
+		// we could have different versions of these scripts, pick the latest
+		int best_version = 0;
+		for(map<string, hinfo_t>::const_iterator hdef_itr = the_hdef.hists.begin();
+		    hdef_itr != the_hdef.hists.begin(); hdef_itr++) {
+			if( hdef_itr->second.macroVersion > best_version )
+				best_version = hdef_itr->second.macroVersion;
+		}
+
+		// now combine the data
+		TMemFile *first_file = NULL;
+		TFileMerger summed_file;
+
+		for(map<string, hinfo_t>::const_iterator hdef_itr = the_hdef.hists.begin();
+		    hdef_itr != the_hdef.hists.begin(); hdef_itr++) {
+			if( hdef_itr->second.macroVersion == best_version ) {
+				if(first_file == NULL)   // save the first file so that we can get unique data out of it
+					first_file = hdef_itr->second.macroData;
+				summed_file.AddFile( hdef_itr->second.macroData );
+			}
+		}
+		summed_file.OutputFile( TMP_FILENAME.c_str() );
+		summed_file.Merge();
+
+		// extract the macro
+		TObjString *macro_str = (TObjString *)first_file->Get("macro");
+		if(!macro_str) {
+			_DBG_ << "Could not extract macro from " << first_file->GetName() << endl;
+			return;
+		}
+		string the_macro( macro_str->GetString().Data() );
+
+		// open the summed file
+		TFile *f = new TFile(TMP_FILENAME.c_str());
+		if(!f) { 
+			_DBG_ << "Could not open summed file!" << endl;
+			return;
+		}
+		
+		// move to the right canvas and draw!
+		the_canvas->cd();
+		ExecuteMacro(f, the_macro);
+		f->Close();
+		unlink( TMP_FILENAME.c_str() );
+	}
+}
+
+void rs_mainframe::ExecuteMacro(TFile *f, string macro)
+{
+	// configuration for file output
+	const string base_directory = "/tmp";
+	const string base_filename = "RootSpy.macro";   // maybe make this depend on the TMemFile name?
+
+	TDirectory *savedir = gDirectory;
+
+	// write the macro to a temporary file
+        //char filename[] = "/tmp/RootSpy.macro.XXXXXX";
+	// we have to do a little dance here since the 'XXXXXX' in the filename is
+	// replaced by mkstemp() - a better solution should be found
+	stringstream ss;
+	ss << base_directory << "/" << base_filename << ".XXXXXX";
+	char *filename = new char[strlen(ss.str().c_str())+1];
+	strcpy(filename, ss.str().c_str());
+        int macro_fd = mkstemp(filename);
+        if (macro_fd == -1) {
+		_DBG_ << "Could not open macro file " << filename << endl;
+		delete filename;
+		return;
+	}
+	
+	// write the macro to a file
+	write(macro_fd, macro.c_str(), macro.length());
+	close(macro_fd);
+	
+	// execute the macro
+	TExec *exec_shell = new TExec();
+	string cmd = string(".x ") + filename;
+	f->cd();
+	exec_shell->Exec(cmd.c_str());
+	
+	// restore 
+	savedir->cd();
+	unlink(filename);
+	delete filename;
 }
 
 

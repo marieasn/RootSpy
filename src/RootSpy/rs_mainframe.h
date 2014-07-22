@@ -34,6 +34,7 @@
 #include <TGMenu.h>
 #include <TGDockableFrame.h>
 #include <TExec.h>
+#include <TMemFile.h>
 
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
@@ -135,6 +136,10 @@ class rs_mainframe:public TGMainFrame {
 			void DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
 				      hdef_t::histdimension_t hdim,
 				      hdisplay_info_t &display_info);
+			void ExecuteMacro(TFile* f, string macro);
+			void DrawMacro(TCanvas*the_canvas, hinfo_t &the_hinfo);
+			void DrawMacro(TCanvas*the_canvas, hdef_t &the_hdef);
+
 	private:
 	
 		TTimer *timer;

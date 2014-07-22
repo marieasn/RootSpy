@@ -109,6 +109,7 @@ void Dialog_SelectHists::DoTimer(void)
 			string servername = iter->first;
 			if(servername!=""){
 				RS_CMSG->RequestHists(servername);
+				RS_CMSG->RequestMacroList(servername);
 			}
 		}
 		RS_INFO->Unlock();
