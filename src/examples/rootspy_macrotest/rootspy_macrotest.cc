@@ -1,6 +1,7 @@
 
 #include <unistd.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <iostream>
 #include <cmath>
 using namespace std;
@@ -10,6 +11,8 @@ using namespace std;
 #include <TH2.h>
 #include <TRandom.h>
 #include <TMath.h>
+#include <TExec.h>
+#include <TCanvas.h>
 
 bool DONE = false;
 
@@ -20,7 +23,10 @@ int main(int narg, char *argv[])
 	DRootSpy* RS = new DRootSpy();
 
 	signal(SIGINT, sigHandler);
-	
+
+	// make a little display
+	TCanvas *c1 = new TCanvas("c1", "", 600, 600);
+
 	// Lock access to ROOT global while we access it
 	pthread_mutex_lock(gROOTSPY_MUTEX);
 
@@ -29,24 +35,33 @@ int main(int narg, char *argv[])
 			
 	////////////////////////////////////
 	// build macro
-	string script = "";
-	script += "// Draw axes\n";
-	script += "TH2D *axes = new TH2D(\"axes\", \"CDC Occupancy\", 100, -65.0, 65.0, 100, -65.0, 65.0);\n";
-	script += "axes->SetStats(0);\n";
-	script += "axes->Draw();\n";
-	script += "\n";
-	script += "// Overlay all ring histos\n";
-	script += "hist[0]->Draw(\"colz pol same\"); // draw first histo with 'colz' so palette is drawn\n";
-	script += "\n";
-	script += "for(unsigned int i=1; i<hist.size(); i++){\n";
-	script += "char hname[256];\n";
-	script += "sprintf(hname, \"ring%02d\", iring+1);\n";
-	script += "h = ()gDirectory->Get(hname);\n";
-	script += "h->Draw(\"col pol same\"); // draw remaining histos without overwriting color palette\n";
-	script += "}\n";
+	string macro = "";
+	macro += "{\n";
+	macro += "// Draw axes\n";
+	//macro += "TH2D *axes = new TH2D(\"axes\", \"CDC Occupancy 2\", 100, -65.0, 65.0, 100, -65.0, 65.0);\n";
+	macro += "TH2D *axes = (TH2D *)gDirectory->Get(\"axes\");\n";
+	macro += "if(!axes)\n";
+	macro += "axes = new TH2D(\"axes\", \"CDC Occupancy 2\", 100, -65.0, 65.0, 100, -65.0, 65.0);\n";
+	macro += "\n";
+	macro += "axes->SetStats(0);\n";
+	macro += "axes->Draw();\n";
+	macro += "\n";
+	macro += "// Overlay all ring histos\n";
+	macro += "hist0 = gDirectory->Get(\"ring01\");\n"; 
+	macro += "hist0->Draw(\"colz pol same\"); // draw first histo with 'colz' so palette is drawn\n";
+	macro += "hist0 = gDirectory->Get(\"ring01\");\n"; 
+	macro += "hist0->Draw(\"colz pol same\"); // draw first histo with 'colz' so palette is drawn\n";
+	macro += "\n";
+	macro += "for(unsigned int iring=1; iring<28; iring++){\n";
+	macro += "char hname[256];\n";
+	macro += "sprintf(hname, \"ring%02d\", iring+1);\n";
+	macro += "h = gDirectory->Get(hname);\n";
+	macro += "h->Draw(\"col pol same\"); // draw remaining histos without overwriting color palette\n";
+	macro += "}\n";
+	macro += "}\n";
 
 	// register it!
-	RS->RegisterMacro("CDCwires", "/", script);
+	RS->RegisterMacro("CDCwires", "/", macro);
 	RS->SetMacroVersion("CDCwires", "/", 1);
 	////////////////////////////////////
 
@@ -69,7 +84,7 @@ int main(int narg, char *argv[])
 		
 		TH2D *h = new TH2D(hname, "", Nstraws[iring], phi_start, phi_end, 1, r_start, r_end);
 		hist.push_back(h);
-		RS->AddMacroHistogram("CDCwires", "/", (TH1*)h);
+		RS->AddMacroHistogram("CDCwires", "/", h);
 	}
 	 
 	// Set or fill bin contents using the following where ring=1-28 and straw=1-N :
@@ -86,7 +101,46 @@ int main(int narg, char *argv[])
 
 	// Release lock on ROOT global
 	pthread_mutex_unlock(gROOTSPY_MUTEX);
+
+	// list current histograms
+	gDirectory->ls();
+
+	// write the macro to a file
+	char filename[] = "/tmp/RootSpy.macro.XXXXXX";
+	int macro_fd = mkstemp(filename);
+	if (macro_fd != -1) {
+		// write the macro to the file
+		write(macro_fd, macro.c_str(), macro.length());
+		close(macro_fd);
+
+		// try the macro out
+		TExec *exec_shell = new TExec();
+		string cmd = string(".x ") + filename;
+		exec_shell->Exec(cmd.c_str());
+	}
+
+
+#if 0
+	//// Plot the test histogram
+	// Draw axes
+	TH2D *axes = new TH2D("axes", "CDC Occupancy", 100, -65.0, 65.0, 100, -65.0, 65.0);
+	axes->SetStats(0);
+	axes->Draw();
 	
+	// Overlay all ring histos
+	hist[0]->Draw("colz pol same"); // draw first histo with 'colz' so palette is drawn
+	
+	for(unsigned int iring=1; iring<hist.size(); iring++){
+		char hname[256];
+		sprintf(hname, "ring%02d", iring+1);
+		hist[iring-1]->Draw("col pol same"); // draw remaining histos without overwriting color palette
+	}
+#endif
+
+	// print out whatever we drew
+	// for some reason the canvas isn't popping out a new window??
+	c1->Print("out.pdf");
+
 	while (!DONE) {
 		// wait forever...
 		sleep(5);
@@ -95,6 +149,9 @@ int main(int narg, char *argv[])
 
 	cout << endl;
 	cout << "Ending" << endl;
+
+	// clean up macro file
+	unlink(filename);
 
 	return 0;
 }
