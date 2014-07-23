@@ -2034,6 +2034,7 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 	// The cases where there are zero or one attached servers are straightforward
 	// If there are multiple attached servers, we need to merge the data somehow
 	int num_servers = the_hdef.hists.size();
+	//cerr << " number of servers = " << num_servers << endl;
 	if( num_servers == 0 ) {
 		_DBG_ << "Trying to draw a macro with data from no servers!" << endl;
 		return;
@@ -2042,25 +2043,29 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 	} else {
 		// we could have different versions of these scripts, pick the latest
 		int best_version = 0;
-		for(map<string, hinfo_t>::const_iterator hdef_itr = the_hdef.hists.begin();
-		    hdef_itr != the_hdef.hists.begin(); hdef_itr++) {
-			if( hdef_itr->second.macroVersion > best_version )
-				best_version = hdef_itr->second.macroVersion;
+		for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
+		    hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
+			cerr << " version = " << hinfo_itr->second.macroVersion << endl;
+			if( hinfo_itr->second.macroVersion > best_version )
+				best_version = hinfo_itr->second.macroVersion;
 		}
 
 		// now combine the data
 		TMemFile *first_file = NULL;
-		TFileMerger summed_file;
 
-		for(map<string, hinfo_t>::const_iterator hdef_itr = the_hdef.hists.begin();
-		    hdef_itr != the_hdef.hists.begin(); hdef_itr++) {
-			if( hdef_itr->second.macroVersion == best_version ) {
+		//cerr << "TEST!!!" << endl;
+		//int ifile=1;
+		for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
+		    hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
+			//cerr << "file " << ifile++ << " version = " << hinfo_itr->second.macroVersion
+			//   << "  ptr = " << hinfo_itr->second.macroData << endl;
+			if( hinfo_itr->second.macroVersion == best_version ) {
 				if(first_file == NULL)   // save the first file so that we can get unique data out of it
-					first_file = hdef_itr->second.macroData;
-				summed_file.AddFile( hdef_itr->second.macroData );
+					first_file = hinfo_itr->second.macroData;
+				summed_file.AddFile( hinfo_itr->second.macroData );
 			}
 		}
-		summed_file.OutputFile( TMP_FILENAME.c_str() );
+		//summed_file.OutputFile( TMP_FILENAME.c_str(), "RECREATE" );
 		summed_file.Merge();
 
 		// extract the macro
@@ -2071,28 +2076,45 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 		}
 		string the_macro( macro_str->GetString().Data() );
 
+		//cerr << "======= MACRO ==========" << endl;
+		//cerr << the_macro << endl;
+/*
 		// open the summed file
 		TFile *f = new TFile(TMP_FILENAME.c_str());
 		if(!f) { 
 			_DBG_ << "Could not open summed file!" << endl;
 			return;
 		}
-		
+		//f->ls();
+		*/		
 		// move to the right canvas and draw!
 		the_canvas->cd();
 		ExecuteMacro(f, the_macro);
-		f->Close();
-		unlink( TMP_FILENAME.c_str() );
+		//f->Close();
+		//unlink( TMP_FILENAME.c_str() );
 	}
 }
 
 void rs_mainframe::ExecuteMacro(TFile *f, string macro)
 {
+	TDirectory *savedir = gDirectory;
+	f->cd();
+
+	// execute script line-by-line
+	istringstream macro_stream(macro);
+	while(!macro_stream.eof()) {
+		string s;
+		getline(macro_stream, s);
+		gROOT->ProcessLine(s.c_str());
+	}
+
+	// restore
+	savedir->cd();	
+
+#if 0	
 	// configuration for file output
 	const string base_directory = "/tmp";
 	const string base_filename = "RootSpy.macro";   // maybe make this depend on the TMemFile name?
-
-	TDirectory *savedir = gDirectory;
 
 	// write the macro to a temporary file
         //char filename[] = "/tmp/RootSpy.macro.XXXXXX";
@@ -2112,17 +2134,18 @@ void rs_mainframe::ExecuteMacro(TFile *f, string macro)
 	// write the macro to a file
 	write(macro_fd, macro.c_str(), macro.length());
 	close(macro_fd);
-	
+
 	// execute the macro
 	TExec *exec_shell = new TExec();
 	string cmd = string(".x ") + filename;
 	f->cd();
 	exec_shell->Exec(cmd.c_str());
-	
+
 	// restore 
-	savedir->cd();
 	unlink(filename);
 	delete filename;
+#endif	
+
 }
 
 
