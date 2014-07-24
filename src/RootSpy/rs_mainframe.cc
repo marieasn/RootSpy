@@ -35,6 +35,9 @@
 #include <TGaxis.h>
 #include <TFrame.h>
 #include <TFileMerger.h>
+#include <TKey.h>
+#include <THashList.h>
+#include <TFileMergeInfo.h>
 
 #include <KeySymbols.h>
 
@@ -76,6 +79,10 @@ enum MenuCommandIdentifiers {
   M_VIEW_SCALE_OPTS
 
 };
+
+// static functions
+//static Bool_t MergeMacroFiles(TDirectory *target, vector<TFile *> &sourcelist);
+static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist);
 
 //-------------------
 // Constructor
@@ -2028,7 +2035,7 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hinfo_t &the_hinfo)
 
 void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 {
-	const string TMP_FILENAME = ".summed_file.root";
+	//const string TMP_FILENAME = ".summed_file.root";
 
 	// We have a few different possible scenarios here
 	// The cases where there are zero or one attached servers are straightforward
@@ -2045,28 +2052,39 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 		int best_version = 0;
 		for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
 		    hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
-			cerr << " version = " << hinfo_itr->second.macroVersion << endl;
 			if( hinfo_itr->second.macroVersion > best_version )
 				best_version = hinfo_itr->second.macroVersion;
 		}
 
 		// now combine the data
 		TMemFile *first_file = NULL;
+		//vector<TFile *> file_list;
+		//TList file_list;
+		TList *file_list = new TList();
+		//file_list->SetOwner(kFALSE); // this doesn't work??
 
-		//cerr << "TEST!!!" << endl;
-		//int ifile=1;
+		//cerr << "BUILD FILE LIST" << endl;
 		for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
 		    hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
-			//cerr << "file " << ifile++ << " version = " << hinfo_itr->second.macroVersion
-			//   << "  ptr = " << hinfo_itr->second.macroData << endl;
+			//cerr << hinfo_itr->second.macroData->GetName() << endl;
+			//hinfo_itr->second.macroData->ls();
 			if( hinfo_itr->second.macroVersion == best_version ) {
 				if(first_file == NULL)   // save the first file so that we can get unique data out of it
 					first_file = hinfo_itr->second.macroData;
-				summed_file.AddFile( hinfo_itr->second.macroData );
+				//file_list.push_back( hinfo_itr->second.macroData );
+				hinfo_itr->second.macroData->SetBit(kCanDelete, kFALSE);
+				file_list->Add( hinfo_itr->second.macroData );
 			}
 		}
-		//summed_file.OutputFile( TMP_FILENAME.c_str(), "RECREATE" );
-		summed_file.Merge();
+
+		//cerr << "MERGE FILES" << endl;
+		//file_list->SetOwner(kFALSE);
+		static TMemFile *macro_data = new TMemFile(".rootspy_macro_tmp.root", "RECREATE");
+		macro_data->Delete("T*;*");
+		MergeMacroFiles(macro_data, file_list);
+
+		//cerr << "======= MERGED FILES ==========" << endl;
+		//macro_data->ls();
 
 		// extract the macro
 		TObjString *macro_str = (TObjString *)first_file->Get("macro");
@@ -2089,9 +2107,11 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 		*/		
 		// move to the right canvas and draw!
 		the_canvas->cd();
-		ExecuteMacro(f, the_macro);
+		ExecuteMacro(macro_data, the_macro);
 		//f->Close();
 		//unlink( TMP_FILENAME.c_str() );
+		//file_list->Clear();
+		delete file_list;
 	}
 }
 
@@ -2101,6 +2121,7 @@ void rs_mainframe::ExecuteMacro(TFile *f, string macro)
 	f->cd();
 
 	// execute script line-by-line
+	// maybe we should do some sort of sanity check first?
 	istringstream macro_stream(macro);
 	while(!macro_stream.eof()) {
 		string s;
@@ -2178,3 +2199,718 @@ void rs_mainframe::DoReset()
     
 }
 **/
+
+
+static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist)
+{
+	Bool_t status = kTRUE;
+	Bool_t onlyListed = kFALSE;
+
+	// Get the dir name
+	TString path(target->GetPath());
+	// coverity[unchecked_value] 'target' is from a file so GetPath always returns path starting with filename: 
+	path.Remove(0, path.Last(':') + 2);
+
+	Int_t nguess = sourcelist->GetSize()+1000;
+	THashList allNames(nguess);
+	allNames.SetOwner(kTRUE);
+
+	((THashList*)target->GetList())->Rehash(nguess);
+	((THashList*)target->GetListOfKeys())->Rehash(nguess);
+   
+	TFileMergeInfo info(target);
+
+	TFile      *current_file;
+	TDirectory *current_sourcedir;
+	current_file      = (TFile*)sourcelist->First();
+	current_sourcedir = current_file->GetDirectory(path);
+
+	while (current_file || current_sourcedir) {
+		// When current_sourcedir != 0 and current_file == 0 we are going over the target
+		// for an incremental merge.
+		if (current_sourcedir && (current_file == 0 || current_sourcedir != target)) {
+
+			// loop over all keys in this directory
+			TIter nextkey( current_sourcedir->GetListOfKeys() );
+			TKey *key;
+			TString oldkeyname;
+         
+			while ( (key = (TKey*)nextkey())) {
+
+				// Keep only the highest cycle number for each key for mergeable objects. They are stored
+				// in the (hash) list onsecutively and in decreasing order of cycles, so we can continue
+				// until the name changes. We flag the case here and we act consequently later.
+				Bool_t alreadyseen = (oldkeyname == key->GetName()) ? kTRUE : kFALSE;
+
+				// Read in but do not copy directly the processIds.
+				if (strcmp(key->GetClassName(),"TProcessID") == 0) { key->ReadObj(); continue;}
+
+				// If we have already seen this object [name], we already processed
+				// the whole list of files for this objects and we can just skip it
+				// and any related cycles.
+				if (allNames.FindObject(key->GetName())) {
+					oldkeyname = key->GetName();
+					continue;
+				}
+
+				TClass *cl = TClass::GetClass(key->GetClassName());
+				if (!cl || !cl->InheritsFrom(TObject::Class())) {
+					//Info("MergeRecursive", "cannot merge object type, name: %s title: %s",
+					//   key->GetName(), key->GetTitle());
+					continue;
+				}
+
+				// For mergeable objects we add the names in a local hashlist handling them
+				// again (see above)
+				if (cl->GetMerge() || cl->InheritsFrom(TDirectory::Class()) ||
+				    (cl->InheritsFrom(TObject::Class()) &&
+				     (cl->GetMethodWithPrototype("Merge", "TCollection*,TFileMergeInfo*") ||
+				      cl->GetMethodWithPrototype("Merge", "TCollection*"))))
+					allNames.Add(new TObjString(key->GetName()));
+				
+				// read object from first source file
+				TObject *obj;
+				obj = key->ReadObj();
+				if (!obj) {
+					//Info("MergeRecursive", "could not read object for key {%s, %s}",
+					//   key->GetName(), key->GetTitle());
+					continue;
+				}
+            
+				Bool_t canBeMerged = kTRUE;
+
+				if ( obj->IsA()->InheritsFrom( TDirectory::Class() ) ) {
+					// it's a subdirectory
+               
+					target->cd();
+					TDirectory *newdir;
+
+					// For incremental or already seen we may have already a directory created
+					if (alreadyseen) {
+						newdir = target->GetDirectory(obj->GetName());
+						if (!newdir) {
+							newdir = target->mkdir( obj->GetName(), obj->GetTitle() );
+						}
+					} else {
+						newdir = target->mkdir( obj->GetName(), obj->GetTitle() );
+					}
+
+					// newdir is now the starting point of another round of merging
+					// newdir still knows its depth within the target file via
+					// GetPath(), so we can still figure out where we are in the recursion
+
+
+					// If this folder is a onlyListed object, merge everything inside.
+					status = MergeMacroFiles(newdir, sourcelist);
+					if (!status) return status;
+				} else if (obj->IsA()->GetMerge()) {
+               
+					// Check if already treated
+					if (alreadyseen) continue;
+               
+					TList inputs;
+					//Bool_t oneGo = fHistoOneGo && obj->IsA()->InheritsFrom(R__TH1_Class);
+               
+					// Loop over all source files and merge same-name object
+					TFile *nextsource = current_file ? (TFile*)sourcelist->After( current_file ) : (TFile*)sourcelist->First();
+					if (nextsource == 0) {
+						// There is only one file in the list
+						ROOT::MergeFunc_t func = obj->IsA()->GetMerge();
+						func(obj, &inputs, &info);
+						info.fIsFirst = kFALSE;
+					} else {
+						do {
+							// make sure we are at the correct directory level by cd'ing to path
+							TDirectory *ndir = nextsource->GetDirectory(path);
+							if (ndir) {
+								ndir->cd();
+								TKey *key2 = (TKey*)ndir->GetListOfKeys()->FindObject(key->GetName());
+								if (key2) {
+									TObject *hobj = key2->ReadObj();
+									if (!hobj) {
+										//Info("MergeRecursive", "could not read object for key {%s, %s}; skipping file %s",
+										//   key->GetName(), key->GetTitle(), nextsource->GetName());
+										nextsource = (TFile*)sourcelist->After(nextsource);
+										continue;
+									}
+									// Set ownership for collections
+									if (hobj->InheritsFrom(TCollection::Class())) {
+										((TCollection*)hobj)->SetOwner();
+									}
+									hobj->ResetBit(kMustCleanup);
+									inputs.Add(hobj);
+									ROOT::MergeFunc_t func = obj->IsA()->GetMerge();
+									Long64_t result = func(obj, &inputs, &info);
+									info.fIsFirst = kFALSE;
+									if (result < 0) {
+										Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+										      obj->GetName(), nextsource->GetName());
+									}
+									inputs.Delete();
+								}
+							}
+							nextsource = (TFile*)sourcelist->After( nextsource );
+						} while (nextsource);
+						// Merge the list, if still to be done
+						if (info.fIsFirst) {
+							ROOT::MergeFunc_t func = obj->IsA()->GetMerge();
+							func(obj, &inputs, &info);
+							info.fIsFirst = kFALSE;
+							inputs.Delete();
+						}
+					}
+				} else if (obj->InheritsFrom(TObject::Class()) &&
+					   obj->IsA()->GetMethodWithPrototype("Merge", "TCollection*,TFileMergeInfo*") ) {
+					// Object implements Merge(TCollection*,TFileMergeInfo*) and has a reflex dictionary ... 
+               
+					// Check if already treated
+					if (alreadyseen) continue;
+               
+					TList listH;
+					TString listHargs;
+					listHargs.Form("(TCollection*)0x%lx,(TFileMergeInfo*)0x%lx", (ULong_t)&listH,(ULong_t)&info);
+               
+					// Loop over all source files and merge same-name object
+					TFile *nextsource = current_file ? (TFile*)sourcelist->After( current_file ) : (TFile*)sourcelist->First();
+					if (nextsource == 0) {
+						// There is only one file in the list
+						Int_t error = 0;
+						obj->Execute("Merge", listHargs.Data(), &error);
+						info.fIsFirst = kFALSE;
+						if (error) {
+							Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+							      obj->GetName(), key->GetName());
+						}
+					} else {
+						while (nextsource) {
+							// make sure we are at the correct directory level by cd'ing to path
+							TDirectory *ndir = nextsource->GetDirectory(path);
+							if (ndir) {
+								ndir->cd();
+								TKey *key2 = (TKey*)ndir->GetListOfKeys()->FindObject(key->GetName());
+								if (key2) {
+									TObject *hobj = key2->ReadObj();
+									if (!hobj) {
+										//Info("MergeRecursive", "could not read object for key {%s, %s}; skipping file %s",
+										//   key->GetName(), key->GetTitle(), nextsource->GetName());
+										nextsource = (TFile*)sourcelist->After(nextsource);
+										continue;
+									}
+									// Set ownership for collections
+									if (hobj->InheritsFrom(TCollection::Class())) {
+										((TCollection*)hobj)->SetOwner();
+									}
+									hobj->ResetBit(kMustCleanup);
+									listH.Add(hobj);
+									Int_t error = 0;
+									obj->Execute("Merge", listHargs.Data(), &error);
+									info.fIsFirst = kFALSE;
+									if (error) {
+										Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+										      obj->GetName(), nextsource->GetName());
+									}
+									listH.Delete();
+								}
+							}
+							nextsource = (TFile*)sourcelist->After( nextsource );
+						}
+						// Merge the list, if still to be done
+						if (info.fIsFirst) {
+							Int_t error = 0;
+							obj->Execute("Merge", listHargs.Data(), &error);
+							info.fIsFirst = kFALSE;
+							listH.Delete();
+						}
+					}
+				} else if (obj->InheritsFrom(TObject::Class()) &&
+					   obj->IsA()->GetMethodWithPrototype("Merge", "TCollection*") ) {
+					// Object implements Merge(TCollection*) and has a reflex dictionary ...
+               
+					// Check if already treated
+					if (alreadyseen) continue;
+               
+					TList listH;
+					TString listHargs;
+					listHargs.Form("((TCollection*)0x%lx)", (ULong_t)&listH);
+               
+					// Loop over all source files and merge same-name object
+					TFile *nextsource = current_file ? (TFile*)sourcelist->After( current_file ) : (TFile*)sourcelist->First();
+					if (nextsource == 0) {
+						// There is only one file in the list
+						Int_t error = 0;
+						obj->Execute("Merge", listHargs.Data(), &error);
+						if (error) {
+							Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+							      obj->GetName(), key->GetName());
+						}
+					} else {
+						while (nextsource) {
+							// make sure we are at the correct directory level by cd'ing to path
+							TDirectory *ndir = nextsource->GetDirectory(path);
+							if (ndir) {
+								ndir->cd();
+								TKey *key2 = (TKey*)ndir->GetListOfKeys()->FindObject(key->GetName());
+								if (key2) {
+									TObject *hobj = key2->ReadObj();
+									if (!hobj) {
+										Info("MergeRecursive", "could not read object for key {%s, %s}; skipping file %s",
+										     key->GetName(), key->GetTitle(), nextsource->GetName());
+										nextsource = (TFile*)sourcelist->After(nextsource);
+										continue;
+									}
+									// Set ownership for collections
+									if (hobj->InheritsFrom(TCollection::Class())) {
+										((TCollection*)hobj)->SetOwner();
+									}
+									hobj->ResetBit(kMustCleanup);
+									listH.Add(hobj);
+									Int_t error = 0;
+									obj->Execute("Merge", listHargs.Data(), &error);
+									info.fIsFirst = kFALSE;
+									if (error) {
+										Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+										      obj->GetName(), nextsource->GetName());
+									}
+									listH.Delete();
+								}
+							}
+							nextsource = (TFile*)sourcelist->After( nextsource );
+						}
+						// Merge the list, if still to be done
+						if (info.fIsFirst) {
+							Int_t error = 0;
+							obj->Execute("Merge", listHargs.Data(), &error);
+							info.fIsFirst = kFALSE;
+							listH.Delete();
+						}
+					}
+				} else {
+					// Object is of no type that we can merge
+					canBeMerged = kFALSE;
+				}
+            
+				// now write the merged histogram (which is "in" obj) to the target file
+				// note that this will just store obj in the current directory level,
+				// which is not persistent until the complete directory itself is stored
+				// by "target->SaveSelf()" below
+				target->cd();
+            
+				// only actually merge objects that can be merged (i.e. histograms and trees)
+				if(!canBeMerged) continue;
+
+				oldkeyname = key->GetName();
+				//!!if the object is a tree, it is stored in globChain...
+				if(obj->IsA()->InheritsFrom( TDirectory::Class() )) {
+					//printf("cas d'une directory\n");
+					// Do not delete the directory if it is part of the output
+					// and we are in incremental mode (because it will be reuse
+					// and has not been written to disk (for performance reason).
+					// coverity[var_deref_model] the IsA()->InheritsFrom guarantees that the dynamic_cast will succeed. 
+					if (dynamic_cast<TDirectory*>(obj)->GetFile() != target) {
+						delete obj;
+					}
+				} else if (obj->IsA()->InheritsFrom( TCollection::Class() )) {
+					// Don't overwrite, if the object were not merged.
+					if ( obj->Write( oldkeyname, canBeMerged ? TObject::kSingleKey | TObject::kOverwrite : TObject::kSingleKey) <= 0 ) {
+						status = kFALSE;
+					}
+					((TCollection*)obj)->SetOwner();
+					delete obj;
+				} else {
+					// Don't overwrite, if the object were not merged.
+					// NOTE: this is probably wrong for emulated objects.
+					if ( obj->Write( oldkeyname, canBeMerged ? TObject::kOverwrite : 0) <= 0) {
+						status = kFALSE;
+					}
+					cl->Destructor(obj); // just in case the class is not loaded.
+				}
+				info.Reset();
+			} // while ( ( TKey *key = (TKey*)nextkey() ) )
+		}
+		current_file = current_file ? (TFile*)sourcelist->After(current_file) : (TFile*)sourcelist->First();
+		if (current_file) {
+			current_sourcedir = current_file->GetDirectory(path);
+		} else {
+			current_sourcedir = 0;
+		}
+	}
+	// save modifications to the target directory.
+	target->SaveSelf(kTRUE);
+
+	return status;	
+}
+
+#if 0
+// adapted from TFileMerger::MergeRecursive()
+static Bool_t MergeMacroFiles(TDirectory *target, vector<TFile *> &sourcelist)
+{
+	// Merge all objects in a directory
+	Bool_t status = kTRUE;
+
+	if(sourcelist.size() == 0)
+		return status;
+	
+	// Get the dir name
+	TString path(target->GetPath());
+	// coverity[unchecked_value] 'target' is from a file so GetPath always returns path starting with filename: 
+	path.Remove(0, path.Last(':') + 2);
+
+	Int_t nguess = sourcelist.size()+1000;
+	THashList allNames(nguess);
+	allNames.SetOwner(kTRUE);
+	((THashList*)target->GetList())->Rehash(nguess);
+	((THashList*)target->GetListOfKeys())->Rehash(nguess);
+   
+	TFileMergeInfo info(target);
+
+	vector<TFile *>::iterator file_itr = sourcelist.begin();
+	TFile      *current_file = *file_itr;
+	TDirectory *current_sourcedir = current_file->GetDirectory(path);
+
+	while (current_file || current_sourcedir) {
+		// When current_sourcedir != 0 and current_file == 0 we are going over the target
+		// for an incremental merge.
+		if (current_sourcedir && (current_file == NULL || current_sourcedir != target)) {
+
+			// loop over all keys in this directory
+			TIter nextkey( current_sourcedir->GetListOfKeys() );
+			TKey *key;
+			TString oldkeyname;
+			
+			while ( (key = (TKey*)nextkey())) {
+				
+				// Keep only the highest cycle number for each key for mergeable objects. They are stored
+				// in the (hash) list onsecutively and in decreasing order of cycles, so we can continue
+				// until the name changes. We flag the case here and we act consequently later.
+				Bool_t alreadyseen = (oldkeyname == key->GetName()) ? kTRUE : kFALSE;
+
+				// Read in but do not copy directly the processIds.
+				if (strcmp(key->GetClassName(),"TProcessID") == 0) { key->ReadObj(); continue;}
+
+				// If we have already seen this object [name], we already processed
+				// the whole list of files for this objects and we can just skip it
+				// and any related cycles.
+				if (allNames.FindObject(key->GetName())) {
+					oldkeyname = key->GetName();
+					continue;
+				}
+				
+				TClass *cl = TClass::GetClass(key->GetClassName());
+				if (!cl || !cl->InheritsFrom(TObject::Class())) {
+					//Info("MergeRecursive", "cannot merge object type, name: %s title: %s",
+					//   key->GetName(), key->GetTitle());
+					continue;
+				}
+				// For mergeable objects we add the names in a local hashlist handling them
+				// again (see above)
+				if (cl->GetMerge() || cl->InheritsFrom(TDirectory::Class()) ||
+				    (cl->InheritsFrom(TObject::Class()) &&
+				     (cl->GetMethodWithPrototype("Merge", "TCollection*,TFileMergeInfo*") ||
+				      cl->GetMethodWithPrototype("Merge", "TCollection*"))))
+					allNames.Add(new TObjString(key->GetName()));
+				
+				//if (fNoTrees && cl->InheritsFrom(R__TTree_Class)) {
+				//	// Skip the TTree objects and any related cycles.
+				//	oldkeyname = key->GetName();
+				//	continue;
+				//}
+            
+				// read object from first source file
+				TObject *obj;
+				obj = key->ReadObj();
+				if (!obj) {
+					//Info("MergeRecursive", "could not read object for key {%s, %s}",
+					//   key->GetName(), key->GetTitle());
+					continue;
+				}
+
+				Bool_t canBeMerged = kTRUE;
+
+				if ( obj->IsA()->InheritsFrom( TDirectory::Class() ) ) {
+					// it's a subdirectory
+               
+					target->cd();
+					TDirectory *newdir;
+
+					// For incremental or already seen we may have already a directory created
+					if (alreadyseen) {
+						newdir = target->GetDirectory(obj->GetName());
+						if (!newdir) {
+							newdir = target->mkdir( obj->GetName(), obj->GetTitle() );
+						}
+					} else {
+						newdir = target->mkdir( obj->GetName(), obj->GetTitle() );
+					}
+
+					// newdir is now the starting point of another round of merging
+					// newdir still knows its depth within the target file via
+					// GetPath(), so we can still figure out where we are in the recursion
+					
+					// If this folder is a onlyListed object, merge everything inside.
+					status = MergeMacroFiles(newdir, sourcelist);
+					if (!status) return status;
+				} else if (obj->IsA()->GetMerge()) {
+               
+					// Check if already treated
+					if (alreadyseen) continue;
+               
+					TList inputs;
+					//Bool_t oneGo = fHistoOneGo && obj->IsA()->InheritsFrom(R__TH1_Class);
+					
+					// Loop over all source files and merge same-name object
+					//TFile *nextsource = current_file ? (TFile*)sourcelist->After( current_file ) : (TFile*)sourcelist->First();
+					TFile *nextsource = NULL;
+					if(current_file) {
+						nextsource = *(++file_itr);
+					} else {
+						nextsource = sourcelist.front();
+					}
+					//if (nextsource == 0) {
+					if (sourcelist.size() == 1) {
+						// There is only one file in the list
+						ROOT::MergeFunc_t func = obj->IsA()->GetMerge();
+						func(obj, &inputs, &info);
+						info.fIsFirst = kFALSE;
+					} else {
+						do {
+							// make sure we are at the correct directory level by cd'ing to path
+							TDirectory *ndir = nextsource->GetDirectory(path);
+							if (ndir) {
+								ndir->cd();
+								TKey *key2 = (TKey*)ndir->GetListOfKeys()->FindObject(key->GetName());
+								if (key2) {
+									TObject *hobj = key2->ReadObj();
+									if (!hobj) {
+										//Info("MergeRecursive", "could not read object for key {%s, %s}; skipping file %s",
+										//   key->GetName(), key->GetTitle(), nextsource->GetName());
+										//nextsource = (TFile*)sourcelist->After(nextsource);
+										nextsource = *(++file_itr);
+										continue;
+									}
+									// Set ownership for collections
+									if (hobj->InheritsFrom(TCollection::Class())) {
+										((TCollection*)hobj)->SetOwner();
+									}
+									hobj->ResetBit(kMustCleanup);
+									inputs.Add(hobj);
+									//if (!oneGo) {
+									ROOT::MergeFunc_t func = obj->IsA()->GetMerge();
+									Long64_t result = func(obj, &inputs, &info);
+									info.fIsFirst = kFALSE;
+									if (result < 0) {
+										Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+										      obj->GetName(), nextsource->GetName());
+									}
+									inputs.Delete();
+									//}
+								}
+							}
+							//nextsource = (TFile*)sourcelist->After( nextsource );
+							nextsource = *(++file_itr);
+						} while (nextsource);
+						// Merge the list, if still to be done
+						//if (oneGo || info.fIsFirst) {
+						if (info.fIsFirst) {
+							ROOT::MergeFunc_t func = obj->IsA()->GetMerge();
+							func(obj, &inputs, &info);
+							info.fIsFirst = kFALSE;
+							inputs.Delete();
+						}
+					}
+				} else if (obj->InheritsFrom(TObject::Class()) &&
+					   obj->IsA()->GetMethodWithPrototype("Merge", "TCollection*,TFileMergeInfo*") ) {
+					// Object implements Merge(TCollection*,TFileMergeInfo*) and has a reflex dictionary ... 
+               
+					// Check if already treated
+					if (alreadyseen) continue;
+               
+					TList listH;
+					TString listHargs;
+					listHargs.Form("(TCollection*)0x%lx,(TFileMergeInfo*)0x%lx", (ULong_t)&listH,(ULong_t)&info);
+               
+					// Loop over all source files and merge same-name object
+					//TFile *nextsource = current_file ? (TFile*)sourcelist->After( current_file ) : (TFile*)sourcelist->First();
+					TFile *nextsource = NULL;
+					if(current_file) {
+						nextsource = *(++file_itr);
+					} else {
+						nextsource = sourcelist.front();
+					}
+					//if (nextsource == 0) {
+					if (sourcelist.size() == 1) {
+						// There is only one file in the list
+						Int_t error = 0;
+						obj->Execute("Merge", listHargs.Data(), &error);
+						info.fIsFirst = kFALSE;
+						if (error) {
+							Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+							      obj->GetName(), key->GetName());
+						}
+					} else {
+						while (nextsource) {
+							// make sure we are at the correct directory level by cd'ing to path
+							TDirectory *ndir = nextsource->GetDirectory(path);
+							if (ndir) {
+								ndir->cd();
+								TKey *key2 = (TKey*)ndir->GetListOfKeys()->FindObject(key->GetName());
+								if (key2) {
+									TObject *hobj = key2->ReadObj();
+									if (!hobj) {
+										//Info("MergeRecursive", "could not read object for key {%s, %s}; skipping file %s",
+										//   key->GetName(), key->GetTitle(), nextsource->GetName());
+										//nextsource = (TFile*)sourcelist->After(nextsource);
+										nextsource = *(++file_itr);
+										continue;
+									}
+									// Set ownership for collections
+									if (hobj->InheritsFrom(TCollection::Class())) {
+										((TCollection*)hobj)->SetOwner();
+									}
+									hobj->ResetBit(kMustCleanup);
+									listH.Add(hobj);
+									Int_t error = 0;
+									obj->Execute("Merge", listHargs.Data(), &error);
+									info.fIsFirst = kFALSE;
+									if (error) {
+										Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+										      obj->GetName(), nextsource->GetName());
+									}
+									listH.Delete();
+								}
+							}
+							//nextsource = (TFile*)sourcelist->After( nextsource );
+							nextsource = *(++file_itr);
+						}
+						// Merge the list, if still to be done
+						if (info.fIsFirst) {
+							Int_t error = 0;
+							obj->Execute("Merge", listHargs.Data(), &error);
+							info.fIsFirst = kFALSE;
+							listH.Delete();
+						}
+					}
+				} else if (obj->InheritsFrom(TObject::Class()) &&
+					   obj->IsA()->GetMethodWithPrototype("Merge", "TCollection*") ) {
+					// Object implements Merge(TCollection*) and has a reflex dictionary ...
+               
+					// Check if already treated
+					if (alreadyseen) continue;
+               
+					TList listH;
+					TString listHargs;
+					listHargs.Form("((TCollection*)0x%lx)", (ULong_t)&listH);
+               
+					// Loop over all source files and merge same-name object
+					//TFile *nextsource = current_file ? (TFile*)sourcelist->After( current_file ) : (TFile*)sourcelist->First();
+					TFile *nextsource = NULL;
+					if(current_file) {
+						nextsource = *(++file_itr);
+					} else {
+						nextsource = sourcelist.front();
+					}
+					//if (nextsource == 0) {
+					if (sourcelist.size() == 1) {
+						// There is only one file in the list
+						Int_t error = 0;
+						obj->Execute("Merge", listHargs.Data(), &error);
+						if (error) {
+							Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+							      obj->GetName(), key->GetName());
+						}
+					} else {
+						while (nextsource) {
+							// make sure we are at the correct directory level by cd'ing to path
+							TDirectory *ndir = nextsource->GetDirectory(path);
+							if (ndir) {
+								ndir->cd();
+								TKey *key2 = (TKey*)ndir->GetListOfKeys()->FindObject(key->GetName());
+								if (key2) {
+									TObject *hobj = key2->ReadObj();
+									if (!hobj) {
+										//Info("MergeRecursive", "could not read object for key {%s, %s}; skipping file %s",
+										//   key->GetName(), key->GetTitle(), nextsource->GetName());
+										//nextsource = (TFile*)sourcelist->After(nextsource);
+										nextsource = *(++file_itr);
+										continue;
+									}
+									// Set ownership for collections
+									if (hobj->InheritsFrom(TCollection::Class())) {
+										((TCollection*)hobj)->SetOwner();
+									}
+									hobj->ResetBit(kMustCleanup);
+									listH.Add(hobj);
+									Int_t error = 0;
+									obj->Execute("Merge", listHargs.Data(), &error);
+									info.fIsFirst = kFALSE;
+									if (error) {
+										Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
+										      obj->GetName(), nextsource->GetName());
+									}
+									listH.Delete();
+								}
+							}
+							//nextsource = (TFile*)sourcelist->After( nextsource );
+							nextsource = *(++file_itr);
+						}
+						// Merge the list, if still to be done
+						if (info.fIsFirst) {
+							Int_t error = 0;
+							obj->Execute("Merge", listHargs.Data(), &error);
+							info.fIsFirst = kFALSE;
+							listH.Delete();
+						}
+					}
+				} else {
+					// Object is of no type that we can merge
+					canBeMerged = kFALSE;
+				}
+            
+				// now write the merged histogram (which is "in" obj) to the target file
+				// note that this will just store obj in the current directory level,
+				// which is not persistent until the complete directory itself is stored
+				// by "target->SaveSelf()" below
+				target->cd();
+				
+				oldkeyname = key->GetName();
+				//!!if the object is a tree, it is stored in globChain...
+				if(obj->IsA()->InheritsFrom( TDirectory::Class() )) {
+					//printf("cas d'une directory\n");
+					// Do not delete the directory if it is part of the output
+					// and we are in incremental mode (because it will be reuse
+					// and has not been written to disk (for performance reason).
+					// coverity[var_deref_model] the IsA()->InheritsFrom guarantees that the dynamic_cast will succeed. 
+					if (dynamic_cast<TDirectory*>(obj)->GetFile() != target) {
+						delete obj;
+					}
+				} else if (obj->IsA()->InheritsFrom( TCollection::Class() )) {
+					// Don't overwrite, if the object were not merged.
+					if ( obj->Write( oldkeyname, canBeMerged ? TObject::kSingleKey | TObject::kOverwrite : TObject::kSingleKey) <= 0 ) {
+						status = kFALSE;
+					}
+					((TCollection*)obj)->SetOwner();
+					delete obj;
+				} else {
+					// Don't overwrite, if the object were not merged.
+					// NOTE: this is probably wrong for emulated objects.
+					if ( obj->Write( oldkeyname, canBeMerged ? TObject::kOverwrite : 0) <= 0) {
+						status = kFALSE;
+					}
+					cl->Destructor(obj); // just in case the class is not loaded.
+				}
+				info.Reset();
+			} // while ( ( TKey *key = (TKey*)nextkey() ) )
+		}
+		//current_file = current_file ? (TFile*)sourcelist->After(current_file) : (TFile*)sourcelist->First();
+		if(++file_itr == sourcelist.end()) {
+			current_sourcedir = NULL;
+		} else {
+			current_file = *file_itr;
+			current_sourcedir = current_file->GetDirectory(path);
+		}
+	} 
+	// save modifications to the target directory.
+	target->SaveSelf(kTRUE);
+
+	return status;
+}
+#endif
