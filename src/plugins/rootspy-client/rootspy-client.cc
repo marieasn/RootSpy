@@ -246,6 +246,7 @@ void rsList(void)
 			case hdef_t::oneD:    type = "1D";  break;
 			case hdef_t::twoD:    type = "2D";  break;
 			case hdef_t::threeD:  type = "3D";  break;
+			case hdef_t::macro:   type = "macro";  break;
 		}
 		
 		string &hname = hdef.hnamepath;

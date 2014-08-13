@@ -171,6 +171,7 @@ DRootSpy::~DRootSpy()
 
 	// Stop cMsg system
 	cMsgSys->stop();
+	cMsgSys->disconnect();
 
 	sem_destroy(&RootSpy_final_sem);
 	

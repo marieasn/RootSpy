@@ -111,6 +111,7 @@ rs_cmsg::~rs_cmsg()
 
 	// Stop cMsg system
 	cMsgSys->stop();
+	cMsgSys->disconnect();
     }
 }
 
