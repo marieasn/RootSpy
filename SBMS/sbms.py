@@ -51,13 +51,17 @@ def library(env, libname=''):
 		# We're in launch directory (or descendent) schedule installation
 
 		# Installation directories for library and headers
-		installdir = env.subst('$INSTALLDIR')
-		includedir = "%s" %(env.subst('$INCDIR'))
+		includedir = "%s/%s" %(env.subst('$INCDIR'), libname)
 		libdir = env.subst('$LIBDIR')
+		ginstalldir = env.subst('$GINSTALLDIR')
+		glibdir = '%s/lib' % ginstalldir
+		gincludedir = '%s/include' % ginstalldir
 
 		# Install targets 
 		env.Install(libdir, mylib)
-		env.Install(includedir, env.Glob('*.[h|hh|hpp]'))
+		env.Install(includedir, env.Glob('*.h')+env.Glob('*.hh')+env.Glob('*.hpp'))
+		env.Install(glibdir, mylib)
+		env.Install(gincludedir, env.Glob('*.h')+env.Glob('*.hh')+env.Glob('*.hpp'))
 
 
 ##################################
@@ -96,12 +100,13 @@ def executable(env, exename=''):
 		# We're in launch directory (or descendent) schedule installation
 
 		# Installation directories for executable and headers
-		installdir = env.subst('$INSTALLDIR')
-		includedir = env.subst('$INCDIR')
 		bindir = env.subst('$BINDIR')
+		ginstalldir = env.subst('$GINSTALLDIR')
+		gbindir = '%s/bin' % ginstalldir
 
 		# Install targets 
 		env.Install(bindir, myexe)
+		env.Install(gbindir, myexe)
 
 
 ##################################
@@ -159,7 +164,11 @@ def executables(env):
 	else:
 		# We're in launch directory (or descendent) schedule installation
 		bindir = env.subst('$BINDIR')
+		ginstalldir = env.subst('$GINSTALLDIR')
+		gbindir = '%s/bin' % ginstalldir
+
 		env.Install(bindir, progs)
+		env.Install(gbindir, progs)
 
 
 ##################################
@@ -195,13 +204,43 @@ def plugin(env, pluginname=''):
 		# We're in launch directory (or descendent) schedule installation
 
 		# Installation directories for plugin and headers
-		installdir = env.subst('$INSTALLDIR')
 		includedir = "%s/%s" %(env.subst('$INCDIR'), pluginname)
 		pluginsdir = env.subst('$PLUGINSDIR')
+		ginstalldir = env.subst('$GINSTALLDIR')
+		gpluginsdir = '%s/plugins' % ginstalldir
+		gincludedir = '%s/include' % ginstalldir
 
 		# Install targets 
-		installed = env.Install(pluginsdir, myplugin)
-		env.Install(includedir, env.Glob('*.[h|hh|hpp]'))
+		env.Install(pluginsdir, myplugin)
+		env.Install(includedir, env.Glob('*.h')+env.Glob('*.hh')+env.Glob('*.hpp'))
+		env.Install(gpluginsdir, myplugin)
+		env.Install(gincludedir, env.Glob('*.h')+env.Glob('*.hh')+env.Glob('*.hpp'))
+
+
+##################################
+# script
+##################################
+def script(env, scriptname):
+
+	# Only thing to do for script is to install it.
+
+	# Cleaning and installation are restricted to the directory
+	# scons was launched from or its descendents
+	CurrentDir = env.Dir('.').srcnode().abspath
+	if not CurrentDir.startswith(env.GetLaunchDir()):
+		# Not in launch directory. Tell scons not to clean these targets
+		env.NoClean([scriptname])
+	else:
+		# We're in launch directory (or descendent) schedule installation
+
+		# Installation directories for executable and headers
+		bindir = env.subst('$BINDIR')
+		ginstalldir = env.subst('$GINSTALLDIR')
+		gbindir = '%s/bin' % ginstalldir
+
+		# Install targets 
+		env.Install(bindir, scriptname)
+		env.Install(gbindir, scriptname)
 
 
 

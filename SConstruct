@@ -23,6 +23,7 @@ arch = ROOT_CFLAGS = subprocess.Popen(["uname"], stdout=subprocess.PIPE).communi
 
 # Setup initial environment
 installdir = "#%s" %(osname)
+ginstalldir = "#../../%s" % (osname)
 include = "%s/include" % (installdir)
 bin = "%s/bin" % (installdir)
 lib = "%s/lib" % (installdir)
@@ -34,6 +35,7 @@ env = Environment(    CPPPATH = [include],
 
 # These are SBMS-specific variables (i.e. not default scons ones)
 env.Replace(INSTALLDIR    = installdir,
+				GINSTALLDIR   = ginstalldir,
 				OSNAME        = osname,
 				INCDIR        = include,
 				BINDIR        = bin,
@@ -88,6 +90,7 @@ SConscript('src/SConscript', variant_dir="src/.%s" % (osname), exports='env osna
 
 # Make install target
 env.Alias('install', installdir)
+env.Alias('ginstall', ginstalldir)
 
 # Create setenv if user explicitly specified "install" target
 #build_targets = map(str,BUILD_TARGETS)
