@@ -61,7 +61,7 @@ public:
 
 class hdef_t{
 	public:
-	enum histdimension_t {noneD, oneD, twoD, threeD,macro};		// 2D, 3D, etc.
+	enum histdimension_t {noneD, oneD, twoD, threeD, profile, macro};		// 2D, 3D, etc.
 		
 		hdef_t(string name, string path){
 			this->name = name;

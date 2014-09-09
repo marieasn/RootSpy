@@ -529,6 +529,7 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		if( (*hist_types)[i].find("TH1")!=string::npos) hdef.type = hdef_t::oneD;
 		else if( (*hist_types)[i].find("TH2")!=string::npos) hdef.type = hdef_t::twoD;
 		else if( (*hist_types)[i].find("TH3")!=string::npos) hdef.type = hdef_t::threeD;
+		else if( (*hist_types)[i].find("TProfile")!=string::npos) hdef.type = hdef_t::profile;
 		else hdef.type = hdef_t::noneD;
 
 		hdef.title = (*hist_titles)[i];

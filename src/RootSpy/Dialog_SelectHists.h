@@ -78,12 +78,15 @@ class Dialog_SelectHists:public TGMainFrame{
 		
 		const TGPicture *folder_t;
 		const TGPicture *ofolder_t;
+		const TGPicture *redx_t;
+		const TGPicture *package_t;
 		const TGPicture *h1_s;
 		const TGPicture *h1_t;
 		const TGPicture *h2_s;
 		const TGPicture *h2_t;
 		const TGPicture *h3_s;
 		const TGPicture *h3_t;
+		const TGPicture *profile_t;
 		const TGPicture *pack_t;
 		const TGPicture *hdisk_t;
 		const TGPicture *checked_t;

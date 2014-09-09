@@ -475,7 +475,14 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 			hist_checkbox = hdef->servers[server];
 		}
 		server_item->SetPictures(hdisk_t, hdisk_t);
-		hist_item->SetPictures(h1_t, h1_t);
+		switch(hdef->type){
+			case hdef_t::noneD:   hist_item->SetPictures(redx_t, redx_t); break;
+			case hdef_t::oneD:    hist_item->SetPictures(h1_t, h1_t); break;
+			case hdef_t::twoD:    hist_item->SetPictures(h2_t, h2_t); break;
+			case hdef_t::threeD:  hist_item->SetPictures(h3_t, h3_t); break;
+			case hdef_t::profile: hist_item->SetPictures(profile_t, profile_t); break;
+			case hdef_t::macro:   hist_item->SetPictures(package_t, package_t); break;
+		}
 		if(!server_checkbox)server_item->Toggle();
 		if(!hist_checkbox)hist_item->Toggle();
 
@@ -585,7 +592,7 @@ void Dialog_SelectHists::CreateGUI(void)
    //item0->SetPictures(popen, pclose);
    //fListTree815->CloseItem(item0);
 
-   fViewPort806->AddFrame(fListTree815);
+   fViewPort806->AddFrame(fListTree815,  new TGLayoutHints(kLHintsExpandY));
    fListTree815->SetLayoutManager(new TGHorizontalLayout(fListTree815));
    fListTree815->MapSubwindows();
    fCanvas805->SetContainer(fListTree815);
@@ -615,7 +622,7 @@ void Dialog_SelectHists::CreateGUI(void)
 
    fVerticalFrame801->AddFrame(fHorizontalFrame816, new TGLayoutHints(kLHintsLeft | kLHintsTop | kFitWidth,2,2,2,2));
 
-   fMainFrame800->AddFrame(fVerticalFrame801, new TGLayoutHints(kLHintsLeft | kLHintsTop | kFitWidth | kFitHeight,2,2,2,2));
+   fMainFrame800->AddFrame(fVerticalFrame801, new TGLayoutHints(kLHintsLeft | kLHintsTop | kFitWidth | kFitHeight | kLHintsExpandY,2,2,2,2));
 
    fMainFrame984->AddFrame(fMainFrame800, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
    //fMainFrame800->MoveResize(0,0,400,290);
@@ -652,12 +659,15 @@ void Dialog_SelectHists::CreateGUI(void)
 
 	folder_t = pclose;
 	ofolder_t = popen;
+	redx_t = gClient->GetPicture("sm_delete.xpm");
+	package_t = gClient->GetPicture("package.xpm");
 	h1_s = gClient->GetPicture("h1_s.xpm");
 	h1_t = gClient->GetPicture("h1_t.xpm");
 	h2_s = gClient->GetPicture("h2_s.xpm");
 	h2_t = gClient->GetPicture("h2_t.xpm");
 	h3_s = gClient->GetPicture("h3_s.xpm");
 	h3_t = gClient->GetPicture("h3_t.xpm");
+	profile_t = gClient->GetPicture("profile_t.xpm");
 	pack_t = gClient->GetPicture("pack_t.xpm");
 	hdisk_t = gClient->GetPicture("hdisk_t.xpm");
 	checked_t = gClient->GetPicture("checked_t.xpm");
