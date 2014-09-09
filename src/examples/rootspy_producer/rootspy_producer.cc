@@ -10,6 +10,8 @@ using namespace std;
 
 #include <TH1.h>
 #include <TH2.h>
+#include <TProfile.h>
+#include <TProfile2D.h>
 #include <TRandom.h>
 #include <TTree.h>
 #include <TFile.h>
@@ -37,6 +39,8 @@ int main(int narg, char *argv[])
 	TH1D *h_px = new TH1D("px", "Momentum X-component", 500, 0.0, 10.0);
 	TH1D *h_py = new TH1D("py", "Momentum Y-component", 500, 0.0, 10.0);
 	TH1D *h_pz = new TH1D("pz", "Momentum Z-component", 500, 0.0, 10.0);
+
+	TProfile *h_pvE = new TProfile("pvE", "Total Momentum vs. Energy", 500, 0.0, 10.0);
 
 	main->cd();
 
@@ -101,6 +105,7 @@ int main(int narg, char *argv[])
 		h_px->Fill(px);
 		h_py->Fill(py);
 		h_pz->Fill(pz);
+		h_pvE->Fill(E,p);
 		h_E->Fill(E);
 		h_Mass->Fill(Mass);
 		
