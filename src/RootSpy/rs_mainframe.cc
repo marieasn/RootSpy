@@ -785,6 +785,15 @@ void rs_mainframe::DoSetArchiveFile(void) {
 	cout << "loaded archiver file = " << ss.str() << endl;
 }
 
+//----------
+// DoTBrowser
+//----------
+//add comment
+void rs_mainframe::DoTBrowser(void) {
+
+	new TBrowser();
+}
+
 //-------------------
 // ReadPreferences
 //-------------------
@@ -1284,6 +1293,13 @@ void rs_mainframe::CreateGUI(void)
    //fHorizontalFrame1060->AddFrame(fTextButtonSetArchive, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
    fHorizontalFrame2060->AddFrame(fTextButtonSetArchive, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
 
+   TGTextButton *fTextButtonTBrowser = new TGTextButton(fHorizontalFrame2060,"TBrowser");
+   fTextButtonSetArchive->SetTextJustify(36);
+   fTextButtonSetArchive->SetMargins(0,0,0,0);
+   fTextButtonSetArchive->SetWrapLength(-1);
+   fTextButtonSetArchive->Resize(300,22);
+   fHorizontalFrame2060->AddFrame(fTextButtonTBrowser, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+
    TGHorizontalFrame *fHorizontalFrame3060 = new TGHorizontalFrame(fVerticalFrame3673,400,30,kHorizontalFrame);
 
    //TGLabel *fLabel2030 = new TGLabel(fHorizontalFrame1060,"");
@@ -1345,6 +1361,7 @@ void rs_mainframe::CreateGUI(void)
 	//TGTextButton* &treeinfobutton = fTextButton1297;
 	//TGTextButton* &final = fTextButtonfinal;
 	TGTextButton* &setarchive = fTextButtonSetArchive;
+	TGTextButton* &tbrowser = fTextButtonTBrowser;
 	//TGTextButton* &online = fTextButtonOnline;
 	indiv = fTextButtonIndiv;
 
@@ -1379,6 +1396,7 @@ void rs_mainframe::CreateGUI(void)
 	//final->Connect("Clicked()", "rs_mainframe", this, "DoFinal()");
 	//treeinfobutton->Connect("Clicked()", "rs_mainframe", this, "DoTreeInfo()");
 	setarchive->Connect("Clicked()", "rs_mainframe", this, "DoSetArchiveFile()");
+	tbrowser->Connect("Clicked()", "rs_mainframe", this, "DoTBrowser()");
 	update->Connect("Clicked()","rs_mainframe", this, "DoUpdate()");
 	delay->Select(4, kTRUE);
 	delay->GetTextEntry()->SetText("4s");
@@ -2031,6 +2049,7 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hinfo_t &the_hinfo)
 	// move to the right canvas and draw!
 	the_canvas->cd();
 	ExecuteMacro(the_hinfo.macroData, the_macro);
+	the_canvas->Update();
 }
 
 void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
@@ -2108,6 +2127,7 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 		// move to the right canvas and draw!
 		the_canvas->cd();
 		ExecuteMacro(macro_data, the_macro);
+		the_canvas->Update();
 		//f->Close();
 		//unlink( TMP_FILENAME.c_str() );
 		//file_list->Clear();

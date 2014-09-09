@@ -82,6 +82,7 @@ class rs_mainframe:public TGMainFrame {
 		void DoTreeInfoShort(void);
 		void DoOnline(void);
 		void DoSetArchiveFile(void);
+		void DoTBrowser(void);
 		void DoLoadHistsList(void);
 		void DoSaveHistsList(void);
 		void DoConfigMacros(void);
