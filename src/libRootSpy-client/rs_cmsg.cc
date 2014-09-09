@@ -1029,7 +1029,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
     if(hdef_iter==RS_INFO->histdefs.end()){
 	_DBG_<<"No hdef_t object for hnamepath=\""<<hnamepath<<"\"!"<<endl;
-	_DBG_<<"Throwing away histogram."<<endl;
+	_DBG_<<"Throwing away macro."<<endl;
 	RS_INFO->Unlock();
 	return;
     }
@@ -1047,7 +1047,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
     if(server_info_iter==RS_INFO->servers.end()){
 	_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
-	_DBG_<<"Throwing away histogram."<<endl;
+	_DBG_<<"Throwing away macro."<<endl;
 	RS_INFO->Unlock();
 	return;
     }
@@ -1089,7 +1089,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     // save each macro in a different file per server
     // we'll concatenate these later
     stringstream tmpfile_stream;
-    tmpfile_stream << "." << server << "." << hnamepath << endl;
+    tmpfile_stream << "." << server << "." << hnamepath;
     string tmpfile_name (tmpfile_stream.str());
     for(string::iterator str_itr = tmpfile_name.begin(); str_itr != tmpfile_name.end(); str_itr++) {
 	    // clean up filename by making sure that we at least dont have any '/'s
