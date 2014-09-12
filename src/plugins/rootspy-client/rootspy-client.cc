@@ -236,8 +236,8 @@ void rsList(void)
 	}
 	
 	// Print all histograms
-	cout << "type name" << string(max_name_len+2-4, ' ') << "  title" << endl;
-	cout << "---- ----" << string(max_name_len+2-4, '-') << " ---------" << endl;
+	cout << " type  name" << string(max_name_len+2-4, ' ') << "  title" << endl;
+	cout << "------ ----" << string(max_name_len+2-4, '-') << " ---------" << endl;
 	for(hiter=histdefs.begin(); hiter!=histdefs.end(); hiter++){
 		hdef_t &hdef = hiter->second;
 		string type = "??";
@@ -246,6 +246,7 @@ void rsList(void)
 			case hdef_t::oneD:    type = "1D";  break;
 			case hdef_t::twoD:    type = "2D";  break;
 			case hdef_t::threeD:  type = "3D";  break;
+			case hdef_t::profile: type = "prof";  break;
 			case hdef_t::macro:   type = "macro";  break;
 		}
 		
