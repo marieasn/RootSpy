@@ -157,6 +157,8 @@ void DRootSpy::Initialize(pthread_mutex_t *mutex, string myUDL)
 	}else{
 		cout << "Unable to create semephore. Final Histograms feature disabled." << endl;
 	}
+	
+	VERBOSE=1;
 }
 
 //---------------------------------
@@ -188,7 +190,7 @@ DRootSpy::~DRootSpy()
 void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 
 	if(!msg)return;
-	cout<<"Received message --  Subject:"<<msg->getSubject()
+	if(VERBOSE>1) cout<<"Received message --  Subject:"<<msg->getSubject()
 			<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
 
 	// The convention here is that the message "type" always constains the
@@ -203,7 +205,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	//be needed below, depending on the command)
 	cMsgMessage *response;
 	if(msg->isGetRequest()) {
-	    _DBG_ << "responding to direct message..." << endl;
+	    if(VERBOSE>1) _DBG_ << "responding to direct message..." << endl;
 	    response = msg->response();
 	} else {
 	    response = new cMsgMessage();
@@ -253,20 +255,20 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	} else 	if(cmd == "get macro") {
 		// Get name of requested histogram
 		string hnamepath = msg->getString("hnamepath");
-		_DBG_ << "sending out macro " << hnamepath << endl;
+		if(VERBOSE>1) _DBG_ << "sending out macro " << hnamepath << endl;
 		getMacro(*response, hnamepath);
 	} else 	if(cmd == "provide final") {
 		finalhists = msg->getStringVector("hnamepaths");
 		finalsender = msg->getType();
 		sem_post(&RootSpy_final_sem);
-		cerr<<"got finalhists"<<endl;
+		if(VERBOSE>1) cerr<<"got finalhists"<<endl;
 		delete msg;
 		return;
 	}
 
 	// if we've handled a synchronous request, be sure to flush the output buffer
 	if(msg->isGetRequest()) {
-	    _DBG_ << "flushing queues!" << endl;
+	    if(VERBOSE>1) _DBG_ << "flushing queues!" << endl;
 	    cMsgSys->flush();
 	}else{
 		 delete response;
@@ -450,7 +452,7 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath) {
 	tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
 	f->CopyTo(*tm);
 
-	_DBG_ << " TMemFile length = " << f->GetEND() << endl;
+	if(VERBOSE>1)_DBG_ << " TMemFile length = " << f->GetEND() << endl;
 
 	response.setByteArray(tm->Buffer(),tm->Length());
 	response.add("macro_name", the_macro.name);
@@ -511,7 +513,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	int64_t firstentry = nentries_in_tree - nentries_to_save;
 	if(firstentry<0 || nentries_to_save<=0) firstentry=0;
 	int64_t nentries = nentries_in_tree - firstentry;
-	cout << "Sending TTree " << tree->GetName() << "  (entries: " << nentries_in_tree << "  sending: " << nentries << ")" << endl;
+	if(VERBOSE>1) cout << "Sending TTree " << tree->GetName() << "  (entries: " << nentries_in_tree << "  sending: " << nentries << ")" << endl;
 
 	// Copy TTree
 	TTree *tree_copy = tree;
@@ -689,7 +691,7 @@ void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 void DRootSpy::findTreeNamesForMsg(TDirectory *dir, vector<string> &tree_names, 
 				   vector<string> &tree_titles, vector<string> &tree_paths) 
 {
-	_DBG_ << "Looking for trees in: " << dir->GetName() << endl;
+	if(VERBOSE>1)_DBG_ << "Looking for trees in: " << dir->GetName() << endl;
 
     TList *list = dir->GetList();
     TIter next(list);

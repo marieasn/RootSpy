@@ -27,7 +27,7 @@ using namespace std;
 #include <TFile.h>
 
 bool DONE =false;
-uint32_t DELAY=1000; // in microseconds
+uint32_t DELAY=400000; // in microseconds
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 int VERBOSE=0;
 int REQUESTS_SENT=0;
@@ -59,7 +59,7 @@ void sigHandler(int sig) { DONE = true; }
 string PrintToString(hinfo_t &hinfo, hdef_t &hdef)
 {
 	stringstream ss;
-	int spaces = 17 - hinfo.serverName.length();
+	int spaces = 25 - hinfo.serverName.length();
 	if(spaces<1) spaces = 1;
 	ss << string(spaces, ' ');
 	ss << hinfo.serverName;
@@ -295,14 +295,29 @@ int main(int narg, char *argv[])
 
 				map<hid_t, double>::iterator it_lrt = last_request_time.find(hid);
 				if(it_lrt != last_request_time.end()){
+
+					// Time we last sent a request
+					double lrt = it_lrt->second;
 					
 					// Look to see if we've received this histogram from this server
 					map<hid_t,hinfo_t>::iterator it_hinfo = hinfos.find(hid);
 					if(it_hinfo != hinfos.end()){
-						double lrt = it_lrt->second;
-						double received = it_hinfo->second.received;
-						if( lrt<received ) REQUESTS_SATISFIED++;
-						if( (lrt>received) && ((now-lrt)<2.0)) continue; // Have not received response since our last request
+
+						double received = it_hinfo->second.received - start_time;
+						if( lrt<received ){
+							REQUESTS_SATISFIED++;
+						}else{
+							// Don't send second request within 2 seconds of previous
+							if((now-lrt)<2.0) continue;
+
+							// Stop requesting histograms from non-responsive servers
+							if((now-received)>10.0 ) continue;
+						}
+					}else{
+						// If we've never received this histogram and
+						// it has been less than 2 seconds, don't send
+						// another request
+						if((now-lrt)<2.0) continue;
 					}
 				}
 				hists_to_request.push_back(hid);
@@ -328,7 +343,7 @@ int main(int narg, char *argv[])
 			map<hid_t,hinfo_t> &hinfos = RS_INFO->hinfos;
 			for(map<hid_t,hinfo_t>::iterator iter=hinfos.begin(); iter!=hinfos.end(); iter++){
 				hinfo_t &hinfo = iter->second;
-				if(now + start_time - hinfo.received > 2.0) continue; // don't print lines for hists that are no longer being updated
+				if(now + start_time - hinfo.received > 4.0) continue; // don't print lines for hists that are no longer being updated
 				hdef_t &hdef = RS_INFO->histdefs[hinfo.hnamepath];
 				string line = PrintToString(hinfo, hdef);
 				lines.push_back(line);

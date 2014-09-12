@@ -52,6 +52,8 @@ class DRootSpy:public cMsgCallback{
     bool AddMacroHistogram(string name, string path, TH1 *the_hist);
     bool AddMacroHistogram(string name, string path, vector<TH1*> the_hists);
     bool SetMacroVersion(string name, string path, int version_number);
+	 
+	 int VERBOSE;
 
  protected:
     
