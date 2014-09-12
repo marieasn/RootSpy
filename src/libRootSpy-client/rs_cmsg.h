@@ -8,6 +8,8 @@
 #ifndef _rs_cmsg_
 #define _rs_cmsg_
 
+#include <sys/time.h>
+
 #include "hinfo_t.h"
 
 #include <vector>
@@ -48,6 +50,16 @@ class rs_cmsg:public cMsgCallback{
 		void RequestMacroSync(string servername, string hnamepath, timespec_t &myTimeout);
 
 		bool IsOnline() { return is_online; }
+
+		static double GetTimeMS(void){
+			struct timeval tval;
+			struct timezone tzone;
+			gettimeofday(&tval, &tzone);
+			return (double)tval.tv_sec+(double)tval.tv_usec/1.0E6;
+		}
+
+		int verbose;
+
 		
 	protected:
 

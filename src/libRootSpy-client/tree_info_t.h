@@ -78,7 +78,8 @@ class tree_info_t:public tree_id_t{
 
 		bool operator== (const tree_info_t& T);
 
-		time_t received;
+		double received;            // Time recieved (in ms since 1970)
+		double rate;                // Rate calculated using time difference between receiving this histo
 		TTree* tree;
 
 		//bool active;					// sees if the histogram is usable

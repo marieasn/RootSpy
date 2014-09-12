@@ -56,6 +56,9 @@ string join( vector<string>::const_iterator begin, vector<string>::const_iterato
 //---------------------------------
 rs_cmsg::rs_cmsg(string &udl, string &name)
 {
+
+	verbose = 2; // higher values=more messages. 0=minimal messages
+
 	// Connect to cMsg system
         is_online = true;
 	string myDescr = "Access ROOT objects in a running program";
@@ -398,7 +401,7 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	
 	if(RS_INFO->servers.find(sender)==RS_INFO->servers.end()){
 		RS_INFO->servers[sender] = server_info_t(sender);
-		cout<<"Added \""<<sender<<"\" to server list."<<endl;
+		if(verbose>=2) cout<<"Added \""<<sender<<"\" to server list."<<endl;
 	}else{
 		// Update lastHeardFrom time for this server
 		RS_INFO->servers[sender].lastHeardFrom = time(NULL);
@@ -485,7 +488,7 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		hist_paths = msg->getStringVector("hist_paths");
 		hist_titles = msg->getStringVector("hist_titles");
 	} catch (cMsgException e) {
-		_DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+		if(verbose>0) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
 		return;
 	}
 
@@ -504,11 +507,11 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 
 	// If the response is incomplete for any reason, then alert user and return.
 	if(!good_response){
-		_DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+		if(verbose>0) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
 		return;
 	}
 
-	_DBG_ << "got histogram list from " << server << endl;
+	if(verbose>=2) _DBG_ << "got histogram list from " << server << endl;
 
 	// Looks like we got a good response. Loop over histograms and add them to
 	// list of hdef_t objects kept in RS_INFO. If there is already an entry
@@ -612,7 +615,7 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 		macro_names = msg->getStringVector("macro_names");
 		macro_paths = msg->getStringVector("macro_paths");
 	} catch (cMsgException e) {
-		_DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+		_DBG_<<"Poorly formed response for \"macros list\". Ignoring."<<endl;
 		return;
 	}
 
@@ -838,7 +841,9 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     T->Print();
 
     // Update tree_info
-    tree_info->received = time(NULL);
+	double last_received = tree_info->received;
+    tree_info->received = GetTimeMS();
+	tree_info->rate = 1.0/(tree_info->received - last_received);
     if(tree_info->tree){
 	// Delete old histo
 	delete tree_info->tree;
@@ -932,7 +937,9 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     }
     
     // Update hinfo
-    hinfo->received = time(NULL);
+	double last_received = hinfo->received;
+    hinfo->received = GetTimeMS();
+	hinfo->rate = 1.0/(hinfo->received - last_received);
     if(hinfo->hist){
 	// Subtract old histo from sum
 	if(hdef->sum_hist)hdef->sum_hist->Add(hinfo->hist, -1.0);
@@ -961,7 +968,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
     
     // Add new histogram to sum and flag it as modified
-    _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
+    if(verbose>=2) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
     if(hdef->sum_hist){
 	// Reset sum histo first if showing only one histo at a time
 	if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
@@ -980,7 +987,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 	//hist_sum_dir = RS_INFO->sum_dir->GetDirectory(hdef->path.c_str());
       }
 
-      cout << "saving in directory " << sum_path << endl;
+      if(verbose>=2) cout << "saving in directory " << sum_path << endl;
 
       // if the directory doesn't exist, make it
       // (needs better error checking)
@@ -1052,7 +1059,6 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	RS_INFO->Unlock();
 	return;
     }
-    server_info_t *server_info = &(server_info_iter->second);
     
     // Get pointer to hinfo_t
     hid_t hid(server, hnamepath);
@@ -1145,8 +1151,10 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     //T->Print();
     
     // Update hinfo
-    hinfo->received = time(NULL);
-    
+	double last_received = hinfo->received;
+    hinfo->received = GetTimeMS();
+ 	hinfo->rate = 1.0/(hinfo->received - last_received);
+   
     // Adds the new histogram to the hists map in hdef_t
     map<string, hinfo_t>::iterator hinfo_it = hdef->hists.find(server);
     

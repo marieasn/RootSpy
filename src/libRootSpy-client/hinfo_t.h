@@ -114,7 +114,8 @@ class hinfo_t:public hid_t{
 		
 		bool operator== (const hinfo_t& hi);
 
-		time_t received;
+		double received;            // Time recieved (in ms since 1970)
+		double rate;                // Rate calculated using time difference between receiving this histo
 		TH1* hist;
 
 		bool active;					// sees if the histogram is usable
