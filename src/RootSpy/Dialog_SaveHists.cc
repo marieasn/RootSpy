@@ -450,7 +450,7 @@ void Dialog_SaveHists::UpdateListTree(vector<hid_t> hids)
 // histograms to be saved. The tosave boolean is set to true and that is recognized once the timer loops over it.
 void Dialog_SaveHists::DoSave(void) {
 	thefileinfo = new TGFileInfo();
-	TGFileDialog* filediag = new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDSave, thefileinfo);
+	new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDSave, thefileinfo);
 //	_DBG__;
 	displaybar = true;
 	cout<<"display bar do save: "<<displaybar<<endl;

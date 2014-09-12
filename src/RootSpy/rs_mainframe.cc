@@ -2224,7 +2224,6 @@ void rs_mainframe::DoReset()
 static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist)
 {
 	Bool_t status = kTRUE;
-	Bool_t onlyListed = kFALSE;
 
 	// Get the dir name
 	TString path(target->GetPath());
