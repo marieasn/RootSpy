@@ -876,6 +876,8 @@ bool DRootSpy::RegisterMacro(string name, string path, string macro_data)
 	string hnamepath = path + "/" + name;
 	macros[hnamepath] = macro_info_t(name,path);
 	macros[hnamepath].macro = macro_data;
+	
+	return true;
 }
 
 //---------------------------------
