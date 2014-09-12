@@ -24,7 +24,7 @@ void sigHandler(int sig) { DONE = true; }
 
 int main(int narg, char *argv[])
 {
-	new DRootSpy();
+	DRootSpy *drootspy = new DRootSpy();
 
 	signal(SIGINT, sigHandler);
 	
@@ -136,6 +136,16 @@ int main(int narg, char *argv[])
 
 	cout << endl;
 	cout << "Ending" << endl;
+	
+	delete h_px;
+	delete h_py;
+	delete h_pz;
+	delete h_pvE;
+	delete h_E;
+	delete h_Mass;
+	delete h_Mass_E;
+	delete T;
+	delete drootspy;
 
 	return 0;
 }

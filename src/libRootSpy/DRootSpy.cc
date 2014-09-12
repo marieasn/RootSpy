@@ -268,6 +268,8 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	if(msg->isGetRequest()) {
 	    _DBG_ << "flushing queues!" << endl;
 	    cMsgSys->flush();
+	}else{
+		 delete response;
 	}
 
 	delete msg;
