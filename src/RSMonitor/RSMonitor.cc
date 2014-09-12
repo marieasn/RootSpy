@@ -29,6 +29,9 @@ using namespace std;
 bool DONE =false;
 uint32_t DELAY=1000; // in microseconds
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
+int VERBOSE=0;
+int REQUESTS_SENT=0;
+int REQUESTS_SATISFIED=0;
 
 
 rs_mainframe *RSMF;
@@ -36,7 +39,8 @@ rs_cmsg *RS_CMSG;
 rs_info *RS_INFO;
 pthread_rwlock_t *ROOT_MUTEX;
 
-
+void Usage(void);
+void ParseCommandLineArguments(int narg, char *argv[]);
 void sigHandler(int sig) { DONE = true; }
 
 #define ESC (char)0x1B
@@ -115,8 +119,10 @@ void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos)
 	PRINTCENTERED(2, "ROOTSpy Monitor");
 	PRINTAT(1, 3, string(Ncols,'-'));
 
-	MOVETO(3, 4); cout << "Number of histograms  published: " << Nhdefs;
-	MOVETO(3, 5); cout << "Number of histograms downloaded: " << Nhinfos;
+	MOVETO( 3, 4); cout << "Number of histograms  published: " << Nhdefs;
+	MOVETO( 3, 5); cout << "Number of histograms downloaded: " << Nhinfos;
+	MOVETO(40, 4); cout << "Number of requests   issued: " << REQUESTS_SENT;
+	MOVETO(40, 5); cout << "Number of requests received: " << REQUESTS_SATISFIED;
 	PRINTAT(1, 6, string(Ncols,'.'));
 
 	for(unsigned int i=0; i<lines.size(); i++){
@@ -141,13 +147,98 @@ void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos)
 }
 
 //------------------------------
+// Usage
+//------------------------------
+void Usage(void)
+{
+	string str=""
+	" Usage:\n"
+	"     RSMonitor [options]\n"
+	"\n"
+	"Retreive all histograms from available RootSpy\n"
+	"servers and print list of them to screen along\n"
+	"with retrieval statistics.\n"
+	"\n"
+	"  options:\n"
+	"\n"
+	" -h,--help  Print this usage statement\n"
+	" -v verbose Set verbosity level (def. is 0)\n"
+	" -udl UDL   Set the RootSpy UDL for connecting\n"
+	"            to the cMsg server.\n"
+	" -delay us  Set the minimum delay between\n"
+	"            requests for a histogram. Value is\n"
+	"            in microseconds. (See not below)\n"
+	"\n"
+	"If the -udl option is not given, the value is\n"
+	"taken from the ROOTSPY_UDL environment variable.\n"
+	"If that is not set, then the default value of\n"
+	"  cMsg://127.0.0.1/cMsg/rootspy  is used.\n"
+	"\n"
+	"The value of the -delay option is used as a sleep\n"
+	"time between rounds of requesting histograms.\n"
+	"Thus, a histogram will not be requested more\n"
+	"frequently than once every \"delay\" microseconds.\n"
+	"Histogram requests are only sent out when a histo\n"
+	"is first declared by the server (via a response\n"
+	"to a \"list hists\" request) or after the histogram\n"
+	"has been received. Thus, the servers are never\n"
+	"flooded with requests at a higher rate than they\n"
+	"can keep up with. Note that the screen updates at\n"
+	"1Hz and is independent of the value of delay.\n"
+	"\n"
+	"Rates displayed are calculated simply from the\n"
+	"difference in times between the last two times\n"
+	"a histogram was received. It is measured by a\n"
+	"millisecond level clock so is pretty inaccurate\n"
+	"for rates approaching 1kHz.\n"
+	"\n";
+
+	cout << str << endl;
+	exit(0);
+}
+
+//------------------------------
+// ParseCommandLineArguments
+//------------------------------
+void ParseCommandLineArguments(int narg, char *argv[])
+{
+	const char *ptr = getenv("ROOTSPY_UDL");
+	if(ptr)ROOTSPY_UDL = ptr;
+
+	for(int iarg=1; iarg<narg; iarg++){
+		string arg = argv[iarg];
+		string next = (iarg+1)<narg ? argv[iarg+1]:"";
+		
+		bool needs_arg = false;
+
+		if(arg=="-h" || arg=="--help" || arg=="-help") Usage();
+		else if(arg=="-v" || arg=="--verbose") {VERBOSE = atoi(next.c_str()); needs_arg=true;}
+		else if(arg=="-udl" || arg=="--udl") {ROOTSPY_UDL = next; needs_arg=true;}
+		else if(arg=="-delay" || arg=="--delay") {DELAY = atoi(next.c_str()); needs_arg=true;}
+		else{
+			cout << "Unknown argument: " << arg << endl;
+			exit(-2);
+		}
+
+		if(needs_arg){
+			if((iarg+1>=narg) || next[0]=='-'){
+				cout << "Argument \""<<arg<<"\" needs an argument!" << endl;
+				exit(-1);
+			}
+			
+			iarg++;
+		}
+	}
+}
+
+//------------------------------
 // main
 //------------------------------
 int main(int narg, char *argv[])
 {
 
-	const char *ptr = getenv("ROOTSPY_UDL");
-	if(ptr)ROOTSPY_UDL = ptr;
+	ParseCommandLineArguments(narg, argv);
+
 
 	// Create rs_info object
 	RS_INFO = new rs_info();
@@ -163,7 +254,7 @@ int main(int narg, char *argv[])
 	string CMSG_NAME = string(str);
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
-	RS_CMSG->verbose=1;
+	RS_CMSG->verbose=VERBOSE;
 
 	signal(SIGINT, sigHandler);
 	
@@ -210,6 +301,7 @@ int main(int narg, char *argv[])
 					if(it_hinfo != hinfos.end()){
 						double lrt = it_lrt->second;
 						double received = it_hinfo->second.received;
+						if( lrt<received ) REQUESTS_SATISFIED++;
 						if( (lrt>received) && ((now-lrt)<2.0)) continue; // Have not received response since our last request
 					}
 				}
@@ -225,6 +317,7 @@ int main(int narg, char *argv[])
 			string &hnamepath = hists_to_request[i].hnamepath;
 			RS_CMSG->RequestHistogram(server, hnamepath);
 			last_request_time[hid_t(server, hnamepath)] = now;
+			REQUESTS_SENT++;
 		}
 
 		// Update screen occasionally
@@ -260,3 +353,6 @@ int main(int narg, char *argv[])
 
 	return 0;
 }
+
+
+

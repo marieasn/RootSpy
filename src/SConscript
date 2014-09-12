@@ -2,7 +2,7 @@
 Import('*')
 
 subdirs = ['libRootSpy', 'libRootSpy-client']
-subdirs.extend(['RootSpy', 'RSArchiver', 'RSDumpTree'])
+subdirs.extend(['RootSpy', 'RSArchiver', 'RSDumpTree', 'RSMonitor'])
 subdirs.extend(['plugins'])
 subdirs.extend(['examples'])
 
