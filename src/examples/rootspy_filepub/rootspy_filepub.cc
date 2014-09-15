@@ -14,8 +14,39 @@ using namespace std;
 #include <TROOT.h>
 #include <TList.h>
 #include <TKey.h>
+#include <TDirectory.h>
 
 
+void ReadIntoMemoryRecursive(TDirectory *dir, int narg, char *argv[])
+{
+	// Read in some or all histograms and TTrees into memory
+	TIter iter(dir->GetListOfKeys());
+	TKey *key;
+	while( (key = (TKey*)iter()) ) {
+		string name(key->GetName());
+
+		// Optionally read in this object if the user specified
+		// additional arguments on the command line AND this
+		// matches one of them.
+		bool read_obj = true;
+		if(narg>2){
+			read_obj = false;
+			for(int i=2; i<narg; i++){
+				if(string(argv[i]) == name) read_obj = true;
+			}
+		}
+
+		if(!read_obj) continue;
+
+		cout << "Reading: " << name << endl; 
+		TObject *obj = key->ReadObj();
+
+		// if this is a subdirectory, load objects from it as well
+		TDirectory *subdir = dynamic_cast<TDirectory*>(obj);
+		if(subdir!=NULL && subdir!=dir) ReadIntoMemoryRecursive(subdir, narg, argv);
+	}
+
+}
 
 int main(int narg, char *argv[])
 {
@@ -42,28 +73,8 @@ int main(int narg, char *argv[])
 		return -2;
 	}
 
-	// Read in some or all histograms and TTrees into memory
-	TIter iter(f->GetListOfKeys());
-	TKey *key;
-	while( (key = (TKey*)iter()) ) {
-		string name(key->GetName());
-
-		// Optionally read in this object if the user specified
-		// additional arguments on the command line AND this
-		// matches one of them.
-		bool read_obj = true;
-		if(narg>2){
-			read_obj = false;
-			for(int i=2; i<narg; i++){
-				if(string(argv[i]) == name) read_obj = true;
-			}
-		}
-
-		if(!read_obj) continue;
-
-		cout << "Reading: " << name << endl; 
-		key->ReadObj();
-	}
+	// Load objects into memory
+	ReadIntoMemoryRecursive(f, narg, argv);
 
 	// Create DRootSpy object
 	new DRootSpy();
