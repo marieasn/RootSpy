@@ -6,10 +6,12 @@
 //
 
 #include "rs_info.h"
+#include "rs_cmsg.h"
 
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <sstream>
 using namespace std;
 
 
@@ -88,6 +90,94 @@ void rs_info::GetActiveHIDs(vector<hid_t> &active_hids)
 		}
 	}
 	
+}
+
+//---------------------------------
+// RequestHistograms
+//---------------------------------
+int rs_info::RequestHistograms(string hnamepath)
+{
+	int NrequestsSent = 0;
+
+	Lock();
+
+	map<string,hdef_t>::iterator it = histdefs.find(hnamepath);
+	if(it != histdefs.end()){
+		
+		// Loop over servers, requesting this hist from each one (that is active)
+		map<string, bool> &servers = it->second.servers;
+		map<string, bool>::iterator server_iter = servers.begin();
+		for(; server_iter!=servers.end(); server_iter++){
+			//if(server_iter->second){
+				NrequestsSent++;
+				if(it->second.type == hdef_t::macro)
+					RS_CMSG->RequestMacro(server_iter->first, hnamepath);
+				else
+					RS_CMSG->RequestHistogram(server_iter->first, hnamepath);
+			//}
+		}
+	}
+	
+	Unlock();
+	
+	return NrequestsSent;
+}
+
+//---------------------------------
+// GetSumHist
+//---------------------------------
+TH1* rs_info::GetSumHist(string &hnamepath, hdef_t::histdimension_t *type, double *sum_hist_modified, string *servers_str)
+{
+	/// Look through list of currently defined histograms/macros and return info on the
+	/// summed histogram. If the histogram is found, a pointer to it is returned.
+	/// If the type, sum_hist_modified, and servers_str pointers are given, then the values
+	/// are copied into there from the the hdef_t object. If the hnamepath is not found, then
+	/// NULL is returned and the type is set to hdef_t::noneD.
+	///
+	/// The value copied into servers_str (if not NULL) is a representation of the servers
+	/// contributing to the sum. If a single server is all that is contributing, then that
+	/// server is copied in. If more than one, then a string starting with "(N svrs)"
+	/// is copied followed by the names or partial names of the first few servers such that
+	/// the string does not exceed 25 characters. This is primarily here for the RootSpy
+	/// GUI for it to put into the "server" label when displaying a hist.
+
+	Lock();
+
+	TH1 *sum_hist = NULL;
+	if(type) *type = hdef_t::noneD;
+	if(sum_hist_modified) *sum_hist_modified = 0.0;
+	
+	map<string,hdef_t>::iterator it = histdefs.find(hnamepath);
+	if(it != histdefs.end()){
+		hdef_t &hdef = it->second;
+
+		sum_hist = hdef.sum_hist;
+		if(type) *type = hdef.type;
+		if(sum_hist_modified) *sum_hist_modified = hdef.sum_hist_modified;
+		if(servers_str){
+			if(hdef.hists.size() == 0){
+				*servers_str = "<none>";
+			}else if(hdef.hists.size() == 1){
+				*servers_str = (hdef.hists.begin())->first;
+			}else{
+				stringstream ss;
+				ss << "(" << hdef.hists.size() << " servers)\n";
+				map<string, hinfo_t>::iterator it_srv = hdef.hists.begin();
+				int Nlines=1;
+				for(; it_srv!=hdef.hists.end(); it_srv++){
+					ss << it_srv->first << "\n";
+					if(++Nlines >=6){
+						ss << "...";
+					}
+				}
+				*servers_str = ss.str();
+			}
+		}
+	}
+
+	Unlock();
+	
+	return sum_hist;
 }
 
 //---------------------------------

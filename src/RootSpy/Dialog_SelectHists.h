@@ -18,6 +18,7 @@
 #include <TVirtualStreamerInfo.h>
 #include <vector>
 #include <map>
+#include <list>
 #include <TGFileDialog.h>
 
 #ifndef __CINT__
@@ -25,14 +26,16 @@
 #endif //__CINT__
 
 #include "hinfo_t.h"
+#include "RSTab.h"
 
 using namespace std;
 
 class Dialog_SelectHists:public TGMainFrame{
 	public:
-		Dialog_SelectHists(const TGWindow *p, UInt_t w, UInt_t h);
+		Dialog_SelectHists(list<string> *hnamepaths, const TGWindow *p, UInt_t w, UInt_t h);
+		Dialog_SelectHists(RSTab *rstab, const TGWindow *p, UInt_t w, UInt_t h);
+		void Init(list<string> *hnamepaths);
 		virtual ~Dialog_SelectHists();
-		
 		
 		void DoTimer(void);
 		void DoOK(void);
@@ -45,12 +48,15 @@ class Dialog_SelectHists:public TGMainFrame{
 		void GetAllHistos(vector<hid_t> &hids);
 		void CloseWindow(void);
 		void DoFilterHists(void);
-		//void GetHistsFromListTree(vector<hid_t> &hists); // first=server, second=hnamepath
-		//void AddBranchToHists(TGListTreeItem *item, multimap<string,string> &hists);
+		void DoSelectAll(void);
+		void DoSelectNone(void);
+
 
 	protected:
 	
 #ifndef __CINT__
+		RSTab *rstab;
+		list<string> *hnamepaths; // Where to store results
 		rs_info::viewStyle_t viewStyle;
 #endif //__CINT__
 		
@@ -91,11 +97,11 @@ class Dialog_SelectHists:public TGMainFrame{
 		const TGPicture *hdisk_t;
 		const TGPicture *checked_t;
 		const TGPicture *unchecked_t;
-		//JustinB Boolean that is read within DoTimer 
-		//of Dialog_SelectHists to know when to save.
-		bool tosave; 
-		//Justin B. For DoSave().
-		TGFileInfo* fileinfo;
+//		//JustinB Boolean that is read within DoTimer 
+//		//of Dialog_SelectHists to know when to save.
+//		bool tosave; 
+//		//Justin B. For DoSave().
+//		TGFileInfo* fileinfo;
 
 		string filter_str;
 

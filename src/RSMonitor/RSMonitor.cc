@@ -258,18 +258,14 @@ int main(int narg, char *argv[])
 
 	signal(SIGINT, sigHandler);
 	
-	struct timeval last_tval;
-	struct timezone tzone;
-	gettimeofday(&last_tval, &tzone);
-	
 	// Loop forever Getting all Histograms
-	double start_time = rs_cmsg::GetTimeMS();
+	double start_time = rs_cmsg::GetTime();
 	double next_update = 1.0; // time relative to start_time
 	map<hid_t, double> last_request_time;
 	while(!DONE){
 
 		// Get Current time
-		double now = rs_cmsg::GetTimeMS() - start_time; // measure time relative to program start
+		double now = rs_cmsg::GetTime() - start_time; // measure time relative to program start
 		
 		// Loop over currently defined histograms, making list of histograms
 		// to request because they have been updated since our last request 

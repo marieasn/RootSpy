@@ -35,7 +35,10 @@
 #include <TGDockableFrame.h>
 #include <TExec.h>
 #include <TMemFile.h>
+#include <TGTab.h>
 
+
+#include "RSTab.h"
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
 #include "hinfo_t.h"
@@ -44,55 +47,59 @@
 class rs_mainframe:public TGMainFrame {
 
 	public:
-    rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h, bool build_gui);
-		~rs_mainframe(){};
-		
 		enum viewStyle_t_rs{
 			kViewByObject_rs,
 			kViewByServer_rs
 		};
 
-		
+		rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h, bool build_gui);
+		~rs_mainframe();
 
 		void ReadPreferences(void);
 		void SavePreferences(void);
 		
+		// Virtual methods and menu handler
+		void   CloseWindow(void);
+		Bool_t HandleKey(Event_t *event);
+		void   HandleMenu(Int_t id);
+		
 		// Slots for ROOT GUI
 		void DoQuit(void);
-		void MakeTB(void);
-		void DoTimer(void);
-//		void DoSelectServerHist(void);
-		void DoSelectHists(void);
-		//void DoSetVBServer(void);
-		//void DoSetVBObject(void);
-		//void DoRadio(void);
+		void DoMakeTB(void);
+		void DoResetDialog(void);
+		void DoSetScaleOptions(void);
+		void DoNewTabDialog(void);
+		void DoRemoveTabDialog(void);
+		void DoTabSelected(Int_t id);
+		void DoSaveHists(void);
+		void DoTreeInfo(void);
+		void DoConfigMacros(void);
 		void DoSelectDelay(Int_t index);
-		void DoUpdate(void);
-// needs to change back to DoNext(void)
-		void DoNext(void);
-		void DoPrev(void);
 		void DoLoopOverServers(void);
 		void DoLoopOverHists(void);
-		void DoSave(void);
-		void DoSaveHists(void);
-		void DoFinal(void);
-		void DoIndiv(void);
-		void CloseWindow(void);
-		void DoTreeInfo(void);
-		void DoTreeInfoShort(void);
-		void DoOnline(void);
+		void DoTimer(void);
+		void DoUpdate(void);
 		void DoSetArchiveFile(void);
-		void DoTBrowser(void);
-		void DoLoadHistsList(void);
-		void DoSaveHistsList(void);
-		void DoConfigMacros(void);
-		void DoResetDialog(void);
+		void DoTreeInfoShort(void);
 		void DoSetViewOptions(int menu_item);
 		void DoUpdateViewMenu(void);
-		void DoSetScaleOptions(void);
+		void DoLoadHistsList(void);
+		void DoSaveHistsList(void);
+		void DoFinal(void);
+		void DoOnline(void);
 
-		void HandleMenu(Int_t id);
-		Bool_t HandleKey(Event_t *event);
+		// Helper methods for building GUI
+		TGLabel*          AddLabel(TGCompositeFrame* frame, string text, Int_t mode=kTextLeft, ULong_t hints=kLHintsLeft | kLHintsTop);
+		TGTextButton*     AddButton(TGCompositeFrame* frame, string text, ULong_t hints=kLHintsLeft | kLHintsTop);
+		TGCheckButton*    AddCheckButton(TGCompositeFrame* frame, string text, ULong_t hints=kLHintsLeft | kLHintsTop);
+		TGPictureButton*  AddPictureButton(TGCompositeFrame* frame, string picture, string tooltip="", ULong_t hints=kLHintsLeft | kLHintsTop);
+		TGFrame*          AddSpacer(TGCompositeFrame* frame, UInt_t w=10, UInt_t h=10, ULong_t hints=kLHintsCenterX | kLHintsCenterY);
+
+
+		TGTab *fMainTab;
+		TGLabel *lUDL;
+		TGCheckButton *bAutoRefresh;
+		TGCheckButton *bAutoAdvance;
 		
 		TGMainFrame *dialog_selectserverhist;
 		TGMainFrame *dialog_selecthists;
@@ -130,6 +137,8 @@ class rs_mainframe:public TGMainFrame {
 		bool can_view_indiv;
 
 		map<string,string> macro_files;
+		list<RSTab*> rstabs;
+		RSTab *current_tab;
 
 
 	protected:
@@ -145,9 +154,9 @@ class rs_mainframe:public TGMainFrame {
 	
 		TTimer *timer;
 		long sleep_time; // in milliseconds
-		time_t last_called;				// last time DoTimer() was called
-		time_t last_ping_time;			// last time we broadcast for a server list
-		time_t last_hist_requested;	// last time we requested a histogram (see rs_info for time we actually got it)
+		double last_called;				// last time DoTimer() was called
+		double last_ping_time;			// last time we broadcast for a server list
+		double last_hist_requested;	    // last time we requested list of histograms
 		
 		
 		TGRadioButton *VBServer;
@@ -156,6 +165,8 @@ class rs_mainframe:public TGMainFrame {
 		
 		hid_t last_requested;	// last hnamepath requested
 		TH1 *last_hist_plotted;
+		
+	
 		void CreateGUI(void);
 
 		// info for comparing with archived histograms

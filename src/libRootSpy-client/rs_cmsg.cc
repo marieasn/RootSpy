@@ -26,6 +26,8 @@ using namespace std;
 #include <TMemFile.h>
 #include <TKey.h>
 
+double rs_cmsg::start_time=0.0; // overwritten on fist call to rs_cmsg::GetTime()
+
 
 //// See http://www.jlab.org/Hall-D/software/wiki/index.php/Serializing_and_deserializing_root_objects
 //class MyTMessage : public TMessage {
@@ -842,7 +844,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 
     // Update tree_info
 	double last_received = tree_info->received;
-    tree_info->received = GetTimeMS();
+    tree_info->received = GetTime();
 	tree_info->rate = 1.0/(tree_info->received - last_received);
     if(tree_info->tree){
 	// Delete old histo
@@ -904,20 +906,18 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     
     // Get pointer to hinfo_t
     hid_t hid(server, hnamepath);
-    hinfo_t *hinfo = NULL;
     map<hid_t,hinfo_t>::iterator hinfo_iter = RS_INFO->hinfos.find(hid);
     if(hinfo_iter==RS_INFO->hinfos.end()){
 	// hinfo_t object doesn't exist. Add one to RS_INFO
 	RS_INFO->hinfos[hid] = hinfo_t(server, hnamepath);
 	hinfo_iter = RS_INFO->hinfos.find(hid);
     }
-    hinfo = &(hinfo_iter->second);
+    hinfo_t *hinfo = &(hinfo_iter->second);
     
     // Lock ROOT mutex while working with ROOT objects
     pthread_rwlock_wrlock(ROOT_MUTEX);
     
     // Get ROOT object from message and cast it as a TNamed*
-    pthread_rwlock_wrlock(ROOT_MUTEX);
     MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
     TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
     if(!namedObj){
@@ -938,7 +938,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     
     // Update hinfo
 	double last_received = hinfo->received;
-    hinfo->received = GetTimeMS();
+    hinfo->received = GetTime();
 	hinfo->rate = 1.0/(hinfo->received - last_received);
     if(hinfo->hist){
 	// Subtract old histo from sum
@@ -1002,9 +1002,8 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
       hdef->sum_hist->SetDirectory(hist_sum_dir);
     }
 
-    //would want to update the hdef_t time stamp here (Justin B)
-    //_DBG_<<hdef->sum_hist<<endl;
-    hdef->sum_hist_modified = true;
+    // Record time we last modified the sum histo
+    hdef->sum_hist_modified = GetTime();
     
     //Justin B
     hdef->sum_hist_present = true;
@@ -1152,7 +1151,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     
     // Update hinfo
 	double last_received = hinfo->received;
-    hinfo->received = GetTimeMS();
+    hinfo->received = GetTime();
  	hinfo->rate = 1.0/(hinfo->received - last_received);
    
     // Adds the new histogram to the hists map in hdef_t

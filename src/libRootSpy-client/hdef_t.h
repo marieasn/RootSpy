@@ -105,7 +105,7 @@ class hdef_t{
 		histdimension_t type; 	// 2D, 3D, etc
 		TH1* sum_hist;				// Pointer to sum histogram
 		map<string, hinfo_t> hists;	// key is server name Pointer map to all summed hists in sum_hist
-		bool sum_hist_modified;	// has the sum_hist histo been modified? (true when modified. false when drawn)
+		double sum_hist_modified;	// last time sum_hist was modified in seconds as returned by rs_cmsg::GetTime()
 /*JustinB*/     bool sum_hist_present; //for SaveHists() method in rs_mainframe class to know when sum_hists are ready.
 
 		map<string, bool> servers;	// servers that can provide this histogram// key=server val=histo was

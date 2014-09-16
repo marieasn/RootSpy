@@ -51,14 +51,18 @@ class rs_cmsg:public cMsgCallback{
 
 		bool IsOnline() { return is_online; }
 
-		static double GetTimeMS(void){
+		// Static method to return time in seconds with microsecond accuracy
+		static double GetTime(void){
 			struct timeval tval;
 			struct timezone tzone;
 			gettimeofday(&tval, &tzone);
-			return (double)tval.tv_sec+(double)tval.tv_usec/1.0E6;
+			double t = (double)tval.tv_sec+(double)tval.tv_usec/1.0E6;
+			if(start_time==0.0) start_time = t;
+			return t - start_time;
 		}
 
 		int verbose;
+		static double start_time;
 
 		
 	protected:

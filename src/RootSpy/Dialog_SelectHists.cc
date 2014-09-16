@@ -31,11 +31,33 @@ using namespace std;
 //---------------------------------
 // Dialog_SelectHists    (Constructor)
 //---------------------------------
-Dialog_SelectHists::Dialog_SelectHists(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
+Dialog_SelectHists::Dialog_SelectHists(list<string> *hnamepaths, const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
 {
+	this->rstab = NULL;
+	Init(hnamepaths);
+}
+
+//---------------------------------
+// Dialog_SelectHists    (Constructor)
+//---------------------------------
+Dialog_SelectHists::Dialog_SelectHists(RSTab *rstab, const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
+{
+	this->rstab = rstab;
+	Init(&rstab->hnamepaths);
+}
+
+//---------------------------------
+// Init
+//---------------------------------
+void Dialog_SelectHists::Init(list<string> *hnamepaths)
+{
+	// Store pointer to the container where we should store
+	// the results after the user hits "OK"
+	this->hnamepaths = hnamepaths;
+
 	// Define all of the of the graphics objects. 
 	CreateGUI();
-	cout<<gClient->GetPicturePool()->GetPath()<<endl;
+
 	// Set up timer to call the DoTimer() method repeatedly
 	// so events can be automatically advanced.
 	timer = new TTimer();
@@ -70,19 +92,26 @@ Dialog_SelectHists::Dialog_SelectHists(const TGWindow *p, UInt_t w, UInt_t h):TG
 Dialog_SelectHists::~Dialog_SelectHists()
 {
 
-	cout<<"escaped destructor"<<endl;
 }
 
-
-void Dialog_SelectHists::CloseWindow(void) {
-	timer->Stop();
-	delete timer;
+//-------------------
+// CloseWindow
+//-------------------
+void Dialog_SelectHists::CloseWindow(void)
+{
+_DBG__;
+	if(timer){
+		timer->Stop();
+		delete timer;
+		timer = NULL;
+	}
 	DeleteWindow();
 	RSMF->RaiseWindow();
 	RSMF->RequestFocus();
 	UnmapWindow();
-	RSMF->delete_dialog_selecthists = true;
+_DBG__;
 }
+
 //-------------------
 // DoTimer
 //-------------------
@@ -145,59 +174,78 @@ void Dialog_SelectHists::DoTimer(void)
 //---------------------------------
 void Dialog_SelectHists::DoOK(void)
 {	
-	RS_INFO->Lock();	
 
-	// Loop over server items and copy the check box status to the appropriate
-	// place in RS_INFO. Specfically, if we are viewing by object, then the server
-	// checkbox corresponds to the values in RS_INFO->histdefs.servers. If viewing
-	// by server, then is corresponds to the active flag in RS_INFO->servers[i].
-	map<hid_t, TGListTreeItem*>::iterator server_items_iter = server_items.begin();
-	for(; server_items_iter!=server_items.end(); server_items_iter++){
-		const hid_t &hid = server_items_iter->first;
-		TGListTreeItem *item = server_items_iter->second;
-		if(viewStyle==rs_info::kViewByObject){
-			map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid.hnamepath);
-			hdef_iter->second.servers[hid.serverName] = item->IsChecked();
-		}else{
-			map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(hid.serverName);
-			server_info_iter->second.active = item->IsChecked();
-		}
-	}
-
-	// Similar to above except for histos. If viewing by object, then the value
-	// goes into RS_INFO->histdefs[].active. If viewing by server, it corresponds 
-	// to RS_INFO->histdefs.servers
 	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
 	for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
 	
 		const hid_t &hid = hist_items_iter->first;
 		TGListTreeItem *item = hist_items_iter->second;
 		
-		map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid.hnamepath);
-		if(viewStyle==rs_info::kViewByObject){
-			hdef_iter->second.active = item->IsChecked();
+		// Look for this item in the list of hnamepaths to display
+		list<string>::iterator it = find(hnamepaths->begin(), hnamepaths->end(), hid.hnamepath);
+		if(it == hnamepaths->end()){
+			if(	item->IsChecked() ) hnamepaths->push_back(hid.hnamepath);
 		}else{
-			hdef_iter->second.servers[hid.serverName] = item->IsChecked();
+			if(!item->IsChecked() ) hnamepaths->erase(it);
 		}
 	}
-
-	// If the RS_INFO->current value is not set, then set it to the first server/histo
-	// and set the flag to have DoUpdate called
-	if(RS_INFO->servers.find(RS_INFO->current.serverName)==RS_INFO->servers.end()){
-		if(RS_INFO->servers.size()>0){
-			map<string,server_info_t>::iterator server_iter = RS_INFO->servers.begin();
-			if(server_iter->second.hnamepaths.size()>0){
-				RS_INFO->current = hid_t(server_iter->first, server_iter->second.hnamepaths[0]);
-			}
-		}
-	}
-	RSMF->can_view_indiv = true;
-	RS_INFO->viewStyle = viewStyle;
-	RS_INFO->update = true;
-
-
-	RS_INFO->Unlock();
 	
+	// If we were given an RSTab pointer, use it to update the current tab
+	if(rstab) rstab->DoUpdateWithFollowUp();
+
+//	RS_INFO->Lock();	
+//
+//	// Loop over server items and copy the check box status to the appropriate
+//	// place in RS_INFO. Specfically, if we are viewing by object, then the server
+//	// checkbox corresponds to the values in RS_INFO->histdefs.servers. If viewing
+//	// by server, then is corresponds to the active flag in RS_INFO->servers[i].
+//	map<hid_t, TGListTreeItem*>::iterator server_items_iter = server_items.begin();
+//	for(; server_items_iter!=server_items.end(); server_items_iter++){
+//		const hid_t &hid = server_items_iter->first;
+//		TGListTreeItem *item = server_items_iter->second;
+//		if(viewStyle==rs_info::kViewByObject){
+//			map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid.hnamepath);
+//			hdef_iter->second.servers[hid.serverName] = item->IsChecked();
+//		}else{
+//			map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(hid.serverName);
+//			server_info_iter->second.active = item->IsChecked();
+//		}
+//	}
+//
+//	// Similar to above except for histos. If viewing by object, then the value
+//	// goes into RS_INFO->histdefs[].active. If viewing by server, it corresponds 
+//	// to RS_INFO->histdefs.servers
+//	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
+//	for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
+//	
+//		const hid_t &hid = hist_items_iter->first;
+//		TGListTreeItem *item = hist_items_iter->second;
+//		
+//		map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid.hnamepath);
+//		if(viewStyle==rs_info::kViewByObject){
+//			hdef_iter->second.active = item->IsChecked();
+//		}else{
+//			hdef_iter->second.servers[hid.serverName] = item->IsChecked();
+//		}
+//	}
+//
+//	// If the RS_INFO->current value is not set, then set it to the first server/histo
+//	// and set the flag to have DoUpdate called
+//	if(RS_INFO->servers.find(RS_INFO->current.serverName)==RS_INFO->servers.end()){
+//		if(RS_INFO->servers.size()>0){
+//			map<string,server_info_t>::iterator server_iter = RS_INFO->servers.begin();
+//			if(server_iter->second.hnamepaths.size()>0){
+//				RS_INFO->current = hid_t(server_iter->first, server_iter->second.hnamepaths[0]);
+//			}
+//		}
+//	}
+//	RSMF->can_view_indiv = true;
+//	RS_INFO->viewStyle = viewStyle;
+//	RS_INFO->update = true;
+//
+//
+//	RS_INFO->Unlock();
+//	
 	
 	DoCancel();
 }
@@ -239,11 +287,8 @@ void Dialog_SelectHists::DoSelectSingleHist(TGListTreeItem* entry, Int_t btn)
 //---------------------------------
 void Dialog_SelectHists::DoCancel(void)
 {
-	timer->Stop();
-	RSMF->RaiseWindow();
-	RSMF->RequestFocus();
-	UnmapWindow();
-	RSMF->delete_dialog_selecthists = true;
+	// The following will also call the destructor
+	CloseWindow();
 }
 
 //---------------------------------
@@ -331,8 +376,6 @@ void Dialog_SelectHists::DoSetViewByServer(void)
 	}
 }
 
-
-
 //---------------------------------
 // DoFilterHists
 //---------------------------------
@@ -346,7 +389,31 @@ void Dialog_SelectHists::DoFilterHists(void)
     UpdateListTree(hids);
 }
 
+//---------------------------------
+// DoSelectAll
+//---------------------------------
+void Dialog_SelectHists::DoSelectAll(void)
+{
+	TGListTreeItem *my_item = listTree->GetFirstItem();
+	while(my_item){
+		my_item->CheckAllChildren(kTRUE);
+		my_item = my_item->GetNextSibling();
+	}
+	Resize();
+}
 
+//---------------------------------
+// DoSelectNone
+//---------------------------------
+void Dialog_SelectHists::DoSelectNone(void)
+{
+	TGListTreeItem *my_item = listTree->GetFirstItem();
+	while(my_item){
+		my_item->CheckAllChildren(kFALSE);
+		my_item = my_item->GetNextSibling();
+	}
+	Resize();
+}
 
 //---------------------------------
 // GetAllHistos
@@ -463,16 +530,26 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		TGListTreeItem *hist_item=NULL;
 		bool server_checkbox=true;
 		bool hist_checkbox=true;
+		
+		// If hnamepaths list passed to us is empty, assume it has never been
+		// filled and leave all checkboes on. Otherwise, turn off all hists
+		// no appearing in the hnamepaths list
+		if(!hnamepaths->empty()){
+			list<string>::iterator it = find(hnamepaths->begin(), hnamepaths->end(), hnamepath);
+			hist_checkbox = (it != hnamepaths->end());
+		}
+
 		if(viewStyle==rs_info::kViewByObject){
 			server_item = items[items.size()-1];
 			hist_item = items[items.size()-2];
-			server_checkbox = hdef->servers[server];
-			hist_checkbox = hdef->active;
+			server_item->SetCheckBox(kFALSE); // don't draw checkbox next to server
+			//server_checkbox = hdef->servers[server];
+			//hist_checkbox = hdef->active;
 		}else{
 			server_item = items[0];
 			hist_item = items[items.size()-1];
-			server_checkbox = RS_INFO->servers[server].active;
-			hist_checkbox = hdef->servers[server];
+			//server_checkbox = RS_INFO->servers[server].active;
+			//hist_checkbox = hdef->servers[server];
 		}
 		server_item->SetPictures(hdisk_t, hdisk_t);
 		switch(hdef->type){
@@ -552,6 +629,13 @@ void Dialog_SelectHists::CreateGUI(void)
    fRadioButton804->SetWrapLength(-1);
    fVerticalFrame802->AddFrame(fRadioButton804, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
    fHorizontalFrame802->AddFrame(fVerticalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+
+   TGHorizontalFrame *fSelectAllNone = new TGHorizontalFrame(fVerticalFrame802);
+   fVerticalFrame802->AddFrame(fSelectAllNone, new TGLayoutHints(kLHintsCenterX | kLHintsExpandX,2,2,2,2));
+   TGTextButton *bSelectAll = new TGTextButton(fSelectAllNone, "Select All");
+   TGTextButton *bSelectNone = new TGTextButton(fSelectAllNone, "Select None");
+   fSelectAllNone->AddFrame(bSelectAll, new TGLayoutHints(kLHintsLeft,2,2,2,2));
+   fSelectAllNone->AddFrame(bSelectNone, new TGLayoutHints(kLHintsRight,2,2,2,2));
 
    TGTextEntry *fTextEntry689 = new TGTextEntry(fHorizontalFrame802, new TGTextBuffer(14),-1,uGC->GetGC(),ufont->GetFontStruct(),kSunkenFrame | kDoubleBorder | kOwnBackground);
    fTextEntry689->SetMaxLength(4096);
@@ -656,6 +740,8 @@ void Dialog_SelectHists::CreateGUI(void)
 	this->viewByServer->Connect("Clicked()","Dialog_SelectHists", this, "DoSetViewByServer()");
 	//Connect("CloseWindow()", "Dialog_SelectHists", this, "DoCancel()");	
 	filter_button->Connect("Clicked()","Dialog_SelectHists", this, "DoFilterHists()");
+	bSelectAll->Connect("Clicked()","Dialog_SelectHists", this, "DoSelectAll()");
+	bSelectNone->Connect("Clicked()","Dialog_SelectHists", this, "DoSelectNone()");
 
 	folder_t = pclose;
 	ofolder_t = popen;
