@@ -672,6 +672,7 @@ void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 			hi.type = obj->ClassName();
 			hi.path = path;
 			hi.title = hHist->GetTitle();
+			if(hi.title.length() == 0) hi.title = "-"; // cMsg gives "clientThread: error reading message" if title is empty string (??)
 			hinfos.push_back(hi);
 		}
 

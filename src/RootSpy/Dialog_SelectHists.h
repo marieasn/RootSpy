@@ -73,8 +73,13 @@ class Dialog_SelectHists:public TGMainFrame{
 		vector<hid_t> last_hids;
 		map<hid_t, TGListTreeItem*> server_items;
 		map<hid_t, TGListTreeItem*> hist_items;
+		int last_type_filters;
 
 		void CreateGUI(void);
+
+		TGCheckButton *bFilterTH1;
+		TGCheckButton *bFilterTH2;
+		TGCheckButton *bFilterMacro;
 
 		TGCanvas *canvas;
 		TGListTree *listTree;

@@ -32,8 +32,10 @@ using namespace std;
 //---------------------------------
 // Dialog_IndivHists    (Constructor)
 //---------------------------------
-Dialog_IndivHists::Dialog_IndivHists(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
+Dialog_IndivHists::Dialog_IndivHists(string hnamepath, const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
 {
+	this->hnamepath = hnamepath;
+
 	CreateGUI();
 	timer = new TTimer();
 	timer->Connect("Timeout()", "Dialog_IndivHists", this, "DoTimer()");
@@ -47,8 +49,8 @@ Dialog_IndivHists::Dialog_IndivHists(const TGWindow *p, UInt_t w, UInt_t h):TGMa
 	gridstyle = true;
 
 	//Set Divided Radio Button enabled or disabled.
-	if(num_servers <=1) dividedbut->SetEnabled(kFALSE);
-	else dividedbut->SetEnabled(kTRUE);
+	last_enable_divided = num_servers>1;
+	dividedbut->SetEnabled(last_enable_divided);
 
 	SetWindowName("Individual Histograms");
 	SetIconName("Individual Histograms");
@@ -63,6 +65,9 @@ Dialog_IndivHists::Dialog_IndivHists(const TGWindow *p, UInt_t w, UInt_t h):TGMa
 //---------------------------------
 Dialog_IndivHists::~Dialog_IndivHists(){}
 
+//=====================
+// CloseWindow
+//=====================
 void Dialog_IndivHists::CloseWindow() {
 	timer->Stop();
 	delete timer;
@@ -77,24 +82,26 @@ void Dialog_IndivHists::CloseWindow() {
 // DoTimer
 //=====================
 void Dialog_IndivHists::DoTimer(void) {
-	if(num_servers <=1) dividedbut->SetEnabled(kFALSE);
-	else dividedbut->SetEnabled(kTRUE);
+
+	// Enable/disable the "Divided" button depending on if we have more than 1 histogram
+	Bool_t enable_divided = num_servers>1;
+	if(enable_divided!= last_enable_divided) dividedbut->SetEnabled(enable_divided);
+	last_enable_divided = enable_divided;
+
 	// Request the histograms with RS_INFO->current's name from the
 	// individual servers.
 	if(!requested) {
 		RequestCurrentIndividualHistograms();
 	}
 
-	// Check if all the Histograms that were requested have returned and if they
-	// should be displayed. If true then draw the histograms.
-	if(HistogramsReturned() && display) {
-		if(displaystyle == COMBINED) {
-			CombinedStyle();
-		} else { // displaystyle == DIVIDED
-			DividedStyle();
-		}
+	// Draw histograms
+	if(displaystyle == COMBINED) {
+		CombinedStyle();
+	} else { // displaystyle == DIVIDED
+		DividedStyle();
 	}
-	canvas->Resize();
+
+	canvas->Resize();  // force redraw
 }
 
 //============================
@@ -102,7 +109,7 @@ void Dialog_IndivHists::DoTimer(void) {
 //============================
 void Dialog_IndivHists::SetCanvasStyle(TVirtualPad *thecanvas) {
 	if(!gridstyle && !tickstyle) {
-		cout<<"plain"<<endl;
+		//cout<<"plain"<<endl;
 		thecanvas->SetTickx(0);
 		thecanvas->SetTicky(0);
 		thecanvas->SetGridx(0);
@@ -111,7 +118,7 @@ void Dialog_IndivHists::SetCanvasStyle(TVirtualPad *thecanvas) {
 
 	// Display a canvas with grid lines.
 	if(gridstyle) {
-		cout<<"grid"<<endl;
+		//cout<<"grid"<<endl;
 		thecanvas->SetGridx(1);
 		thecanvas->SetGridy(1);
 	} else {
@@ -121,7 +128,7 @@ void Dialog_IndivHists::SetCanvasStyle(TVirtualPad *thecanvas) {
 
 	// Display a canvas with tick lines.
 	if(tickstyle) {
-		cout<<"tick"<<endl;
+		//cout<<"tick"<<endl;
 		thecanvas->SetTickx(1);
 		thecanvas->SetTicky(1);
 	} else {
@@ -131,7 +138,7 @@ void Dialog_IndivHists::SetCanvasStyle(TVirtualPad *thecanvas) {
 }
 
 //============================
-// DividedStyle
+// RequestCurrentIndividualHistograms
 //============================
 void Dialog_IndivHists::RequestCurrentIndividualHistograms(void) {
 	RS_INFO->Lock();
@@ -152,13 +159,18 @@ void Dialog_IndivHists::CombinedStyle(void) {
 	// Display a plain canvas.
 	canvas->cd();
 	SetCanvasStyle(canvas);
+
+	// Get pointer to hdef_t object
+	RS_INFO->Lock();
+	hdef_t histodef = RS_INFO->histdefs[hnamepath];
+
 	// Make the Legend.
-	TLegend* legend = new TLegend(0.5,0.6,0.79,0.79);
+	double height = 0.1 + 0.05*(double)histodef.hists.size();
+	if(height>0.75) height = 0.75;
+	TLegend* legend = new TLegend(0.7, 0.895-height, 0.895, 0.895);
 	//legend->SetHeader("Histograms");
 
 	//Iterate by individual histogram over all the servers.
-	RS_INFO->Lock();
-	hdef_t histodef = RS_INFO->histdefs[RS_INFO->current.hnamepath];
 	map<string, hinfo_t>::iterator hists_iter = histodef.hists.begin();
 	unsigned int color = 1;
 	for(; hists_iter != histodef.hists.end(); hists_iter++) {
@@ -168,14 +180,14 @@ void Dialog_IndivHists::CombinedStyle(void) {
 		else histogram->Draw("same");
 
 		//Dynamically add Histograms to the Legend.
-		legend->AddEntry(histogram, hists_iter->second.serverName.c_str(), "l");
+		legend->AddEntry(histogram, hists_iter->second.serverName.c_str());
 		//legend->AddEntry(histogram, NULL, "l");
-		legend->Draw();
-
-		canvas->Modified();
-		canvas->Update();
 		color++;
 	}
+	legend->Draw();
+	canvas->Modified();
+	canvas->Update();
+
 	// When the timer is called, do not attempt to display.
 	display = false;
 	RS_INFO->Unlock();
@@ -185,15 +197,17 @@ void Dialog_IndivHists::CombinedStyle(void) {
 // DivideCanvas
 //============================
 void Dialog_IndivHists::DivideCanvas(unsigned int &row, unsigned int &col) {
-	unsigned int temp_num_servers = num_servers;
-	if(temp_num_servers%2 == 1){
-		temp_num_servers++;
+
+	// Calculate rows and columns to give something roughly even
+	row = col = 1;
+	while(row*col < num_servers){
+		if(row >= col)
+			row++;
+		else
+			col++;
 	}
-	col = temp_num_servers;
-	do{
-		col = col/2;
-		row++;
-	}while(col>4);
+	
+	canvas->Divide(col, row);
 }
 
 
@@ -204,37 +218,40 @@ void Dialog_IndivHists::DividedStyle(void) {
     unsigned int row = 1;
     unsigned int col = 0;
     num_servers = RS_INFO->servers.size();
+	canvas->Clear();
     DivideCanvas(row, col);
 	// Divide the canvas appropriately.
-	canvas->Clear();
-	canvas->Divide(col, row);
+	//canvas->Divide(col, row);
 	//Iterate by individual histogram over all the servers.
 	RS_INFO->Lock();
-	hdef_t histodef = RS_INFO->histdefs[RS_INFO->current.hnamepath];
+	hdef_t histodef = RS_INFO->histdefs[hnamepath];
 	map<string, hinfo_t>::iterator hists_iter = histodef.hists.begin();
-	unsigned int color = 1;
+	unsigned int colors[] = {kRed, kBlue, kOrange, kBlack, kGreen, kViolet};
+	unsigned int Ncolors = 6;
+	unsigned int color = 0;
+	unsigned int canvas_id = 1;  // divided canvas needs to start at 1 !
+	TLatex latex;
+	latex.SetTextSize(0.035);
 	for(; hists_iter != histodef.hists.end(); hists_iter++) {
 		TH1* histogram = hists_iter->second.hist;
-		histogram->SetLineColor(color);
-		TVirtualPad* subcanvas = canvas->cd(color);
+		histogram->SetLineColor(colors[color%Ncolors]);
+		TVirtualPad* subcanvas = canvas->cd(canvas_id++);
 		SetCanvasStyle(subcanvas);
-		if(color == 1) histogram->Draw();
-		else histogram->Draw();
+		histogram->Draw();
 
-		// Make the Legend.
-		TLegend* legend = new TLegend(0.5,0.6,0.79,0.79);
-		legend->AddEntry(histogram, hists_iter->second.serverName.c_str(), "l");
-		legend->Draw();
+		double x = 0.0;
+		double y = histogram->GetMaximum()*1.06;
+		latex.DrawLatex(x, y, hists_iter->second.serverName.c_str());
 
-		subcanvas->Modified();
-		subcanvas->Update();
 		color++;
 	}
+	canvas->Modified();
+	canvas->Update();
+
 	// When the timer is called, do not attempt to display.
 	display = false;
 	RS_INFO->Unlock();
 }
-
 
 //============================
 // HistogramsReturned
@@ -251,19 +268,6 @@ bool Dialog_IndivHists::HistogramsReturned(void) {
 	}
 	RS_INFO->Unlock();
 	return false;
-}
-
-//============================
-// DoPlainCanvas
-//============================
-void Dialog_IndivHists::DoPlainCanvas(void) {
-//	if(tickmarks->GetState() == kButtonDown
-//			|| gridlines->GetState() == kButtonDown) {
-//		tickmarks->SetState(kButtonUp);
-//		gridlines->SetState(kButtonUp);
-//	}
-//	canvasstyle = PLAIN;
-//	display = true;
 }
 
 //============================
@@ -302,9 +306,9 @@ void Dialog_IndivHists::DoUpdate(void) {
 // DoCombined
 //============================
 void Dialog_IndivHists::DoCombined(void) {
-	if(dividedbut->GetState() == kButtonDown) {
-		dividedbut->SetState(kButtonUp);
-	}
+	combinedbut->SetState(kButtonDown);
+	dividedbut->SetState(kButtonUp);
+
 	displaystyle = COMBINED;
 	display = true;
 }
@@ -313,9 +317,9 @@ void Dialog_IndivHists::DoCombined(void) {
 // DoDivided
 //============================
 void Dialog_IndivHists::DoDivided(void) {
-	if(combinedbut->GetState() == kButtonDown) {
-		combinedbut->SetState(kButtonUp);
-	}
+	combinedbut->SetState(kButtonUp);
+	dividedbut->SetState(kButtonDown);
+
 	displaystyle = DIVIDED;
 	display = true;
 }
@@ -334,15 +338,12 @@ void Dialog_IndivHists::CreateGUI(void) {
 	// Code generated by TGuiBuilder.
 	// main frame
 	TGMainFrame *fMainFrame2360 = this;
-	fMainFrame2360->SetLayoutBroken(kTRUE);
 
 	   // composite frame
-	   TGCompositeFrame *fMainFrame789 = new TGCompositeFrame(fMainFrame2360,879,678, kVerticalFrame);
-	   fMainFrame789->SetLayoutBroken(kTRUE);
+	   TGCompositeFrame *fMainFrame789 = new TGCompositeFrame(fMainFrame2360,879,678, kHorizontalFrame);
 
 		   // vertical frame
 		   TGVerticalFrame *fVerticalFrame790 = new TGVerticalFrame(fMainFrame789,133,676,kVerticalFrame | kRaisedFrame | kFitHeight);
-		   fVerticalFrame790->SetLayoutBroken(kTRUE);
 
 			   TGTextButton *update_button = new TGTextButton(fVerticalFrame790,"Update");
 			   update_button->SetTextJustify(36);
@@ -350,7 +351,6 @@ void Dialog_IndivHists::CreateGUI(void) {
 			   update_button->SetWrapLength(-1);
 			   update_button->Resize(99,24);
 			   fVerticalFrame790->AddFrame(update_button, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-			   update_button->MoveResize(16,8,99,24);
 
 			   TGRadioButton *combinedbutton = new TGRadioButton(fVerticalFrame790,"Combined");
 			   combinedbutton->SetState(kButtonDown);
@@ -358,7 +358,6 @@ void Dialog_IndivHists::CreateGUI(void) {
 			   combinedbutton->SetMargins(0,0,0,0);
 			   combinedbutton->SetWrapLength(-1);
 			   fVerticalFrame790->AddFrame(combinedbutton, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-			   combinedbutton->MoveResize(8,40,113,19);
 
 			   TGRadioButton *dividedbutton = new TGRadioButton(fVerticalFrame790,"Divided Canvas");
 			   dividedbutton->SetState(kButtonUp);
@@ -366,7 +365,6 @@ void Dialog_IndivHists::CreateGUI(void) {
 			   dividedbutton->SetMargins(0,0,0,0);
 			   dividedbutton->SetWrapLength(-1);
 			   fVerticalFrame790->AddFrame(dividedbutton, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-			   dividedbutton->MoveResize(8,56,113,19);
 
 			  // Check Buttons
 			  TGCheckButton *tickmarkbutton = new TGCheckButton(fVerticalFrame790,"Tick Marks");
@@ -375,7 +373,6 @@ void Dialog_IndivHists::CreateGUI(void) {
 			  tickmarkbutton->SetWrapLength(-1);
 			  tickmarkbutton->SetState(kButtonDown);
 			  fVerticalFrame790->AddFrame(tickmarkbutton, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-			  tickmarkbutton->MoveResize(8,128,109,19);
 
 			  TGCheckButton *gridlinebutton = new TGCheckButton(fVerticalFrame790,"Grid Lines");
 			  gridlinebutton->SetTextJustify(36);
@@ -383,38 +380,25 @@ void Dialog_IndivHists::CreateGUI(void) {
 			  gridlinebutton->SetWrapLength(-1);
 			  gridlinebutton->SetState(kButtonDown);
 			  fVerticalFrame790->AddFrame(gridlinebutton, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-			  gridlinebutton->MoveResize(8,112,109,19);
 
-//			  TGCheckButton *fTextButton831 = new TGCheckButton(fVerticalFrame790,"");
-//			  fTextButton831->SetTextJustify(36);
-//			  fTextButton831->SetMargins(0,0,0,0);
-//			  fTextButton831->SetWrapLength(-1);
-//			  fVerticalFrame790->AddFrame(fTextButton831, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-//			  fTextButton831->MoveResize(8,96,109,19);
+			  TGTextButton *closebutton = new TGTextButton(fVerticalFrame790,"Close");
+			  closebutton->SetTextJustify(36);
+			  closebutton->SetMargins(0,0,0,0);
+			  closebutton->SetWrapLength(-1);
+			  fVerticalFrame790->AddFrame(closebutton, new TGLayoutHints(kLHintsBottom | kLHintsExpandX,2,2,2,2));
 
 	   // Add Vertical Frame.
 	   fMainFrame789->AddFrame(fVerticalFrame790, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandY,2,2,2,2));
-	   fVerticalFrame790->MoveResize(744,0,133,676);
 
-		   // horizontal frame
-		   TGHorizontalFrame *fHorizontalFrame795 = new TGHorizontalFrame(fMainFrame789,736,676,kHorizontalFrame | kFitWidth | kFitHeight);
-		   fHorizontalFrame795->SetLayoutBroken(kTRUE);
-
-			   // embedded canvas
-			   TRootEmbeddedCanvas *fCanvas = new TRootEmbeddedCanvas(0,fHorizontalFrame795,732,672);
-			   Int_t wfCanvas = fCanvas->GetCanvasWindowId();
-			   TCanvas *c125 = new TCanvas("c125", 10, 10, wfCanvas);
-			   fCanvas->AdoptCanvas(c125);
-			   fHorizontalFrame795->AddFrame(fCanvas, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
-			   fCanvas->MoveResize(2,2,732,672);
-
-	   // Add Horizontal Frame.
-	   fMainFrame789->AddFrame(fHorizontalFrame795, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
-	   fHorizontalFrame795->MoveResize(0,0,736,676);
+		   // embedded canvas
+		   TRootEmbeddedCanvas *fCanvas = new TRootEmbeddedCanvas(0,fMainFrame789,732,672);
+		   Int_t wfCanvas = fCanvas->GetCanvasWindowId();
+		   TCanvas *c125 = new TCanvas("c125", 10, 10, wfCanvas);
+		   fCanvas->AdoptCanvas(c125);
+		   fMainFrame789->AddFrame(fCanvas, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
 
 	// Add Composite Frame.
 	fMainFrame2360->AddFrame(fMainFrame789, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY));
-	fMainFrame789->MoveResize(0,0,879,678);
 
 	fMainFrame2360->SetMWMHints(kMWMDecorAll,
 						kMWMFuncAll,
@@ -437,4 +421,5 @@ void Dialog_IndivHists::CreateGUI(void) {
 	combinedbut->Connect("Clicked()", "Dialog_IndivHists", this, "DoCombined()");
 	dividedbut->Connect("Clicked()", "Dialog_IndivHists", this, "DoDivided()");
 	update_button->Connect("Clicked()", "Dialog_IndivHists", this, "DoUpdate()");
+	closebutton->Connect("Clicked()", "Dialog_IndivHists", this, "CloseWindow()");
 }

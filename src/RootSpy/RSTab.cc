@@ -38,13 +38,13 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	TGVerticalFrame *fTabMainLeftInfo = new TGVerticalFrame(fTabMainLeft);	
 	fTabMainLeft->AddFrame(fTabMainLeftInfo, new TGLayoutHints(kLHintsCenterX | kLHintsTop | kLHintsExpandX,2,2,2,2));
 	AddLabel(fTabMainLeftInfo, "Server:"    ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
-	lServer    = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight);
+	lServer    = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
 	AddSpacer(fTabMainLeftInfo, 1, 5);
 	AddLabel(fTabMainLeftInfo, "Histogram:" ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
-	lHistogram = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight);
+	lHistogram = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
 	AddSpacer(fTabMainLeftInfo, 1, 5);
 	AddLabel(fTabMainLeftInfo, "Received:"  ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
-	lReceived  = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight);
+	lReceived  = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
 	
 	// Add some space between labels and controls
 	AddSpacer(fTabMainLeft, 1, 10);
@@ -118,6 +118,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	last_update = 0.0;
 	last_request_sent = -10.0;
 	last_servers_str_Nlines = 1;
+	hnamepaths_seeded = false;
 }
 
 //---------------------------------
@@ -126,6 +127,57 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 RSTab::~RSTab()
 {
 
+}
+
+//---------------------------------
+// SelectAllHistos
+//---------------------------------
+void RSTab::SelectAllHistos(void)
+{
+	/// Get list of all currently defined histos and copy them
+	/// into our hnamepath list, overwritting any that are
+	/// currently there. This is used to seed the list when
+	/// the tab is initially created. 
+
+	RS_INFO->Lock();
+
+	// Make list of all histograms from all servers
+	list<string> new_hnamepaths;
+	map<string,hdef_t>::iterator it = RS_INFO->histdefs.begin();
+	for(; it!=RS_INFO->histdefs.end(); it++){//iterates over servers
+
+		new_hnamepaths.push_back(it->first);
+
+	}
+	
+	RS_INFO->Unlock();
+	
+	hnamepaths = new_hnamepaths;
+
+	// Tell the screen to update quickly
+	if(!hnamepaths.empty()){
+		hnamepaths_seeded = true;
+		DoUpdateWithFollowUp();
+	}
+}
+
+//-------------------
+// SetTo
+//-------------------
+void RSTab::SetTo(string hnamepath)
+{
+	int idx = 0;
+	list<string>::iterator it = hnamepaths.begin();
+	for(; it!=hnamepaths.end(); it++, idx++){
+		if(*it == hnamepath){
+			if(idx != currently_displayed){
+				currently_displayed = idx;
+				TTimer::SingleShot(1, "RSTab", this, "DoUpdate()"); // have canvas updated quickly
+				TTimer::SingleShot(250, "RSTab", this, "DoUpdate()");
+				return;
+			}
+		}
+	}
 }
 
 //-------------------
@@ -228,7 +280,8 @@ void RSTab::DoPrev(void)
 //-------------------
 void RSTab::DoShowIndiv(void)
 {
-	new Dialog_IndivHists(gClient->GetRoot(), 10, 10);
+	string hnamepath = lHistogram->GetText()->GetString();
+	new Dialog_IndivHists(hnamepath, gClient->GetRoot(), 10, 10);
 }
 
 //----------
@@ -264,8 +317,13 @@ void RSTab::DoUpdate(void)
 			canvas->Update();
 			currently_displayed_modified = now;
 		}
+		
+		// Seed hnamepaths when we first start up
+		if(!hnamepaths_seeded) SelectAllHistos();
+
 		return;
-	}	
+	}
+	hnamepaths_seeded = true;
 
 	// If the currently displayed histogram index is out of range, force it into range
 	if(currently_displayed >= hnamepaths.size()) currently_displayed = 0;
@@ -291,8 +349,26 @@ void RSTab::DoUpdate(void)
 	string servers_str;
 	TH1* sum_hist = RS_INFO->GetSumHist(hnamepath, &type, &sum_hist_modified, &servers_str);
 	
+	// Update labels
+	time_t t = (unsigned long)floor(sum_hist_modified+rs_cmsg::start_time); // seconds since 1970
+	string tstr = ctime(&t);
+	tstr[tstr.length()-1] = 0; // chop off last "\n"
+	lServer->SetText(TString(servers_str));
+	lReceived->SetText(TString(tstr));
+	lHistogram->SetText(TString(hnamepath));
+	
+	// Trigger resize of controls widgets if number of
+	// lines changed.
+	int Nlines = 1;
+	for(uint32_t i=0; i<servers_str.length(); i++) if(servers_str[i]=='\n') Nlines++;
+	if(Nlines != last_servers_str_Nlines){
+		fTabMainLeft->Resize();
+		last_servers_str_Nlines = Nlines;
+	}
+
 	// Draw the histogram/macro
 	canvas->cd();
+	map<string,hdef_t>::iterator hdef_it;
 	switch(type){
 		case hdef_t::oneD:
 		case hdef_t::twoD:
@@ -302,26 +378,15 @@ void RSTab::DoUpdate(void)
 				if(sum_hist_modified > currently_displayed_modified){
 
 					// Draw histogram
-					sum_hist->Draw();
-					
-					// Update labels
-					time_t t = (unsigned long)floor(sum_hist_modified+rs_cmsg::start_time); // seconds since 1970
-					string tstr = ctime(&t);
-					tstr[tstr.length()-1] = 0; // chop off last "\n"
-					lServer->SetText(TString(servers_str));
-					lReceived->SetText(TString(tstr));
-					lHistogram->SetText(TString(hnamepath));
-					
-					// Trigger resize of controls widgets if number of
-					// lines changed.
-					int Nlines = 1;
-					for(uint32_t i=0; i<servers_str.length(); i++) if(servers_str[i]=='\n') Nlines++;
-					if(Nlines != last_servers_str_Nlines){
-						fTabMainLeft->Resize();
-						last_servers_str_Nlines = Nlines;
-					}
+					sum_hist->Draw();					
 				}
 			}
+			break;
+		case hdef_t::macro:
+			RS_INFO->Lock();
+			hdef_it = RS_INFO->histdefs.find(hnamepath);
+			if(hdef_it != RS_INFO->histdefs.end()) RSMF->DrawMacro(canvas, hdef_it->second);
+			RS_INFO->Unlock();
 			break;
 		default:
 			cout << "Unable to handle histogram type at the moment." << endl;

@@ -48,6 +48,7 @@ int main(int narg, char *argv[])
 	CMSG_NAME = string(str);
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
+	RS_CMSG->verbose = 1;
 
 	//cout<<__FILE__<<__LINE__<<" "<<gClient->ClassName();
 

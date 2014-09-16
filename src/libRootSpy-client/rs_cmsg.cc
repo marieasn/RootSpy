@@ -64,6 +64,7 @@ rs_cmsg::rs_cmsg(string &udl, string &name)
 	// Connect to cMsg system
         is_online = true;
 	string myDescr = "Access ROOT objects in a running program";
+	cMsgSetDebugLevel(CMSG_DEBUG_INFO); // print all messages
 	cMsgSys = new cMsg(udl, name, myDescr);   	// the cMsg system object, where
 	try {                         	           	//  all args are of type string
 		cMsgSys->connect(); 
@@ -1021,7 +1022,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 //TODO: documentation comment.
 void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg) 
 {
-	_DBG_ << "In rs_cmsg::RegisterMacro()..." << endl;
+	if(verbose>=2) _DBG_ << "In rs_cmsg::RegisterMacro()..." << endl;
     
     // Get hnamepath from message
     string name = msg->getString("macro_name");
@@ -1085,7 +1086,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     pthread_rwlock_wrlock(ROOT_MUTEX);
     
     // extract info from message
-    _DBG_ << "unpacking macro..." << endl;
+    if(verbose>=2) _DBG_ << "unpacking macro..." << endl;
 
     MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
     Long64_t length;
@@ -1102,8 +1103,8 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	    if(*str_itr == '/')     
 		    *str_itr = '_';
     }
-    _DBG_ << " TMemFile name = " << tmpfile_name << endl;
-    _DBG_ << "     file size = " << length << endl;
+    if(verbose>=2) _DBG_ << " TMemFile name = " << tmpfile_name << endl;
+    if(verbose>=2) _DBG_ << "     file size = " << length << endl;
     TString filename(tmpfile_name);
 
     TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
@@ -1146,7 +1147,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	return;
     }
     */
-    _DBG_ << "unpacked macro!" << endl;
+    // _DBG_ << "unpacked macro!" << endl;
     //T->Print();
     
     // Update hinfo
@@ -1165,6 +1166,9 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     
     // Now we add the newer version to the map
     hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
+
+    // Record time we last modified the sum histo
+    hdef->sum_hist_modified = GetTime();
     
     // Unlock mutexes
     pthread_rwlock_unlock(ROOT_MUTEX);

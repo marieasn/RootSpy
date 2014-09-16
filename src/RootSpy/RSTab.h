@@ -10,6 +10,7 @@
 
 #include <string>
 #include <list>
+#include <iostream>
 using namespace std;
 
 #include <TROOT.h>
@@ -53,6 +54,10 @@ class RSTab{
 		double last_request_sent;
 		string last_request_hnamepath;
 		int last_servers_str_Nlines;
+		bool hnamepaths_seeded; // set to true the first time we see hnamepaths is not empty
+		
+		void SelectAllHistos(void);
+		void SetTo(string hnamepath);
 		
 		void DoNext(void);
 		void DoPrev(void);

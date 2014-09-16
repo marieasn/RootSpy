@@ -30,7 +30,7 @@ using namespace std;
 
 class Dialog_IndivHists:public TGMainFrame{
 	public:
-		Dialog_IndivHists(const TGWindow *p, UInt_t w, UInt_t h);
+		Dialog_IndivHists(string hnamepath, const TGWindow *p, UInt_t w, UInt_t h);
 		virtual ~Dialog_IndivHists();
 
 		//Methods
@@ -39,7 +39,6 @@ class Dialog_IndivHists:public TGMainFrame{
 		void DoTimer(void);
 		void DoGridLines(void);
 		void DoTickMarks(void);
-		void DoPlainCanvas(void);
 		void DoUpdate(void);
 		void DoCombined(void);
 		void DoDivided(void);
@@ -49,6 +48,9 @@ class Dialog_IndivHists:public TGMainFrame{
 			COMBINED,
 			DIVIDED
 		};
+		
+		string hnamepath;
+		Bool_t last_enable_divided;
 
 	private:
 		//Methods
@@ -74,7 +76,6 @@ class Dialog_IndivHists:public TGMainFrame{
 		TGRadioButton* combinedbut;
 		TGRadioButton* dividedbut;
 		TGVerticalFrame *verticalframe;
-//		canvas_style canvasstyle;
 		display_style displaystyle;
 		bool tickstyle;
 		bool gridstyle;

@@ -141,7 +141,6 @@ class rs_mainframe:public TGMainFrame {
 		RSTab *current_tab;
 
 
-	protected:
 			viewStyle_t_rs viewStyle_rs;
 			void DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
 				      hdef_t::histdimension_t hdim,

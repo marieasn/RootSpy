@@ -69,6 +69,7 @@ void Dialog_SelectHists::Init(list<string> *hnamepaths)
 	last_called = now;
 	last_ping_time = now;
 	last_hist_time = now;
+	last_type_filters = 0;
 
 	filter_str = "";
 	
@@ -99,7 +100,6 @@ Dialog_SelectHists::~Dialog_SelectHists()
 //-------------------
 void Dialog_SelectHists::CloseWindow(void)
 {
-_DBG__;
 	if(timer){
 		timer->Stop();
 		delete timer;
@@ -109,7 +109,6 @@ _DBG__;
 	RSMF->RaiseWindow();
 	RSMF->RequestFocus();
 	UnmapWindow();
-_DBG__;
 }
 
 //-------------------
@@ -152,6 +151,20 @@ void Dialog_SelectHists::DoTimer(void)
 	vector<hid_t> hids;
 	GetAllHistos(hids);
 
+	// optionally filter histograms
+	if(filter_str != "") {
+	    vector<hid_t> good_hids;
+
+	    // only keep the histograms that match the filter text
+	    for(vector<hid_t>::iterator hid_itr = hids.begin();
+		hid_itr != hids.end(); hid_itr++) {
+		if( hid_itr->hnamepath.find(filter_str) != string::npos )
+		    good_hids.push_back( *hid_itr );
+	    }
+
+	    hids = good_hids;
+	}
+
 	// Check if list of histos has changed
 	bool hists_changed = false;
 	if(last_hids.size() == hids.size()){
@@ -162,9 +175,18 @@ void Dialog_SelectHists::DoTimer(void)
 	}else{
 		hists_changed = true;
 	}
+	
+	// The type filters are applied in UpdateListTree. Just check here
+	// if the filter settings have changed.
+	bool filterTH1 = bFilterTH1->GetState() == kButtonUp;
+	bool filterTH2 = bFilterTH2->GetState() == kButtonUp;
+	bool filterMacro = bFilterMacro->GetState() == kButtonUp;
+	int type_filters = (filterTH1<<0) + (filterTH2<<1) + (filterMacro<<2);
+	bool filters_changed = type_filters!=last_type_filters;
+	last_type_filters = type_filters;
 
 	// Refill TGListTree if needed
-	if(hists_changed)UpdateListTree(hids);
+	if(hists_changed || filters_changed)UpdateListTree(hids);
 
 	last_called = now;
 }
@@ -192,60 +214,6 @@ void Dialog_SelectHists::DoOK(void)
 	
 	// If we were given an RSTab pointer, use it to update the current tab
 	if(rstab) rstab->DoUpdateWithFollowUp();
-
-//	RS_INFO->Lock();	
-//
-//	// Loop over server items and copy the check box status to the appropriate
-//	// place in RS_INFO. Specfically, if we are viewing by object, then the server
-//	// checkbox corresponds to the values in RS_INFO->histdefs.servers. If viewing
-//	// by server, then is corresponds to the active flag in RS_INFO->servers[i].
-//	map<hid_t, TGListTreeItem*>::iterator server_items_iter = server_items.begin();
-//	for(; server_items_iter!=server_items.end(); server_items_iter++){
-//		const hid_t &hid = server_items_iter->first;
-//		TGListTreeItem *item = server_items_iter->second;
-//		if(viewStyle==rs_info::kViewByObject){
-//			map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid.hnamepath);
-//			hdef_iter->second.servers[hid.serverName] = item->IsChecked();
-//		}else{
-//			map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(hid.serverName);
-//			server_info_iter->second.active = item->IsChecked();
-//		}
-//	}
-//
-//	// Similar to above except for histos. If viewing by object, then the value
-//	// goes into RS_INFO->histdefs[].active. If viewing by server, it corresponds 
-//	// to RS_INFO->histdefs.servers
-//	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
-//	for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
-//	
-//		const hid_t &hid = hist_items_iter->first;
-//		TGListTreeItem *item = hist_items_iter->second;
-//		
-//		map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid.hnamepath);
-//		if(viewStyle==rs_info::kViewByObject){
-//			hdef_iter->second.active = item->IsChecked();
-//		}else{
-//			hdef_iter->second.servers[hid.serverName] = item->IsChecked();
-//		}
-//	}
-//
-//	// If the RS_INFO->current value is not set, then set it to the first server/histo
-//	// and set the flag to have DoUpdate called
-//	if(RS_INFO->servers.find(RS_INFO->current.serverName)==RS_INFO->servers.end()){
-//		if(RS_INFO->servers.size()>0){
-//			map<string,server_info_t>::iterator server_iter = RS_INFO->servers.begin();
-//			if(server_iter->second.hnamepaths.size()>0){
-//				RS_INFO->current = hid_t(server_iter->first, server_iter->second.hnamepaths[0]);
-//			}
-//		}
-//	}
-//	RSMF->can_view_indiv = true;
-//	RS_INFO->viewStyle = viewStyle;
-//	RS_INFO->update = true;
-//
-//
-//	RS_INFO->Unlock();
-//	
 	
 	DoCancel();
 }
@@ -259,20 +227,20 @@ void Dialog_SelectHists::DoSelectSingleHist(TGListTreeItem* entry, Int_t btn)
     listTree->GetPathnameFromItem(entry, path);
 
     // allow double clicks to select a particular histrogram to display
-    _DBG_ << " selected entry " << entry->GetText() << " with path = " << path << endl;
+	_DBG_ << " selected entry " << entry->GetText() << " with path = " << path << endl;
     bool found = false;
 
     RS_INFO->Lock();
 
     // to start with, only display histograms that correspon to the one that is clicked
-    map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
-    for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
-	if(hist_items_iter->second == entry) {
-	    found = true;
-	    RS_INFO->current = hist_items_iter->first;
-	    break;
+	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
+	for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
+		if(hist_items_iter->second == entry) {
+			found = true;
+			if(rstab) rstab->SetTo(hist_items_iter->first.hnamepath);
+			break;
+		}
 	}
-    }
 
     RS_INFO->Unlock();
 
@@ -451,20 +419,10 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 	server_items.clear();
 	hist_items.clear();
 
-	// optionally filter histograms
-	if(filter_str != "") {
-	    vector<hid_t> good_hids;
-
-	    // only keep the histograms that match the filter text
-	    for(vector<hid_t>::iterator hid_itr = hids.begin();
-		hid_itr != hids.end(); hid_itr++) {
-		if( hid_itr->hnamepath.find(filter_str) != string::npos )
-		    good_hids.push_back( *hid_itr );
-	    }
-
-	    hids = good_hids;
-	}
-
+	// Filter by type
+	bool filterTH1 = bFilterTH1->GetState() == kButtonUp;
+	bool filterTH2 = bFilterTH2->GetState() == kButtonUp;
+	bool filterMacro = bFilterMacro->GetState() == kButtonUp;
 
 	// Loop over histograms
 	for(unsigned int i=0; i<hids.size(); i++){
@@ -478,6 +436,11 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 			continue;
 		}
 		hdef_t *hdef = &(hdef_iter->second);
+		
+		// Apply type filters
+		if(filterTH1 && hdef->type==hdef_t::oneD) continue;
+		if(filterTH2 && hdef->type==hdef_t::twoD) continue;
+		if(filterMacro && hdef->type==hdef_t::macro) continue;
 
 		// Here we want to create a vector with each of the path
 		// elements (folders) to be displayed and then the final
@@ -510,13 +473,10 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 				
 				// Sets the directories to show all, with the 
 				// exception of the servers if viewStyle is by object
-				if(viewStyle==rs_info::kViewByObject && j == 0){
-					item->SetOpen(true);
-				} else if (viewStyle==rs_info::kViewByObject && j != 0){
-					item->SetOpen(false);
-				} else {
-					item->SetOpen(true);
-				}
+				bool show_open = false;
+				if((j+2)<path.size()) show_open = true; // show open if not last item in path (i.e. server)
+				if(viewStyle!=rs_info::kViewByObject) show_open = true; // show eveything open if viewing by server
+				item->SetOpen(show_open);
 			}
 			items.push_back(item);
 		}
@@ -629,6 +589,20 @@ void Dialog_SelectHists::CreateGUI(void)
    fRadioButton804->SetWrapLength(-1);
    fVerticalFrame802->AddFrame(fRadioButton804, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
    fHorizontalFrame802->AddFrame(fVerticalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+
+	// Filter by type checkboxes
+	TGVerticalFrame *fTypeFilters = new TGVerticalFrame(fHorizontalFrame802);
+	bFilterTH1 = new TGCheckButton(fTypeFilters, "TH1");
+	bFilterTH2 = new TGCheckButton(fTypeFilters, "TH2");
+	bFilterMacro = new TGCheckButton(fTypeFilters, "Macros");
+	bFilterTH1->SetOn();
+	bFilterTH2->SetOn();
+	bFilterMacro->SetOn();
+	fTypeFilters->AddFrame(bFilterTH1, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+	fTypeFilters->AddFrame(bFilterTH2, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+	fTypeFilters->AddFrame(bFilterMacro, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+	fHorizontalFrame802->AddFrame(fTypeFilters, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+
 
    TGHorizontalFrame *fSelectAllNone = new TGHorizontalFrame(fVerticalFrame802);
    fVerticalFrame802->AddFrame(fSelectAllNone, new TGLayoutHints(kLHintsCenterX | kLHintsExpandX,2,2,2,2));
