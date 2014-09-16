@@ -46,7 +46,10 @@ class RSTab{
 		TCanvas *canvas;
 		TGRadioButton *bDisplayFileConfig;
 		TGRadioButton *bDisplayCustomConfig;
+		TGComboBox *sConfig;
 		
+		string title;
+		string config;
 		list<string> hnamepaths; // histos and macros to loop through showing
 		int currently_displayed; // index of element in hnamepaths
 		double currently_displayed_modified; // Time at which the currently displayed histo was last modified
@@ -56,7 +59,7 @@ class RSTab{
 		int last_servers_str_Nlines;
 		bool hnamepaths_seeded; // set to true the first time we see hnamepaths is not empty
 		
-		void SelectAllHistos(void);
+		void SeedHistos(void);
 		void SetTo(string hnamepath);
 		
 		void DoNext(void);

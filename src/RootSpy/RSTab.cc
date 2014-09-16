@@ -25,6 +25,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 
 	// Create new tab
 	TGCompositeFrame *f = fTab->AddTab(title.c_str());
+	this->title = title;
 	
 	// Hoizontal frame (controls to left, canvas to the right)
 	fTabMain = new TGHorizontalFrame(f);
@@ -68,7 +69,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	bDisplayCustomConfig->SetToolTipText("Select this to use a custom configuration \nof histograms and macros to view. Select which \nhistograms and macros using the \"Select\" below.");
 
 	// Configurations combobox and select button
-	TGComboBox *sConfig = new TGComboBox(fDisplayOptions,"<none>",-1,kHorizontalFrame | kSunkenFrame | kDoubleBorder | kOwnBackground);
+	sConfig = new TGComboBox(fDisplayOptions,"<none>",-1,kHorizontalFrame | kSunkenFrame | kDoubleBorder | kOwnBackground);
 	sConfig->SetHeight(20);
 
 	// Place display options widgets in a way that hopefully makes it clear how to use them
@@ -112,6 +113,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	bDisplayCustomConfig->Connect("Clicked()","RSTab", this, "DoSetCustomConfig()");
 	
 	// Set some defaults
+	config = title;
 	bDisplayCustomConfig->SetOn(kTRUE, kTRUE);
 	currently_displayed = 0;
 	currently_displayed_modified = 0.0;
@@ -130,14 +132,18 @@ RSTab::~RSTab()
 }
 
 //---------------------------------
-// SelectAllHistos
+// SeedHistos
 //---------------------------------
-void RSTab::SelectAllHistos(void)
+void RSTab::SeedHistos(void)
 {
 	/// Get list of all currently defined histos and copy them
 	/// into our hnamepath list, overwritting any that are
 	/// currently there. This is used to seed the list when
-	/// the tab is initially created. 
+	/// the tab is initially created. If the hnamepaths_seeded
+	/// flag is set then this returns immediately without doing
+	/// anything.
+
+	if(hnamepaths_seeded) return;
 
 	RS_INFO->Lock();
 
@@ -319,7 +325,7 @@ void RSTab::DoUpdate(void)
 		}
 		
 		// Seed hnamepaths when we first start up
-		if(!hnamepaths_seeded) SelectAllHistos();
+		if(!hnamepaths_seeded) SeedHistos();
 
 		return;
 	}

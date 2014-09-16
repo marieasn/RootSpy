@@ -51,6 +51,13 @@ class rs_mainframe:public TGMainFrame {
 			kViewByObject_rs,
 			kViewByServer_rs
 		};
+		
+		class tab_config_t{
+			public:
+				string name;
+				int currently_displayed;
+				vector<string> hnamepaths;
+		};
 
 		rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h, bool build_gui);
 		~rs_mainframe();
@@ -100,6 +107,7 @@ class rs_mainframe:public TGMainFrame {
 		TGLabel *lUDL;
 		TGCheckButton *bAutoRefresh;
 		TGCheckButton *bAutoAdvance;
+		TGComboBox *fDelay;
 		
 		TGMainFrame *dialog_selectserverhist;
 		TGMainFrame *dialog_selecthists;
@@ -139,6 +147,7 @@ class rs_mainframe:public TGMainFrame {
 		map<string,string> macro_files;
 		list<RSTab*> rstabs;
 		RSTab *current_tab;
+		map<string, tab_config_t> tab_configs;
 
 
 			viewStyle_t_rs viewStyle_rs;

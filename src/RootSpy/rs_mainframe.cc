@@ -101,6 +101,10 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	//Define all of the -graphics objects. 
         if(build_gui) {
 	    CreateGUI();
+		
+		ReadPreferences();
+		
+		if(rstabs.empty()) new RSTab(this, "New"); // make sure we have at least one tab
 
 	    // Set up timer to call the DoTimer() method repeatedly
 	    // so events can be automatically advanced.
@@ -114,9 +118,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	last_called=now - 1.0;
 	last_ping_time = now;
 	last_hist_requested = -4.0;
-	
-	delay_time = 4; // default is 4 seconds (needs to be tied to default used to set GUI)
-	
+
 	last_requested.hnamepath = "N/A";
 	last_hist_plotted = NULL;
 	
@@ -191,27 +193,143 @@ void rs_mainframe::ReadPreferences(void)
 	if(!home)return;
 	
 	// Try and open file
-	string fname = string(home) + "/.RootSys";
+	string fname = string(home) + "/.rootspy";
 	ifstream ifs(fname.c_str());
 	if(!ifs.is_open())return;
 	cout<<"Reading preferences from \""<<fname<<"\" ..."<<endl;
 	
+	// Containers to hold results
+	vector<pair<string, string> > tabs; // first=title  second=config
+	
 	// Loop over lines
+	string filling_tab_config = "";
+	int selected_tab = 0;
 	char line[1024];
 	while(!ifs.eof()){
 		ifs.getline(line, 1024);
-		if(strlen(line)==0)continue;
+		if(strlen(line)==0){ filling_tab_config=""; continue; }
 		if(line[0] == '#')continue;
 		string str(line);
 		
-		// Break line into tokens
+		// Break line into tokens, respecting double quotes
 		vector<string> tokens;
-		string buf; // Have a buffer string
-		stringstream ss(str); // Insert the string into a stream
-		while (ss >> buf)tokens.push_back(buf);
+		int pos=0;
+		bool in_quotes = false;
+		bool in_token = false;
+		string token;
+		while(pos<strlen(line)){
+			if(isspace(line[pos])){
+				if(in_token){
+					if(!in_quotes){
+						tokens.push_back(token);
+						token = "";
+						in_token = false;
+					}else{
+						token += line[pos];
+					}
+				}
+			}else if(line[pos]=='"'){
+				if(in_quotes){
+					// end quote
+					tokens.push_back(token);
+					token = "";
+					in_token = in_quotes = false;
+				}else{
+					// start quote
+					in_token = in_quotes = true;
+				}
+			}else{
+				token += line[pos];
+				in_token = true;
+			}
+			pos++;
+		}
+		if(in_token) tokens.push_back(token);
+		
+		// Need at least one token		
 		if(tokens.size()<1)continue;
 
+		if(filling_tab_config != ""){
+			tab_configs[filling_tab_config].hnamepaths.push_back(tokens[0]);
+			continue;
+		}
+
+		if(tokens[0] == "auto-refresh"){
+			if(tokens.size()>1){
+				bAutoRefresh->SetOn(tokens[1] == "on");
+			}else{
+				bAutoRefresh->SetOn(kTRUE);
+			}
+		}
+		if(tokens[0] == "auto-advance"){
+			if(tokens.size()>1){
+				bAutoAdvance->SetOn(tokens[1] == "on");
+			}else{
+				bAutoAdvance->SetOn(kTRUE);
+			}
+		}
+		if(tokens[0] == "delay"){
+			if(tokens.size()>1){
+				delay_time = atoi(tokens[1].c_str());
+				fDelay->Select(delay_time);
+				char str[8];
+				sprintf(str, "%lds", delay_time);
+				fDelay->GetTextEntry()->SetText(str);
+			}
+		}
+		if(tokens[0] == "selected-tab"){
+			if(tokens.size()>1){
+				selected_tab = atoi(tokens[1].c_str());
+			}
+		}
+		if(tokens[0] == "TAB"){      // TAB title
+			if(tokens.size()>2){
+				tabs.push_back(pair<string,string>(tokens[1], tokens[2]));
+			}
+		}
+		if(tokens[0] == "CONFIG:"){  // CONFIG:  name  currently_displayed
+			if(tokens.size()>1){
+				tab_config_t tab_config;
+				tab_config.name = tokens[1];
+				tab_config.currently_displayed = atoi(tokens[1].c_str());
+				tab_configs[tab_config.name] = tab_config;
+				filling_tab_config = tab_config.name;
+			}
+		}
 	}
+	
+	// Create tabs
+	vector<pair<string, string> >::iterator iter = tabs.begin();
+	for(; iter!=tabs.end(); iter++){
+		string title = iter->first;
+		string config = iter->second;
+		RSTab *rstab = new RSTab(this, title);
+		
+		// Copy configs to combobox in rstab
+		map<string, tab_config_t>::iterator it_conf = tab_configs.begin();
+		int idx = 0;
+		rstab->sConfig->RemoveAll();
+		for(; it_conf!=tab_configs.end(); it_conf++, idx++){
+			rstab->sConfig->AddEntry(it_conf->first.c_str(), idx);
+		}
+		
+		// Copy other settings from this config into the RSTab object (if config exists)
+		it_conf = tab_configs.find(config);
+		if(it_conf != tab_configs.end()){
+			tab_config_t &tab_config = it_conf->second;
+			
+			rstab->sConfig->GetTextEntry()->SetText(config.c_str());
+			rstab->currently_displayed = tab_config.currently_displayed;
+			rstab->hnamepaths.clear();
+			for(unsigned int i=0; i<tab_config.hnamepaths.size(); i++){
+				rstab->hnamepaths.push_back(tab_config.hnamepaths[i]);
+			}
+		}
+		
+		rstab->DoUpdateWithFollowUp();
+	}
+	
+	if(selected_tab>0 && selected_tab<(int)tabs.size()) fMainTab->SetTab(selected_tab);
 	
 	// close file
 	ifs.close();
@@ -227,7 +345,7 @@ void rs_mainframe::SavePreferences(void)
 	if(!home)return;
 	
 	// Try deleting old file and creating new file
-	string fname = string(home) + "/.RootSys";
+	string fname = string(home) + "/.rootspy";
 	unlink(fname.c_str());
 	ofstream ofs(fname.c_str());
 	if(!ofs.is_open()){
@@ -241,6 +359,34 @@ void rs_mainframe::SavePreferences(void)
 	ofs<<"##### Auto-generated on "<<ctime(&t)<<endl;
 	ofs<<endl;
 
+	// Global settings
+	ofs<<"auto-refresh " << (bAutoRefresh->GetState()==kButtonDown ? "on":"off") << endl;
+	ofs<<"auto-advance " << (bAutoAdvance->GetState()==kButtonDown ? "on":"off") << endl;
+	ofs<<"delay        " << delay_time << endl;
+	ofs<<"selected-tab " << fMainTab->GetCurrent() << endl;
+	ofs<<endl;
+	
+	// Tabs
+	list<RSTab*>::iterator tab_it = rstabs.begin();
+	for(; tab_it!=rstabs.end(); tab_it++){
+		ofs<<"TAB \"" << (*tab_it)->title << "\" \"" << (*tab_it)->config << "\"" << endl;
+	}
+	ofs<<endl;
+	
+	// Configs
+	tab_it = rstabs.begin();
+	for(; tab_it!=rstabs.end(); tab_it++){
+		RSTab *rstab = *tab_it;
+		
+		if(rstab->hnamepaths.size() == 0) continue; // don't write out empty configurations
+		
+		ofs<<"CONFIG: \"" << rstab->config << "\" " << rstab->currently_displayed << endl;
+		list<string>::iterator h_it = rstab->hnamepaths.begin();
+		for(; h_it!= rstab->hnamepaths.end(); h_it++){
+			ofs << *h_it << endl;
+		}
+		ofs<<endl;
+	}
 
 	ofs<<endl;
 	ofs.close();
@@ -456,7 +602,6 @@ void rs_mainframe::DoRemoveTabDialog(void)
 //-------------------
 void rs_mainframe::DoTabSelected(Int_t id)
 {
-	cout << "New tab selected id=" << id << "rstabs.size()=" << rstabs.size() << " current:0x" << hex << current_tab << dec << endl;
 	list<RSTab*>::iterator it = rstabs.begin();
 	advance(it, id);
 	current_tab = *it;
@@ -1412,7 +1557,7 @@ void rs_mainframe::CreateGUI(void)
    // Delay
    TGHorizontalFrame *fMainTopRightDelay = new TGHorizontalFrame(fMainTopRight);
    AddLabel(fMainTopRightDelay, "delay:");
-   TGComboBox *fDelay = new TGComboBox(fMainTopRightDelay,"-",-1,kHorizontalFrame | kSunkenFrame | kDoubleBorder | kOwnBackground);
+   fDelay = new TGComboBox(fMainTopRightDelay,"-",-1,kHorizontalFrame | kSunkenFrame | kDoubleBorder | kOwnBackground);
    fDelay->AddEntry("0s",0);
    fDelay->AddEntry("1s",1);
    fDelay->AddEntry("2s",2);
@@ -1420,14 +1565,14 @@ void rs_mainframe::CreateGUI(void)
    fDelay->AddEntry("4s",4);
    fDelay->AddEntry("10s ",10);
    fDelay->Resize(50,22);
-   fDelay->Select(4);
+   fDelay->Select(delay_time = 4);
    fDelay->GetTextEntry()->SetText("4s");
    fMainTopRightDelay->AddFrame(fDelay, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
    fMainTopRight->AddFrame(fMainTopRightDelay, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 	
 	//....... Tabs .......
 	// Add a single tab for now
-	new RSTab(this, "New");
+	//new RSTab(this, "New");
 
 	//....... Bottom Frame .......
 	AddSpacer(fMainBot, 50, 1, kLHintsRight);
