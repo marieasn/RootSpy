@@ -71,6 +71,7 @@ enum MenuCommandIdentifiers {
   M_FILE_NEW_CONFIG,
   M_FILE_OPEN_CONFIG,
   M_FILE_SAVE_CONFIG,
+  M_FILE_SAVE_AS_CONFIG,
   M_FILE_EXIT,
 
   M_TOOLS_MACROS,
@@ -97,14 +98,17 @@ static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist);
 rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gui):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
 {
 	current_tab = NULL;
+	config_filename = "";
 
 	//Define all of the -graphics objects. 
         if(build_gui) {
 	    CreateGUI();
 		
 		ReadPreferences();
+		if(config_filename != "") ReadConfig(config_filename);
 		
-		if(rstabs.empty()) new RSTab(this, "New"); // make sure we have at least one tab
+		// make sure we have at least one tab
+		if(rstabs.empty()) new RSTab(this, "New");
 
 	    // Set up timer to call the DoTimer() method repeatedly
 	    // so events can be automatically advanced.
@@ -118,6 +122,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	last_called=now - 1.0;
 	last_ping_time = now;
 	last_hist_requested = -4.0;
+	selected_tab_from_prefrences = 0;
 
 	last_requested.hnamepath = "N/A";
 	last_hist_plotted = NULL;
@@ -184,6 +189,44 @@ void rs_mainframe::CloseWindow(void)
 }
 
 //-------------------
+// SavePreferences
+//-------------------
+void rs_mainframe::SavePreferences(void)
+{
+	// Preferences file is "${HOME}/.RootSys"
+	const char *home = getenv("HOME");
+	if(!home)return;
+	
+	// Try deleting old file and creating new file
+	string fname = string(home) + "/.rootspy";
+	unlink(fname.c_str());
+	ofstream ofs(fname.c_str());
+	if(!ofs.is_open()){
+		cout<<"Unable to create preferences file \""<<fname<<"\"!"<<endl;
+		return;
+	}
+	
+	// Write header
+	time_t t = time(NULL);
+	ofs<<"##### RootSys preferences file ###"<<endl;
+	ofs<<"##### Auto-generated on "<<ctime(&t)<<endl;
+	ofs<<endl;
+
+	// Global settings
+	ofs<<"config-file \"" << config_filename << "\"" << endl;
+	ofs<<"window-size " << GetWidth() << " " << GetHeight() << endl;
+	ofs<<"auto-refresh " << (bAutoRefresh->GetState()==kButtonDown ? "on":"off") << endl;
+	ofs<<"auto-advance " << (bAutoAdvance->GetState()==kButtonDown ? "on":"off") << endl;
+	ofs<<"delay        " << delay_time << endl;
+	ofs<<"selected-tab " << fMainTab->GetCurrent() << endl;
+	ofs<<endl;
+
+	ofs<<endl;
+	ofs.close();
+	cout<<"Preferences written to \""<<fname<<"\""<<endl;
+}
+
+//-------------------
 // ReadPreferences
 //-------------------
 void rs_mainframe::ReadPreferences(void)
@@ -191,26 +234,247 @@ void rs_mainframe::ReadPreferences(void)
 	// Preferences file is "${HOME}/.RootSys"
 	const char *home = getenv("HOME");
 	if(!home)return;
-	
-	// Try and open file
+
+	// Read in file, spliting it into section and tokenizing it
 	string fname = string(home) + "/.rootspy";
-	ifstream ifs(fname.c_str());
-	if(!ifs.is_open())return;
 	cout<<"Reading preferences from \""<<fname<<"\" ..."<<endl;
+	map<string, vector<config_item_t> > config_items;
+	TokenizeFile(fname, config_items);
+
+	// Loop over config items
+	map<string, vector<config_item_t> >::iterator iter;
+	for(iter=config_items.begin(); iter!=config_items.end(); iter++){
+		
+		// For convenience, setup references to type and first element's tokens
+		string type = iter->first;
+		config_item_t &ci = iter->second[0];
+		vector<string> &tokens = ci.tokens;
+
+		if(type == "config-file"){
+			if(tokens.size()>1){
+				config_filename = tokens[1];
+			}
+		}
+		if(type == "window-size"){
+			if(tokens.size()>2){
+				UInt_t w = atoi(tokens[1].c_str());
+				UInt_t h = atoi(tokens[2].c_str());
+				winsize_from_preferences = TGDimension(w, h);
+				TTimer::SingleShot(500, "rs_mainframe", this, "DoSetWindowSize()");
+			}
+		}
+		if(type == "auto-refresh"){
+			if(tokens.size()>1){
+				bAutoRefresh->SetOn(tokens[1] == "on");
+			}else{
+				bAutoRefresh->SetOn(kTRUE);
+			}
+		}
+		if(type == "auto-advance"){
+			if(tokens.size()>1){
+				bAutoAdvance->SetOn(tokens[1] == "on");
+			}else{
+				bAutoAdvance->SetOn(kTRUE);
+			}
+		}
+		if(type == "delay"){
+			if(tokens.size()>1){
+				delay_time = atoi(tokens[1].c_str());
+				fDelay->Select(delay_time);
+				char str[8];
+				sprintf(str, "%lds", delay_time);
+				fDelay->GetTextEntry()->SetText(str);
+			}
+		}
+		if(type == "selected-tab"){
+			if(tokens.size()>1){
+				selected_tab_from_prefrences = atoi(tokens[1].c_str());
+			}
+		}
+	}
+}
+
+//-------------------
+// SaveConfigAs
+//-------------------
+void rs_mainframe::SaveConfigAs(void)
+{
+	// Temporarily set config_filename to empty string
+	// in order to force SaveConfig to present a dialog
+	string save_config_filename = config_filename;
+	config_filename = "";
+
+	SaveConfig();
 	
-	// Containers to hold results
+	// No config file was saved, (user probably hit cancel). Revert to previous.
+	if(config_filename=="") config_filename = save_config_filename;
+}
+
+//-------------------
+// SaveConfig
+//-------------------
+void rs_mainframe::SaveConfig(void)
+{
+	// If config_filename is not set, then ask user for one
+	if(config_filename == ""){
+		TGFileInfo file_info;
+		const char *filetypes[] = {"RootSpy config. files", "*.rsconfig", "All files", "*", 0, 0};
+		file_info.fFileTypes = filetypes;
+		file_info.fMultipleSelection = false;
+		file_info.fOverwrite = true;
+		file_info.fFilename = (char*)malloc(512);
+		file_info.fIniDir = (char*)malloc(512);
+		new TGFileDialog(gClient->GetRoot(), this, kFDSave, &file_info);
+		if(!file_info.fFilename) return; // user hit "cancel"
+
+		string filename = file_info.fFilename;
+		string dirname  = file_info.fIniDir;
+		config_filename = dirname + filename;
+		if(config_filename.length() < 9){
+			config_filename += ".rsconfig";
+		}else{
+			if(config_filename.substr(config_filename.length()-9) != ".rsconfig"){
+				config_filename += ".rsconfig";
+			}
+		}
+	}
+	
+	// Try deleting old file and creating new file
+	unlink(config_filename.c_str());
+	ofstream ofs(config_filename.c_str());
+	if(!ofs.is_open()){
+		cout<<"Unable to create preferences file \""<<config_filename<<"\"!"<<endl;
+		return;
+	}
+	
+	// Write header
+	time_t t = time(NULL);
+	ofs<<"##### RootSys config. file ###"<<endl;
+	ofs<<"##### Generated on "<<ctime(&t)<<endl;
+	ofs<<endl;
+
+	// Global settings
+	ofs<<endl;
+	
+	// Tabs
+	list<RSTab*>::iterator tab_it = rstabs.begin();
+	for(; tab_it!=rstabs.end(); tab_it++){
+		RSTab *rstab = *tab_it;
+
+		ofs<<"TAB: \"" << rstab->title << "\" " << rstab->currently_displayed << endl;
+		list<string>::iterator h_it = rstab->hnamepaths.begin();
+		for(; h_it!= rstab->hnamepaths.end(); h_it++){
+			ofs << *h_it << endl;
+		}
+		ofs<<endl;
+	}
+	ofs<<endl;
+
+	ofs<<endl;
+	ofs.close();
+	cout<<"Configuration written to \""<<config_filename<<"\""<<endl;
+}
+
+//-------------------
+// ReadConfig
+//-------------------
+void rs_mainframe::ReadConfig(string fname)
+{
+	// If fname is not set, then ask user for one
+	if(fname == ""){
+		TGFileInfo file_info;
+		const char *filetypes[] = {"RootSpy config. files", "*.rsconfig", "All files", "*", 0, 0};
+		file_info.fFileTypes = filetypes;
+		file_info.fMultipleSelection = false;
+		file_info.fOverwrite = true;
+		file_info.fFilename = (char*)malloc(512);
+		file_info.fIniDir = (char*)malloc(512);
+		new TGFileDialog(gClient->GetRoot(), this, kFDOpen, &file_info);
+		if(!file_info.fFilename) return; // user hit "cancel"
+
+		string filename = file_info.fFilename;
+		string dirname  = file_info.fIniDir;
+		fname = dirname + filename;
+	}
+	
+	cout << "Reading configuration from \""<<fname<<"\""<<endl;
+	config_filename = fname;
+
+	// Read in file, spliting it into section and tokenizing it
+	map<string, vector<config_item_t> > config_items;
+	TokenizeFile(fname, config_items);
+
+	// Remove all existing tabs
+	int Ntabs = fMainTab->GetNumberOfTabs();
+	for(int i=0; i<Ntabs; i++) fMainTab->RemoveTab(Ntabs-1 - i);
+	list<RSTab*>::iterator tab_iter = rstabs.begin();
+	for(; tab_iter!=rstabs.end(); tab_iter++) delete *tab_iter;
+	rstabs.clear();
+	
+	// Get TAB configurations and create new tabs
 	vector<pair<string, string> > tabs; // first=title  second=config
+	map<string, vector<config_item_t> >::iterator iter = config_items.find("TAB:");
+	if(iter != config_items.end()){
+		vector<config_item_t> &config_items = iter->second;
+		for(uint32_t i=0; i<config_items.size(); i++){
+
+			config_item_t &ci = config_items[i];
+			vector<string> &tokens = ci.tokens;
+			vector<string> &subitems = ci.subitems;
+			
+			if(tokens.size()>1){
+				string title = tokens[1];
+				RSTab *rstab = new RSTab(this, title);
+				
+				// Add hnamepaths
+				for(uint32_t j=0; j<subitems.size(); j++){
+					rstab->hnamepaths.push_back(subitems[j]);
+				}
+				
+				// Set currently displayed histogram
+				if(tokens.size()>2){
+					rstab->currently_displayed = atoi(tokens[2].c_str());
+				}
+				
+				rstab->DoUpdateWithFollowUp();
+			}
+		}
+	}
 	
+	if(selected_tab_from_prefrences>0 && selected_tab_from_prefrences<(int)tabs.size()) fMainTab->SetTab(selected_tab_from_prefrences);
+	
+	// Screen does not update correctly without these!
+	TGDimension dim(GetWidth()+1, GetHeight()); // size must be different than current!
+	Resize(dim); // (does not actually change size)
+	MapSubwindows();
+}
+
+//-------------------
+// TokenizeFile
+//-------------------
+bool rs_mainframe::TokenizeFile(string fname, map<string, vector<config_item_t> > &config_items)
+{
+	ifstream ifs(fname.c_str());
+	if(!ifs.is_open()){
+		cout << "unable to open file: " << fname << endl;
+		return true;
+	}
+
 	// Loop over lines
-	string filling_tab_config = "";
-	int selected_tab = 0;
+	config_item_t *filling_config = NULL;
 	char line[1024];
 	while(!ifs.eof()){
 		ifs.getline(line, 1024);
-		if(strlen(line)==0){ filling_tab_config=""; continue; }
+		if(strlen(line)==0){ filling_config=NULL; continue; }
 		if(line[0] == '#')continue;
-		string str(line);
+		//string str(line);
 		
+		// If filling a multi-line config item just add whole line and continue
+		if(filling_config){
+			filling_config->subitems.push_back(line);
+			continue;
+		}
+
 		// Break line into tokens, respecting double quotes
 		vector<string> tokens;
 		int pos=0;
@@ -246,151 +510,27 @@ void rs_mainframe::ReadPreferences(void)
 		}
 		if(in_token) tokens.push_back(token);
 		
-		// Need at least one token		
-		if(tokens.size()<1)continue;
-
-		if(filling_tab_config != ""){
-			tab_configs[filling_tab_config].hnamepaths.push_back(tokens[0]);
-			continue;
-		}
-
-		if(tokens[0] == "auto-refresh"){
-			if(tokens.size()>1){
-				bAutoRefresh->SetOn(tokens[1] == "on");
-			}else{
-				bAutoRefresh->SetOn(kTRUE);
-			}
-		}
-		if(tokens[0] == "auto-advance"){
-			if(tokens.size()>1){
-				bAutoAdvance->SetOn(tokens[1] == "on");
-			}else{
-				bAutoAdvance->SetOn(kTRUE);
-			}
-		}
-		if(tokens[0] == "delay"){
-			if(tokens.size()>1){
-				delay_time = atoi(tokens[1].c_str());
-				fDelay->Select(delay_time);
-				char str[8];
-				sprintf(str, "%lds", delay_time);
-				fDelay->GetTextEntry()->SetText(str);
-			}
-		}
-		if(tokens[0] == "selected-tab"){
-			if(tokens.size()>1){
-				selected_tab = atoi(tokens[1].c_str());
-			}
-		}
-		if(tokens[0] == "TAB"){      // TAB title
-			if(tokens.size()>2){
-				tabs.push_back(pair<string,string>(tokens[1], tokens[2]));
-			}
-		}
-		if(tokens[0] == "CONFIG:"){  // CONFIG:  name  currently_displayed
-			if(tokens.size()>1){
-				tab_config_t tab_config;
-				tab_config.name = tokens[1];
-				tab_config.currently_displayed = atoi(tokens[1].c_str());
-				tab_configs[tab_config.name] = tab_config;
-				filling_tab_config = tab_config.name;
+		// Create a new configuration item. If the first token ends
+		// with ":" then set the filling_config pointer to it
+		if(!tokens.empty()){
+			string &type = tokens[0];
+			if(!type.empty()){
+				config_item_t ci;
+				ci.type = type;
+				ci.tokens = tokens;
+				config_items[ci.type].push_back(ci);
+				if(type[type.size()-1] == ':'){
+					vector<config_item_t> &vci = config_items[ci.type];
+					filling_config = &vci[vci.size()-1];
+				}
 			}
 		}
 	}
-	
-	// Create tabs
-	vector<pair<string, string> >::iterator iter = tabs.begin();
-	for(; iter!=tabs.end(); iter++){
-		string title = iter->first;
-		string config = iter->second;
-		RSTab *rstab = new RSTab(this, title);
-		
-		// Copy configs to combobox in rstab
-		map<string, tab_config_t>::iterator it_conf = tab_configs.begin();
-		int idx = 0;
-		rstab->sConfig->RemoveAll();
-		for(; it_conf!=tab_configs.end(); it_conf++, idx++){
-			rstab->sConfig->AddEntry(it_conf->first.c_str(), idx);
-		}
-		
-		// Copy other settings from this config into the RSTab object (if config exists)
-		it_conf = tab_configs.find(config);
-		if(it_conf != tab_configs.end()){
-			tab_config_t &tab_config = it_conf->second;
-			
-			rstab->sConfig->GetTextEntry()->SetText(config.c_str());
-			rstab->currently_displayed = tab_config.currently_displayed;
-			rstab->hnamepaths.clear();
-			for(unsigned int i=0; i<tab_config.hnamepaths.size(); i++){
-				rstab->hnamepaths.push_back(tab_config.hnamepaths[i]);
-			}
-		}
-		
-		rstab->DoUpdateWithFollowUp();
-	}
-	
-	if(selected_tab>0 && selected_tab<(int)tabs.size()) fMainTab->SetTab(selected_tab);
 	
 	// close file
 	ifs.close();
-}
 
-//-------------------
-// SavePreferences
-//-------------------
-void rs_mainframe::SavePreferences(void)
-{
-	// Preferences file is "${HOME}/.RootSys"
-	const char *home = getenv("HOME");
-	if(!home)return;
-	
-	// Try deleting old file and creating new file
-	string fname = string(home) + "/.rootspy";
-	unlink(fname.c_str());
-	ofstream ofs(fname.c_str());
-	if(!ofs.is_open()){
-		cout<<"Unable to create preferences file \""<<fname<<"\"!"<<endl;
-		return;
-	}
-	
-	// Write header
-	time_t t = time(NULL);
-	ofs<<"##### RootSys preferences file ###"<<endl;
-	ofs<<"##### Auto-generated on "<<ctime(&t)<<endl;
-	ofs<<endl;
-
-	// Global settings
-	ofs<<"auto-refresh " << (bAutoRefresh->GetState()==kButtonDown ? "on":"off") << endl;
-	ofs<<"auto-advance " << (bAutoAdvance->GetState()==kButtonDown ? "on":"off") << endl;
-	ofs<<"delay        " << delay_time << endl;
-	ofs<<"selected-tab " << fMainTab->GetCurrent() << endl;
-	ofs<<endl;
-	
-	// Tabs
-	list<RSTab*>::iterator tab_it = rstabs.begin();
-	for(; tab_it!=rstabs.end(); tab_it++){
-		ofs<<"TAB \"" << (*tab_it)->title << "\" \"" << (*tab_it)->config << "\"" << endl;
-	}
-	ofs<<endl;
-	
-	// Configs
-	tab_it = rstabs.begin();
-	for(; tab_it!=rstabs.end(); tab_it++){
-		RSTab *rstab = *tab_it;
-		
-		if(rstab->hnamepaths.size() == 0) continue; // don't write out empty configurations
-		
-		ofs<<"CONFIG: \"" << rstab->config << "\" " << rstab->currently_displayed << endl;
-		list<string>::iterator h_it = rstab->hnamepaths.begin();
-		for(; h_it!= rstab->hnamepaths.end(); h_it++){
-			ofs << *h_it << endl;
-		}
-		ofs<<endl;
-	}
-
-	ofs<<endl;
-	ofs.close();
-	cout<<"Preferences written to \""<<fname<<"\""<<endl;
+	return false;
 }
 
 //-------------------
@@ -461,6 +601,21 @@ void rs_mainframe::HandleMenu(Int_t id)
    case M_FILE_SAVE:
      DoSaveHistsList();
      break;
+	
+   case M_FILE_NEW_CONFIG:
+     break;
+
+   case M_FILE_OPEN_CONFIG:
+     ReadConfig();
+     break;
+
+   case M_FILE_SAVE_CONFIG:
+     SaveConfig();
+     break;
+
+   case M_FILE_SAVE_AS_CONFIG:
+     SaveConfig();
+     break;
 
    case M_FILE_EXIT: 
      DoQuit();       
@@ -527,6 +682,16 @@ void rs_mainframe::DoMakeTB(void)
 	new TBrowser();
 		
 	//Outputs a new TBrowser, which will help with DeBugging.
+}
+
+//-------------------
+// DoSetWindowSize
+//-------------------
+void rs_mainframe::DoSetWindowSize(void)
+{
+	/// This is called after some delay to resize the window
+	/// after it has been mapped
+	Resize(winsize_from_preferences);
 }
 
 //-------------------
@@ -1480,7 +1645,8 @@ void rs_mainframe::CreateGUI(void)
    fMenuFile->AddSeparator();
    fMenuFile->AddEntry("New Configuration...", M_FILE_NEW_CONFIG);
    fMenuFile->AddEntry("Open Configuration...", M_FILE_OPEN_CONFIG);
-   fMenuFile->AddEntry("Save Configuration...", M_FILE_SAVE_CONFIG);
+   fMenuFile->AddEntry("Save Configuration", M_FILE_SAVE_CONFIG);
+   fMenuFile->AddEntry("Save Configuration As ...", M_FILE_SAVE_AS_CONFIG);
    fMenuFile->AddEntry("E&xit", M_FILE_EXIT);
 
    fMenuTools = new TGPopupMenu(gClient->GetRoot());

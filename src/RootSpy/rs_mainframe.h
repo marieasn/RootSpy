@@ -52,18 +52,32 @@ class rs_mainframe:public TGMainFrame {
 			kViewByServer_rs
 		};
 		
-		class tab_config_t{
-			public:
+#ifndef __CINT__
+		typedef struct {
+				string type;
+				vector<string> tokens;
+				vector<string> subitems;
+		}config_item_t;
+
+		typedef struct {
 				string name;
 				int currently_displayed;
 				vector<string> hnamepaths;
-		};
+		}tab_config_t;
+
+		bool TokenizeFile(string fname, map<string, vector<config_item_t> > &config_items);
+#endif // __CINT__
+
+
 
 		rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h, bool build_gui);
 		~rs_mainframe();
 
-		void ReadPreferences(void);
 		void SavePreferences(void);
+		void ReadPreferences(void);
+		void SaveConfigAs(void);
+		void SaveConfig(void);
+		void ReadConfig(string fname="");
 		
 		// Virtual methods and menu handler
 		void   CloseWindow(void);
@@ -73,6 +87,7 @@ class rs_mainframe:public TGMainFrame {
 		// Slots for ROOT GUI
 		void DoQuit(void);
 		void DoMakeTB(void);
+		void DoSetWindowSize(void);		
 		void DoResetDialog(void);
 		void DoSetScaleOptions(void);
 		void DoNewTabDialog(void);
@@ -144,10 +159,10 @@ class rs_mainframe:public TGMainFrame {
 		bool delete_dialog_scaleopts;
 		bool can_view_indiv;
 
+		string config_filename;
 		map<string,string> macro_files;
 		list<RSTab*> rstabs;
 		RSTab *current_tab;
-		map<string, tab_config_t> tab_configs;
 
 
 			viewStyle_t_rs viewStyle_rs;
@@ -173,6 +188,8 @@ class rs_mainframe:public TGMainFrame {
 		
 		hid_t last_requested;	// last hnamepath requested
 		TH1 *last_hist_plotted;
+		int selected_tab_from_prefrences;
+		TGDimension winsize_from_preferences;
 		
 	
 		void CreateGUI(void);
