@@ -412,7 +412,6 @@ void rs_mainframe::ReadConfig(string fname)
 	rstabs.clear();
 	
 	// Get TAB configurations and create new tabs
-	vector<pair<string, string> > tabs; // first=title  second=config
 	map<string, vector<config_item_t> >::iterator iter = config_items.find("TAB:");
 	if(iter != config_items.end()){
 		vector<config_item_t> &config_items = iter->second;
@@ -440,8 +439,9 @@ void rs_mainframe::ReadConfig(string fname)
 			}
 		}
 	}
-	
-	if(selected_tab_from_prefrences>0 && selected_tab_from_prefrences<(int)tabs.size()) fMainTab->SetTab(selected_tab_from_prefrences);
+
+	// Set the tab read from the preferences file
+	if( (selected_tab_from_prefrences>=0) && (selected_tab_from_prefrences<fMainTab->GetNumberOfTabs())) fMainTab->SetTab(selected_tab_from_prefrences);
 	
 	// Screen does not update correctly without these!
 	TGDimension dim(GetWidth()+1, GetHeight()); // size must be different than current!
@@ -900,9 +900,10 @@ void rs_mainframe::DoTimer(void) {
 		last_ping_time = now;
 	}
 	
-	// Ask for list of all hists from all servers every 5 seconds
+	// Ask for list of all hists and macros from all servers every 5 seconds
 	if(now-last_hist_requested >= 5.0){
 		RS_CMSG->RequestHists("rootspy");
+		RS_CMSG->RequestMacroList("rootspy");
 		last_hist_requested = now;
 	}
 	
