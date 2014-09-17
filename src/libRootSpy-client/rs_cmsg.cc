@@ -618,7 +618,7 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 		macro_names = msg->getStringVector("macro_names");
 		macro_paths = msg->getStringVector("macro_paths");
 	} catch (cMsgException e) {
-		_DBG_<<"Poorly formed response for \"macros list\". Ignoring."<<endl;
+		if(verbose>2) _DBG_<<"Poorly formed response for \"macros list\". (May just be empty list. Ignoring.)"<<endl;
 		return;
 	}
 
@@ -637,7 +637,7 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 		return;
 	}
 
-	_DBG_ << "got macro list from " << server << endl;
+	if(verbose>=2)_DBG_ << "got macro list from " << server << endl;
 
 	// Looks like we got a good response. Loop over histograms and add them to
 	// list of hdef_t objects kept in RS_INFO. 
