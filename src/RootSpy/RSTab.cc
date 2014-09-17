@@ -62,24 +62,8 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 
 	// Display Type
 	TGGroupFrame *fDisplayOptions = new TGGroupFrame(fTabMainLeft, "Display Options", kVerticalFrame);
-	fTabMainLeft->AddFrame(fDisplayOptions, new TGLayoutHints(kLHintsLeft | kLHintsCenterY, 2,2,2,2));
-	bDisplayFileConfig = new TGRadioButton(fDisplayOptions, "RootSpy Config.", 1);
-	bDisplayCustomConfig = new TGRadioButton(fDisplayOptions, "Customized", 2);
-	bDisplayFileConfig->SetToolTipText("Select this to use a predefined configuration \nof histograms to view. Select which configuration \nfrom the config. combobox below.");
-	bDisplayCustomConfig->SetToolTipText("Select this to use a custom configuration \nof histograms and macros to view. Select which \nhistograms and macros using the \"Select\" below.");
-
-	// Configurations combobox and select button
-	sConfig = new TGComboBox(fDisplayOptions,"<none>",-1,kHorizontalFrame | kSunkenFrame | kDoubleBorder | kOwnBackground);
-	sConfig->SetHeight(20);
-
-	// Place display options widgets in a way that hopefully makes it clear how to use them
-	fDisplayOptions->AddFrame(bDisplayFileConfig, new TGLayoutHints(kLHintsLeft | kLHintsTop, 2,2,2,2));
-	AddLabel(fDisplayOptions, "config:");
-	fDisplayOptions->AddFrame(sConfig, new TGLayoutHints(kLHintsRight | kLHintsCenterY | kLHintsExpandX | kLHintsExpandY, 0,0,0,0));
-
-	AddSpacer(fDisplayOptions, 1, 15);
-	fDisplayOptions->AddFrame(bDisplayCustomConfig, new TGLayoutHints(kLHintsLeft | kLHintsTop, 2,2,2,2));
-	TGTextButton *bSelect = AddButton(fDisplayOptions, "Select", kLHintsRight);
+	fTabMainLeft->AddFrame(fDisplayOptions, new TGLayoutHints(kLHintsExpandX | kLHintsCenterY, 2,2,2,2));
+	TGTextButton *bSelect = AddButton(fDisplayOptions, "Select", kLHintsExpandX);
 	
 	// Buttons at bottom left
 	TGVerticalFrame *fTabMainLeftBottom = new TGVerticalFrame(fTabMainLeft);
@@ -109,12 +93,9 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	bSaveCanvas->Connect("Clicked()","RSTab", this, "DoSaveCanvas()");
 	bUpdate->Connect("Clicked()","RSTab", this, "DoUpdateWithFollowUp()");
 	bSelect->Connect("Clicked()","RSTab", this, "DoSelectHists()");
-	bDisplayFileConfig->Connect("Clicked()","RSTab", this, "DoSetFileConfig()");
-	bDisplayCustomConfig->Connect("Clicked()","RSTab", this, "DoSetCustomConfig()");
 	
 	// Set some defaults
 	config = title;
-	bDisplayCustomConfig->SetOn(kTRUE, kTRUE);
 	currently_displayed = 0;
 	currently_displayed_modified = 0.0;
 	last_update = 0.0;
@@ -431,22 +412,6 @@ void RSTab::DoUpdateWithFollowUp(void)
 void RSTab::DoSelectHists(void)
 {
 	new Dialog_SelectHists(this, gClient->GetRoot(), 10, 10);
-}
-
-//----------
-// DoSetFileConfig
-//----------
-void RSTab::DoSetFileConfig(void)
-{
-	bDisplayCustomConfig->SetOn(kFALSE);
-}
-
-//----------
-// DoSetCustomConfig
-//----------
-void RSTab::DoSetCustomConfig(void)
-{
-	bDisplayFileConfig->SetOn(kFALSE);
 }
 
 

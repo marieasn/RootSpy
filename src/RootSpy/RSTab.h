@@ -44,9 +44,6 @@ class RSTab{
 		TGLabel *lHistogram;
 		TGLabel *lReceived;
 		TCanvas *canvas;
-		TGRadioButton *bDisplayFileConfig;
-		TGRadioButton *bDisplayCustomConfig;
-		TGComboBox *sConfig;
 		
 		string title;
 		string config;
@@ -69,8 +66,6 @@ class RSTab{
 		void DoUpdate(void);
 		void DoUpdateWithFollowUp(void);
 		void DoSelectHists(void);
-		void DoSetFileConfig(void);
-		void DoSetCustomConfig(void);
 	
 	protected:
 
