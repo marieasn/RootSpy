@@ -77,12 +77,18 @@ void Dialog_SelectHists::Init(list<string> *hnamepaths)
 	viewStyle = rs_info::kViewByObject;
 	
 	DoTimer();
+	
+	// Make initial window height something resonable
+	TGDimension dim = GetDefaultSize();
+	UInt_t N = RS_INFO->histdefs.size();
+	if(N>40) N=40; // limit how tall we make the window
+	if(N>11) dim.fHeight += (N-11)*19; // increase window's height if needed
 
 	// Finish up and map the window
 	SetWindowName("RootSpy Select Server/Histogram");
 	SetIconName("SelectHist");
 	MapSubwindows();
-	Resize(GetDefaultSize());
+	Resize(dim);
 	MapWindow();
 
 }
