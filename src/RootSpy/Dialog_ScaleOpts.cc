@@ -43,30 +43,46 @@ enum {
 //---------------------------------
 // Dialog_ScaleOpts    (Constructor)
 //---------------------------------
-Dialog_ScaleOpts::Dialog_ScaleOpts(const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
+Dialog_ScaleOpts::Dialog_ScaleOpts(string hnamepath, const TGWindow *p, UInt_t w, UInt_t h):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
 {
-    cout << " in Dialog_ScaleOpts constructor..." << endl;
+	this->hnamepath = hnamepath;
+	this->Nbins = 1;
+	
+	double min = 0;
+	double max = 100;
 
-    // make sure that there is a currently selected histogram, otherwise we bail
-    // probably should throw up an error message if we do...
-    RS_INFO->Lock();
-    current_hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-    if( (RS_INFO->current.hnamepath == "")
-        || (current_hdef_iter == RS_INFO->histdefs.end()) ) {
-        RS_INFO->Unlock();
-	RSMF->delete_dialog_scaleopts = true;
-        return;
-    }
-        RS_INFO->Unlock();
+	// Get current min/max setting and Nbins in this histogram
+	RS_INFO->Lock();
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+	if( hdef_iter != RS_INFO->histdefs.end() ) {
+    	hdef_t *hdef = &hdef_iter->second;
+		
+		selected_mode = hdef->display_info.overlay_scale_mode;
+		min = hdef->display_info.scale_range_low;
+		max = hdef->display_info.scale_range_hi;
+		if(hdef->sum_hist) Nbins = hdef->sum_hist->GetNbinsX();
 
+	}
+	RS_INFO->Unlock();
 
     // Define all of the of the graphics objects. 
-    CreateGUI();
-    
+	CreateGUI();
+
+	// Initialize min/max
+	stringstream ssmin;
+	ssmin << min;
+	stringstream ssmax;
+	ssmax << max;
+	minBox->SetText(ssmin.str().c_str());
+	maxBox->SetText(ssmax.str().c_str());
+	
+	// Set selected mode (may also cap min and max)
+	group->SetButton(selected_mode);
+	
     // Finish up and map the window
-    SetWindowName("");
-    //SetIconName("SelectHist");
-    MapSubwindows();
+	string title = "RootSpy Scaling Options: "+hnamepath;
+    SetWindowName(title.c_str());
+	MapSubwindows();
     Resize(GetDefaultSize());
     MapWindow();
 
@@ -77,17 +93,17 @@ Dialog_ScaleOpts::Dialog_ScaleOpts(const TGWindow *p, UInt_t w, UInt_t h):TGMain
 //---------------------------------
 Dialog_ScaleOpts::~Dialog_ScaleOpts()
 {
-	cout<<"escaped destructor"<<endl;
+	RSMF->dialog_scaleopts = NULL;
 }
 
-
+//---------------------------------
+// CloseWindow
+//---------------------------------
 void Dialog_ScaleOpts::CloseWindow(void) {
   	DeleteWindow();
 	RSMF->RaiseWindow();
 	RSMF->RequestFocus();
 	UnmapWindow();
-
-	RSMF->delete_dialog_scaleopts = true;
 }
 
 
@@ -95,33 +111,42 @@ void Dialog_ScaleOpts::CloseWindow(void) {
 // DoOk
 //---------------------------------
 void Dialog_ScaleOpts::DoOK(void)
-{	
-    // save information and then quit
-    current_hdef_iter->second.display_info.overlay_scale_mode = selected_mode;
+{
 
-    // error check
-    if(selected_mode == B_SCALE_PERCENT) {
-	double min = atoi(minBox->GetText());  // fragile!
-	double max = atoi(maxBox->GetText());
+	RS_INFO->Lock();
 
-	if(min < 0.)  min = 0.;
-	if(max > 100.) max = 100.;
+	// Get pointer to hdef_t
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+	if( hdef_iter == RS_INFO->histdefs.end() ) {
+		cerr << "Cannot find histogram definition for \""<<hnamepath<<"\"!" << endl;
+	}else{
 
-	current_hdef_iter->second.display_info.scale_range_low = min;
-	current_hdef_iter->second.display_info.scale_range_hi = max;
-    } else if(selected_mode == B_SCALE_BIN) {
-	double min = atoi(minBox->GetText());  // fragile!
-	double max = atoi(maxBox->GetText());
+		hdef_t *hdef = &hdef_iter->second;
 
-	if(min < 0.)  min = 0.;
-	if(max > current_hdef_iter->second.sum_hist->GetNbinsX()+1) 
-	    max = current_hdef_iter->second.sum_hist->GetNbinsX()+1;
+		// save mode info
+		hdef->display_info.overlay_scale_mode = selected_mode;
 
-	current_hdef_iter->second.display_info.scale_range_low = min;
-	current_hdef_iter->second.display_info.scale_range_hi = max;
-    }
+		// Set min and mac depending on mode selected
+		double min = atoi(minBox->GetText());  // fragile!
+		double max = atoi(maxBox->GetText());
+		if(selected_mode == B_SCALE_PERCENT) {
 
-    CloseWindow();
+			if(min < 0.)  min = 0.;
+			if(max > 100.) max = 100.;
+
+		} else if(selected_mode == B_SCALE_BIN) {
+
+			if(min < 0.)  min = 0.;
+			if(max > Nbins+1) max = Nbins+1;
+		}
+
+		hdef->display_info.scale_range_low = min;
+		hdef->display_info.scale_range_hi = max;
+	}
+	
+	RS_INFO->Unlock();
+
+	CloseWindow();
 
 }
 
@@ -140,29 +165,40 @@ void Dialog_ScaleOpts::DoCancel(void)
 //---------------------------------
 void Dialog_ScaleOpts::DoRadioButton(Int_t id)
 {	
-    // handle any needed changes when someone clicks on one of the radio buttons
-    switch(id) {
-    case B_SCALE_PERCENT:
-	minBox->SetText("0");
-	maxBox->SetText("100");
-	break;
-    case B_SCALE_BIN:
-	RS_INFO->Lock();
-	// make sure that there is a valid histogram loaded
-	map<string,hdef_t>::iterator hdef_itr = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-	if( (RS_INFO->current.hnamepath != "")
-	    && (hdef_itr != RS_INFO->histdefs.end()) ) {
-	    minBox->SetText("1");
-	    stringstream ss;
-	    ss << hdef_itr->second.sum_hist->GetNbinsX();
-	    maxBox->SetText(ss.str().c_str());
-	}
-	RS_INFO->Unlock();	    
-	break;
-    }
+	// Get current settings of min/max
+	double min = atoi(minBox->GetText());
+	double max = atoi(maxBox->GetText());
 
-    // keep track of which button is currently selected
-    selected_mode = id;
+	// min can't be <0 in any case
+	if(min<0) min = 0;
+
+	// Adjust max based on mode
+	switch(id) {
+		case B_SCALE_PERCENT:
+			if(max>100) max = 100;
+			minBox->SetEnabled(kTRUE);
+			maxBox->SetEnabled(kTRUE);
+			break;
+		case B_SCALE_BIN:
+			if(max > Nbins+1) max = Nbins+1;
+			minBox->SetEnabled(kTRUE);
+			maxBox->SetEnabled(kTRUE);
+			break;
+		default:
+			minBox->SetEnabled(kFALSE);
+			maxBox->SetEnabled(kFALSE);
+	}
+
+	// Convert min/max to strings and copy into entries
+	stringstream ssmin;
+	ssmin << min;
+	stringstream ssmax;
+	ssmax << max;
+	minBox->SetText(ssmin.str().c_str());
+	maxBox->SetText(ssmax.str().c_str());
+
+	// keep track of which button is currently selected
+	selected_mode = id;
 }
 
 //---------------------------------
@@ -176,7 +212,7 @@ void Dialog_ScaleOpts::CreateGUI(void)
     TGMainFrame *fMainFrame946 = this;
     //fMainFrame946->SetName("fMainFrame844");
     fMainFrame946->SetLayoutBroken(kTRUE);
-    
+   
     TGFont *ufont;         // will reflect user font changes
     ufont = gClient->GetFont("-*-helvetica-medium-r-*-*-12-*-*-*-*-*-iso8859-1");
 
@@ -191,7 +227,7 @@ void Dialog_ScaleOpts::CreateGUI(void)
     vall572.fGraphicsExposures = kFALSE;
     uGC = gClient->GetGC(&vall572, kTRUE);
 
-    string label_str = "Options for " + current_hdef_iter->second.hnamepath;
+    string label_str = "Nomalization Options";
     TGLabel *fLabel575 = new TGLabel(fMainFrame946,label_str.c_str(),uGC->GetGC());
     //fLabel575->SetTextJustify(36);
     fLabel575->SetTextJustify( kTextLeft | kTextCenterY );
@@ -199,19 +235,20 @@ void Dialog_ScaleOpts::CreateGUI(void)
     fLabel575->SetWrapLength(-1);
     fMainFrame946->AddFrame(fLabel575, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
     fLabel575->MoveResize(10,15,0,0);
-    
+	
+	stringstream ssbinrange;
+	ssbinrange<<"Bin range(1-"<<Nbins<<")";
 
     group = new TGButtonGroup(fMainFrame946, "Scale Options");
     //horizontal->SetTitlePos(TGGroupFrame::kCenter);
     button1 = new TGRadioButton(group, "None", B_SCALE_NONE);
     button2 = new TGRadioButton(group, "Full range", B_SCALE_ALL);
-    button3 = new TGRadioButton(group, "Bin range", B_SCALE_BIN);
-    button4 = new TGRadioButton(group, "Percent range", B_SCALE_PERCENT);
+    button3 = new TGRadioButton(group, ssbinrange.str().c_str(), B_SCALE_BIN);
+    button4 = new TGRadioButton(group, "Percent range(1-100)", B_SCALE_PERCENT);
 
     //fMainFrame946->AddFrame(group, new TGLayoutHints(kLHintsExpandX));
     fMainFrame946->AddFrame(group, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
     group->MoveResize(10,40,0,0);
-
 
 
     TGLabel *fLabel572 = new TGLabel(fMainFrame946,"Min",uGC->GetGC());
@@ -219,20 +256,20 @@ void Dialog_ScaleOpts::CreateGUI(void)
     fLabel572->SetMargins(0,0,0,0);
     fLabel572->SetWrapLength(-1);
     fMainFrame946->AddFrame(fLabel572, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-    fLabel572->MoveResize(180,60,0,0);
+    fLabel572->MoveResize(200,60,0,0);
     TGLabel *fLabel573 = new TGLabel(fMainFrame946,"Max",uGC->GetGC());
     fLabel573->SetTextJustify( kTextLeft | kTextCenterY );
     fLabel573->SetMargins(0,0,0,0);
     fLabel573->SetWrapLength(-1);
     fMainFrame946->AddFrame(fLabel573, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-    fLabel573->MoveResize(180,90,0,0);
+    fLabel573->MoveResize(200,90,0,0);
 
     TGTextEntry *fTextEntry689 = new TGTextEntry(fMainFrame946, new TGTextBuffer(14),-1,uGC->GetGC(),ufont->GetFontStruct(),kSunkenFrame | kDoubleBorder | kOwnBackground);
     fTextEntry689->SetMaxLength(3);
     fTextEntry689->SetAlignment(kTextLeft);
     fTextEntry689->SetText("");
     //fTextEntry689->Resize(280,fTextEntry689->GetDefaultHeight());
-    fTextEntry689->MoveResize(220,60,45,fTextEntry689->GetDefaultHeight());
+    fTextEntry689->MoveResize(240,60,45,fTextEntry689->GetDefaultHeight());
     fMainFrame946->AddFrame(fTextEntry689, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
     TGTextEntry *fTextEntry688 = new TGTextEntry(fMainFrame946, new TGTextBuffer(14),-1,uGC->GetGC(),ufont->GetFontStruct(),kSunkenFrame | kDoubleBorder | kOwnBackground);
@@ -240,7 +277,7 @@ void Dialog_ScaleOpts::CreateGUI(void)
     fTextEntry688->SetAlignment(kTextLeft);
     fTextEntry688->SetText("");
     //fTextEntry688->Resize(280,fTextEntry688->GetDefaultHeight());
-    fTextEntry688->MoveResize(220,90,45,fTextEntry688->GetDefaultHeight());
+    fTextEntry688->MoveResize(240,90,45,fTextEntry688->GetDefaultHeight());
     fMainFrame946->AddFrame(fTextEntry688, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
 
@@ -283,18 +320,18 @@ void Dialog_ScaleOpts::CreateGUI(void)
     // initialize dialog values
     //group->SetButton(B_SCALE_ALL);
     //selected_mode = B_SCALE_ALL;
-    selected_mode = current_hdef_iter->second.display_info.overlay_scale_mode;
-    group->SetButton(selected_mode);
+//    selected_mode = current_hdef_iter->second.display_info.overlay_scale_mode;
+//    group->SetButton(selected_mode = B_SCALE_ALL);
 
-    if ( (selected_mode == B_SCALE_PERCENT) 
-	 || (selected_mode == B_SCALE_BIN) ) {
-	stringstream ss;
-	ss << current_hdef_iter->second.display_info.scale_range_low;
-	minBox->SetText(ss.str().c_str());
-	ss.str("");   ss.clear();
-	ss << current_hdef_iter->second.display_info.scale_range_hi;
-	maxBox->SetText(ss.str().c_str());
-    }
+//    if ( (selected_mode == B_SCALE_PERCENT) 
+//	 || (selected_mode == B_SCALE_BIN) ) {
+//	stringstream ss;
+//	ss << current_hdef_iter->second.display_info.scale_range_low;
+//	minBox->SetText(ss.str().c_str());
+//	ss.str("");   ss.clear();
+//	ss << current_hdef_iter->second.display_info.scale_range_hi;
+//	maxBox->SetText(ss.str().c_str());
+//    }
     
 }
 

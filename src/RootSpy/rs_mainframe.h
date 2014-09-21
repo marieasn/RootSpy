@@ -97,8 +97,8 @@ class rs_mainframe:public TGMainFrame {
 		void DoTreeInfo(void);
 		void DoConfigMacros(void);
 		void DoSelectDelay(Int_t index);
-		void DoLoopOverServers(void);
-		void DoLoopOverHists(void);
+//		void DoLoopOverServers(void);
+//		void DoLoopOverHists(void);
 		void DoTimer(void);
 		void DoUpdate(void);
 		void DoSetArchiveFile(void);
@@ -124,40 +124,40 @@ class rs_mainframe:public TGMainFrame {
 		TGCheckButton *bAutoAdvance;
 		TGComboBox *fDelay;
 		
-		TGMainFrame *dialog_selectserverhist;
-		TGMainFrame *dialog_selecthists;
+//		TGMainFrame *dialog_selectserverhist;
+//		TGMainFrame *dialog_selecthists;
 		TGMainFrame *dialog_savehists;
-		TGMainFrame *dialog_indivhists;
+//		TGMainFrame *dialog_indivhists;
 		TGMainFrame *dialog_selecttree;
 		TGMainFrame *dialog_configmacros;
-		TGMainFrame *dialog_askreset;
+//		TGMainFrame *dialog_askreset;
 		TGMainFrame *dialog_scaleopts;
-		TGLabel *selected_server;
-		TGLabel *selected_hist;
-		TGLabel *retrieved_lab;
-		TGLabel *archive_filename;
-		TGComboBox *delay;
-		TCanvas *canvas;
-		TGCheckButton *auto_refresh;
-		TGCheckButton *loop_over_servers;
-		TGCheckButton *loop_over_hists;
-		TGCheckButton *show_archived_hists;
-		TGTextButton *indiv;
+//		TGLabel *selected_server;
+//		TGLabel *selected_hist;
+//		TGLabel *retrieved_lab;
+//		TGLabel *archive_filename;
+//		TGComboBox *delay;
+//		TCanvas *canvas;
+//		TGCheckButton *auto_refresh;
+//		TGCheckButton *loop_over_servers;
+//		TGCheckButton *loop_over_hists;
+//		TGCheckButton *show_archived_hists;
+//		TGTextButton *indiv;
 
 		TGDockableFrame    *fMenuDock;
 		TGMenuBar  *fMenuBar;
 		TGPopupMenu  *fMenuFile, *fMenuTools, *fMenuView;
 		TGLayoutHints      *fMenuBarLayout, *fMenuBarItemLayout, *fMenuBarHelpLayout;
 
-		bool delete_dialog_selectserverhist;
+//		bool delete_dialog_selectserverhist;
 		bool delete_dialog_selecttree;
-		bool delete_dialog_selecthists;
+//		bool delete_dialog_selecthists;
 		bool delete_dialog_savehists;
-		bool delete_dialog_indivhists;
+//		bool delete_dialog_indivhists;
 		bool delete_dialog_configmacros;
-		bool delete_dialog_askreset;
+//		bool delete_dialog_askreset;
 		bool delete_dialog_scaleopts;
-		bool can_view_indiv;
+//		bool can_view_indiv;
 
 		string config_filename;
 		map<string,string> macro_files;
@@ -166,9 +166,9 @@ class rs_mainframe:public TGMainFrame {
 
 
 			viewStyle_t_rs viewStyle_rs;
-			void DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
-				      hdef_t::histdimension_t hdim,
-				      hdisplay_info_t &display_info);
+//			void DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
+//				      hdef_t::histdimension_t hdim,
+//				      hdisplay_info_t &display_info);
 			void ExecuteMacro(TFile* f, string macro);
 			void DrawMacro(TCanvas*the_canvas, hinfo_t &the_hinfo);
 			void DrawMacro(TCanvas*the_canvas, hdef_t &the_hdef);

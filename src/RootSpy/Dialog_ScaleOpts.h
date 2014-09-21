@@ -28,7 +28,7 @@ using namespace std;
 
 class Dialog_ScaleOpts:public TGMainFrame{
 	public:
-		Dialog_ScaleOpts(const TGWindow *p, UInt_t w, UInt_t h);
+		Dialog_ScaleOpts(string hnamepath, const TGWindow *p, UInt_t w, UInt_t h);
 		virtual ~Dialog_ScaleOpts();
 		
 		
@@ -39,6 +39,9 @@ class Dialog_ScaleOpts:public TGMainFrame{
 		void CloseWindow(void);
 
 	private:
+	
+		string hnamepath;
+		int Nbins;
 
 		TGButtonGroup *group;
 

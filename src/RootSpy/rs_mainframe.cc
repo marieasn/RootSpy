@@ -8,7 +8,7 @@
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectTree.h"
 #include "Dialog_ConfigMacros.h"
-#include "Dialog_AskReset.h"
+//#include "Dialog_AskReset.h"
 #include "Dialog_ScaleOpts.h"
 
 #include <TROOT.h>
@@ -127,19 +127,21 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	last_requested.hnamepath = "N/A";
 	last_hist_plotted = NULL;
 	
-	dialog_selectserverhist = NULL;
-	dialog_selecthists = NULL;
-	dialog_savehists = NULL;
-	dialog_selecttree = NULL;
+//	dialog_selectserverhist = NULL;
+//	dialog_selecthists = NULL;
+//	dialog_savehists = NULL;
+//	dialog_selecttree = NULL;
 	dialog_configmacros = NULL;
-	dialog_indivhists = NULL;
-	dialog_askreset = NULL;
-	delete_dialog_selectserverhist = false;
-	delete_dialog_selecthists = false;
-	delete_dialog_savehists = false;
+	dialog_scaleopts = NULL;
+//	dialog_indivhists = NULL;
+//	dialog_askreset = NULL;
+//	delete_dialog_selectserverhist = false;
+//	delete_dialog_selecthists = false;
+//	delete_dialog_savehists = false;
 	delete_dialog_configmacros = false;
-	delete_dialog_askreset = false;
-	can_view_indiv = false;
+//	delete_dialog_scaleopts = false;
+//	delete_dialog_askreset = false;
+//	can_view_indiv = false;
 
 	//overlay_mode = false;
 	archive_file = NULL;
@@ -148,14 +150,6 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	//archive_file = new TFile("/u/home/sdobbs/test_archives/run1_output.root");
 
 	SetWindowName("RootSpy");
-	/** -- remove offline functionality for now
-	// Finish up and map the window
-	if(RS_CMSG->IsOnline())
-	    SetWindowName("RootSpy - Online");
-	else
-	    SetWindowName("RootSpy - Offline");
-	**/
-
 	SetIconName("RootSpy");
 	MapSubwindows();
 	Resize(GetDefaultSize());
@@ -164,11 +158,6 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	viewStyle_rs = kViewByServer_rs;
 	exec_shell = new TExec();
 
-	// for testing
-	//macro_files["/components/px"] = "macro.C";
-
-	// Set ROOT style parameters
-	//gROOT->SetStyle("Plain");
 }
 
 //-------------------
@@ -441,8 +430,11 @@ void rs_mainframe::ReadConfig(string fname)
 	}
 
 	// Set the tab read from the preferences file
-	if( (selected_tab_from_prefrences>=0) && (selected_tab_from_prefrences<fMainTab->GetNumberOfTabs())) fMainTab->SetTab(selected_tab_from_prefrences);
-	
+	if( (selected_tab_from_prefrences>=0) && (selected_tab_from_prefrences<fMainTab->GetNumberOfTabs())){
+		fMainTab->SetTab(selected_tab_from_prefrences);
+		DoTabSelected(selected_tab_from_prefrences);
+	}
+
 	// Screen does not update correctly without these!
 	TGDimension dim(GetWidth()+1, GetHeight()); // size must be different than current!
 	Resize(dim); // (does not actually change size)
@@ -689,8 +681,8 @@ void rs_mainframe::DoMakeTB(void)
 //-------------------
 void rs_mainframe::DoSetWindowSize(void)
 {
-	/// This is called after some delay to resize the window
-	/// after it has been mapped
+	/// This is called via a timer setup while reading in preferences.
+	/// The timer is use to delay this breifly while the window is mapped.
 	Resize(winsize_from_preferences);
 }
 
@@ -699,13 +691,9 @@ void rs_mainframe::DoSetWindowSize(void)
 //-------------------
 void rs_mainframe::DoResetDialog(void)
 {
-
-	if(!dialog_savehists){
-		dialog_askreset = new Dialog_AskReset(gClient->GetRoot(), 300, 150);
-	}else{
-		dialog_askreset->RaiseWindow();
-		dialog_askreset->RequestFocus();
-	}
+	Int_t ret_code = 0;
+	new TGMsgBox(gClient->GetRoot(), this, "Reset Histograms", "Are you sure you want to delete all\nhistograms and trees? (will not affect\nremote processes)", kMBIconQuestion, kMBOk|kMBCancel, &ret_code);
+	if(ret_code == kMBOk) RS_INFO->Reset();
 }
 
 //-------------------
@@ -713,9 +701,15 @@ void rs_mainframe::DoResetDialog(void)
 //-------------------
 void rs_mainframe::DoSetScaleOptions(void)
 {
-
-	if(!dialog_savehists){
-		dialog_scaleopts = new Dialog_ScaleOpts(gClient->GetRoot(), 300, 200);
+	string hnamepath = "";
+	if(current_tab){
+		list<string>::iterator it = current_tab->hnamepaths.begin();
+		advance(it, current_tab->currently_displayed);
+		hnamepath = *it;
+	}
+	if(hnamepath=="") return;
+	if(!dialog_scaleopts){
+		dialog_scaleopts = new Dialog_ScaleOpts(hnamepath, gClient->GetRoot(), 350, 200);
 	}else{
 		dialog_scaleopts->RaiseWindow();
 		dialog_scaleopts->RequestFocus();
@@ -770,6 +764,7 @@ void rs_mainframe::DoTabSelected(Int_t id)
 	list<RSTab*>::iterator it = rstabs.begin();
 	advance(it, id);
 	current_tab = *it;
+	current_tab->DoUpdateWithFollowUp();
 }
 
 //-------------------
@@ -819,57 +814,57 @@ void rs_mainframe::DoSelectDelay(Int_t index)
 	delay_time = (time_t)index;
 }
 
-//------------------
-// DoLoopOverServers
-//------------------
-void rs_mainframe::DoLoopOverServers(void)
-{
-	RS_INFO->Lock();
-	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-	if(loop_over_servers->GetState()==kButtonUp && hdef_iter->second.hists.size() > 0){
+////------------------
+//// DoLoopOverServers
+////------------------
+//void rs_mainframe::DoLoopOverServers(void)
+//{
+//	RS_INFO->Lock();
+//	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
+//	if(loop_over_servers->GetState()==kButtonUp && hdef_iter->second.hists.size() > 0){
+//
+//		loop_over_hists->SetState(kButtonUp);
+//		
+//		_DBG_ << "I was here" << endl;	
+//			
+//		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();	
+//		hinfo_it->second.setDisplayed(true);
+//
+//	} else {
+//		loop_over_servers->SetState(kButtonDown);
+//		loop_over_hists->SetState(kButtonUp);
+//	}	
+//		
+//	RS_INFO->Unlock();
+//}
 
-		loop_over_hists->SetState(kButtonUp);
-		
-		_DBG_ << "I was here" << endl;	
-			
-		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();	
-		hinfo_it->second.setDisplayed(true);
-
-	} else {
-		loop_over_servers->SetState(kButtonDown);
-		loop_over_hists->SetState(kButtonUp);
-	}	
-		
-	RS_INFO->Unlock();
-}
-
-//------------------
-// DoLoopOverHists
-//------------------
-void rs_mainframe::DoLoopOverHists(void)
-{
-	RS_INFO->Lock();
-		
-	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-	if(loop_over_hists->GetState()==kButtonUp && hdef_iter->second.hists.size() > 0){
-		loop_over_servers->SetState(kButtonUp);
-
-		_DBG_ << "I was here" << endl;	
-
-		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();	
-		while(hinfo_it!=hdef_iter->second.hists.end()) {
-			_DBG_ << "I was here" << endl;	
-			hinfo_it->second.setDisplayed(false);	
-			hinfo_it++;
-			_DBG_ << "I was here" << endl;
-		}	hinfo_it->second.setDisplayed(false);
-
-	} else {
-		loop_over_hists->SetState(kButtonDown);
-		loop_over_servers->SetState(kButtonUp);
-	}		
-	RS_INFO->Unlock();
-}
+////------------------
+//// DoLoopOverHists
+////------------------
+//void rs_mainframe::DoLoopOverHists(void)
+//{
+//	RS_INFO->Lock();
+//		
+//	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
+//	if(loop_over_hists->GetState()==kButtonUp && hdef_iter->second.hists.size() > 0){
+//		loop_over_servers->SetState(kButtonUp);
+//
+//		_DBG_ << "I was here" << endl;	
+//
+//		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();	
+//		while(hinfo_it!=hdef_iter->second.hists.end()) {
+//			_DBG_ << "I was here" << endl;	
+//			hinfo_it->second.setDisplayed(false);	
+//			hinfo_it++;
+//			_DBG_ << "I was here" << endl;
+//		}	hinfo_it->second.setDisplayed(false);
+//
+//	} else {
+//		loop_over_hists->SetState(kButtonDown);
+//		loop_over_servers->SetState(kButtonUp);
+//	}		
+//	RS_INFO->Unlock();
+//}
 
 //-------------------
 // DoTimer
@@ -927,8 +922,8 @@ void rs_mainframe::DoTimer(void) {
 	}
 
 //	//selecthists dialog
-//	if(delete_dialog_selecthists) {
-//		dialog_selecthists = NULL;
+//	if(delete_dialog_scaleopts) {
+//		delete_dialog_scaleopts = NULL;
 //	}
 //	delete_dialog_selecthists = false;
 //
@@ -1167,12 +1162,13 @@ void rs_mainframe::DoUpdate(void)
 }
 
 //----------
-//DoSetArchiveFile
+// DoSetArchiveFile
 //----------
 //add comment
 void rs_mainframe::DoSetArchiveFile(void) {
 	TGFileInfo* fileinfo = new TGFileInfo();
 	new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDOpen, fileinfo);
+	if(!fileinfo->fFilename) return; // user hit cancel
 
 	if(archive_file)
 	    archive_file->Close();
@@ -1181,13 +1177,13 @@ void rs_mainframe::DoSetArchiveFile(void) {
 	// check for errors?
 
 	// update display on GUI
-	stringstream ss;
-	ss << "Archive file: " << fileinfo->fFilename;
-	//archive_filename->SetTitle(ss.str().c_str());
-	archive_filename->SetText(ss.str().c_str());
-	//archive_filename->Resize(300,30);
-
-	cout << "loaded archiver file = " << ss.str() << endl;
+//	stringstream ss;
+//	ss << "Archive file: " << fileinfo->fFilename;
+//	//archive_filename->SetTitle(ss.str().c_str());
+//	archive_filename->SetText(ss.str().c_str());
+//	//archive_filename->Resize(300,30);
+//
+//	cout << "loaded archiver file = " << ss.str() << endl;
 }
 
 //-------------------
@@ -1427,7 +1423,7 @@ void rs_mainframe::DoLoadHistsList(void)
     }
   }
 
-  RSMF->can_view_indiv = true;
+//  RSMF->can_view_indiv = true;
   //RS_INFO->viewStyle = viewStyle;
   RS_INFO->update = true;
   
@@ -1656,7 +1652,7 @@ void rs_mainframe::CreateGUI(void)
    fMenuTools->AddEntry("View Tree Info", M_TOOLS_TREEINFO);
    fMenuTools->AddEntry("Save Hists...",  M_TOOLS_SAVEHISTS);
    fMenuTools->AddSeparator();
-   fMenuTools->AddEntry("Reset Servers...",  M_TOOLS_RESET);
+   fMenuTools->AddEntry("Reset Histograms/Macros...",  M_TOOLS_RESET);
    
    fMenuView = new TGPopupMenu(gClient->GetRoot());
    fMenuView->AddEntry("New Tab...", M_VIEW_NEW_TAB);
@@ -1754,620 +1750,171 @@ void rs_mainframe::CreateGUI(void)
 	bSetArchive->Connect("Clicked()","rs_mainframe", this, "DoSetArchiveFile()");
 	fDelay->Connect("Selected(Int_t)","rs_mainframe", this, "DoSelectDelay(Int_t)");
 
-#if 0
-	//======================= The following was copied for a macro made with TGuiBuilder ===============
-
-	TGMainFrame *fMainFrame1435 = this;
-	   // composite frame
-   TGCompositeFrame *fMainFrame656 = new TGCompositeFrame(fMainFrame1435,833,700,kVerticalFrame);
-
-   // composite frame
-   TGCompositeFrame *fCompositeFrame657 = new TGCompositeFrame(fMainFrame656,833,700,kVerticalFrame);
-
-   // composite frame
-   TGCompositeFrame *fCompositeFrame658 = new TGCompositeFrame(fCompositeFrame657,833,700,kVerticalFrame);
-
-   // composite frame
-   TGCompositeFrame *fCompositeFrame659 = new TGCompositeFrame(fCompositeFrame658,833,700,kVerticalFrame);
-//   fCompositeFrame659->SetLayoutBroken(kTRUE);
-
-   // composite frame
-   TGCompositeFrame *fCompositeFrame660 = new TGCompositeFrame(fCompositeFrame659,833,700,kVerticalFrame);
-//   fCompositeFrame660->SetLayoutBroken(kTRUE);
-
-   // composite frame
-   TGCompositeFrame *fCompositeFrame661 = new TGCompositeFrame(fCompositeFrame660,833,700,kVerticalFrame);
-//   fCompositeFrame661->SetLayoutBroken(kTRUE);
-
-   // vertical frame
-   TGVerticalFrame *fVerticalFrame662 = new TGVerticalFrame(fCompositeFrame661,708,640,kVerticalFrame);
-//   fVerticalFrame662->SetLayoutBroken(kTRUE);
-
-   // horizontal frame
-   TGHorizontalFrame *fHorizontalFrame663 = new TGHorizontalFrame(fVerticalFrame662,564,118,kHorizontalFrame);
-
-   // "Current Histogram Info." group frame
-   TGGroupFrame *fGroupFrame664 = new TGGroupFrame(fHorizontalFrame663,"Current Histogram Info.",kHorizontalFrame | kRaisedFrame);
-
-   // vertical frame
-   TGVerticalFrame *fVerticalFrame665 = new TGVerticalFrame(fGroupFrame664,62,60,kVerticalFrame);
-   TGLabel *fLabel666 = new TGLabel(fVerticalFrame665,"Server:");
-   fLabel666->SetTextJustify(kTextRight);
-   fLabel666->SetMargins(0,0,0,0);
-   fLabel666->SetWrapLength(-1);
-   fVerticalFrame665->AddFrame(fLabel666, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-   TGLabel *fLabel667 = new TGLabel(fVerticalFrame665,"Histogram:");
-   fLabel667->SetTextJustify(kTextRight);
-   fLabel667->SetMargins(0,0,0,0);
-   fLabel667->SetWrapLength(-1);
-   fVerticalFrame665->AddFrame(fLabel667, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-   TGLabel *fLabel668 = new TGLabel(fVerticalFrame665,"Retrieved:");
-   fLabel668->SetTextJustify(kTextRight);
-   fLabel668->SetMargins(0,0,0,0);
-   fLabel668->SetWrapLength(-1);
-   fVerticalFrame665->AddFrame(fLabel668, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-
-
-   TGTextButton *fTextButtonIndiv = new TGTextButton(fVerticalFrame665,"View Indiv.");
-   fTextButtonIndiv->SetTextJustify(36);
-   fTextButtonIndiv->SetMargins(0,0,0,0);
-   fTextButtonIndiv->SetWrapLength(-1);
-   fTextButtonIndiv->Resize(100,22);
-   fVerticalFrame665->AddFrame(fTextButtonIndiv, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-/*
-   TGRadioButton *fRadioButton019 = new TGRadioButton(fVerticalFrame665,"View By Server");
-   fRadioButton019->SetState(kButtonDown);
-   fRadioButton019->SetTextJustify(36);
-   fRadioButton019->SetMargins(0,0,0,0);
-   fRadioButton019->SetWrapLength(-1);
-   fVerticalFrame665->AddFrame(fRadioButton019, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-*/
-   //fGroupFrame664->AddFrame(fVerticalFrame665, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kFitWidth,2,2,2,2));
-   fGroupFrame664->AddFrame(fVerticalFrame665, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
-
-   // vertical frame
-   TGVerticalFrame *fVerticalFrame669 = new TGVerticalFrame(fGroupFrame664,29,60,kVerticalFrame);
-   TGLabel *fLabel670 = new TGLabel(fVerticalFrame669,"------------------------------");
-   fLabel670->SetTextJustify(kTextLeft);
-   fLabel670->SetMargins(0,0,0,0);
-   fLabel670->SetWrapLength(-1);
-   fVerticalFrame669->AddFrame(fLabel670, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   TGLabel *fLabel671 = new TGLabel(fVerticalFrame669,"-------------------------------------------------------");
-   fLabel671->SetTextJustify(kTextLeft);
-   fLabel671->SetMargins(0,0,0,0);
-   fLabel671->SetWrapLength(-1);
-   fVerticalFrame669->AddFrame(fLabel671, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   TGLabel *fLabel672 = new TGLabel(fVerticalFrame669,"-----test-------------------------");
-   fLabel672->SetTextJustify(kTextLeft);
-   fLabel672->SetMargins(0,0,0,0);
-   fLabel672->SetWrapLength(-1);
-   fVerticalFrame669->AddFrame(fLabel672, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fGroupFrame664->AddFrame(fVerticalFrame669, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-
-   // vertical frame
-   TGVerticalFrame *fVerticalFrame673 = new TGVerticalFrame(fGroupFrame664,97,78,kVerticalFrame);
-
-   TGHorizontalFrame *fHorizontalFrame801 = new TGHorizontalFrame(fVerticalFrame673,97,24,kHorizontalFrame);
-   TGTextButton *fTextButton674 = new TGTextButton(fHorizontalFrame801,"Select Server/Histo");
-   fTextButton674->SetTextJustify(36);
-   fTextButton674->SetMargins(0,0,0,0);
-   fTextButton674->SetWrapLength(-1);
-   fTextButton674->Resize(93,22);
-   fHorizontalFrame801->AddFrame(fTextButton674, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   fVerticalFrame673->AddFrame(fHorizontalFrame801, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   TGHorizontalFrame *fHorizontalFrame802 = new TGHorizontalFrame(fVerticalFrame673,97,24,kHorizontalFrame);
-   TGTextButton *fTextButton677 = new TGTextButton(fHorizontalFrame802,"Prev");
-   fTextButton677->SetTextJustify(36);
-   fTextButton677->SetMargins(0,0,0,0);
-   fTextButton677->SetWrapLength(-1);
-   fTextButton677->Resize(87,22);
-   fHorizontalFrame802->AddFrame(fTextButton677, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   TGTextButton *fTextButton675 = new TGTextButton(fHorizontalFrame802,"Next");
-   fTextButton675->SetTextJustify(36);
-   fTextButton675->SetMargins(0,0,0,0);
-   fTextButton675->SetWrapLength(-1);
-   fTextButton675->Resize(87,22);
-   fHorizontalFrame802->AddFrame(fTextButton675, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   fVerticalFrame673->AddFrame(fHorizontalFrame802, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   TGHorizontalFrame *fHorizontalFrame803 = new TGHorizontalFrame(fVerticalFrame673,97,24,kHorizontalFrame);
-   TGTextButton *fTextButton676 = new TGTextButton(fHorizontalFrame803,"Update");
-   fTextButton676->SetTextJustify(36);
-   fTextButton676->SetMargins(0,0,0,0);
-   fTextButton676->SetWrapLength(-1);
-   fTextButton676->Resize(87,22);
-   fHorizontalFrame803->AddFrame(fTextButton676, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fVerticalFrame673->AddFrame(fHorizontalFrame803, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-//   TGTextButton *fSelectTree = new TGTextButton(fVerticalFrame673, "Tree Info");
-//   fSelectTree->SetTextJustify(36);
-//   fSelectTree->SetMargins(0,0,0,0);
-//   fSelectTree->SetWrapLength(-1);
-//   fSelectTree->Resize(10,10);
-//   fVerticalFrame673->AddFrame(fTextButton676, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fGroupFrame664->AddFrame(fVerticalFrame673, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fGroupFrame664->SetLayoutManager(new TGHorizontalLayout(fGroupFrame664));
-   fGroupFrame664->Resize(232,114);
-   fHorizontalFrame663->AddFrame(fGroupFrame664, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-
-   // "fGroupFrame746" group frame
-   TGGroupFrame *fGroupFrame746 = new TGGroupFrame(fHorizontalFrame663,"Continuous Update options",kHorizontalFrame);
-
-   // vertical frame
-   TGVerticalFrame *fVerticalFrame678 = new TGVerticalFrame(fGroupFrame746,144,63,kVerticalFrame);
-   TGCheckButton *fCheckButton679 = new TGCheckButton(fVerticalFrame678,"Auto-refresh");
-   fCheckButton679->SetTextJustify(36);
-   fCheckButton679->SetMargins(0,0,0,0);
-   fCheckButton679->SetWrapLength(-1);
-   fVerticalFrame678->AddFrame(fCheckButton679, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   TGCheckButton *fCheckButton680 = new TGCheckButton(fVerticalFrame678,"loop over all servers");
-   fCheckButton680->SetTextJustify(36);
-   fCheckButton680->SetMargins(0,0,0,0);
-   fCheckButton680->SetWrapLength(-1);
-   fVerticalFrame678->AddFrame(fCheckButton680, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   TGCheckButton *fCheckButton681 = new TGCheckButton(fVerticalFrame678,"loop over all hists");
-   fCheckButton681->SetTextJustify(36);
-   fCheckButton681->SetMargins(0,0,0,0);
-   fCheckButton681->SetWrapLength(-1);
-   fVerticalFrame678->AddFrame(fCheckButton681, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   TGCheckButton *fCheckButton6681 = new TGCheckButton(fVerticalFrame678,"show archived hists");
-   fCheckButton6681->SetTextJustify(36);
-   fCheckButton6681->SetMargins(0,0,0,0);
-   fCheckButton6681->SetWrapLength(-1);
-   fVerticalFrame678->AddFrame(fCheckButton6681, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fGroupFrame746->AddFrame(fVerticalFrame678, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   // horizontal frame
-   TGHorizontalFrame *fHorizontalFrame682 = new TGHorizontalFrame(fGroupFrame746,144,26,kHorizontalFrame);
-   TGLabel *fLabel683 = new TGLabel(fHorizontalFrame682,"delay:");
-   fLabel683->SetTextJustify(36);
-   fLabel683->SetMargins(0,0,0,0);
-   fLabel683->SetWrapLength(-1);
-   fHorizontalFrame682->AddFrame(fLabel683, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   ULong_t ucolor;        // will reflect user color changes
-   gClient->GetColorByName("#ffffff",ucolor);
-
-   // combo box
-   TGComboBox *fComboBox684 = new TGComboBox(fHorizontalFrame682,"-",-1,kHorizontalFrame | kSunkenFrame | kDoubleBorder | kOwnBackground);
-   fComboBox684->AddEntry("0s",0);
-   fComboBox684->AddEntry("1s",1);
-   fComboBox684->AddEntry("2s",2);
-   fComboBox684->AddEntry("3s",3);
-   fComboBox684->AddEntry("4s",4);
-   fComboBox684->AddEntry("10s ",10);
-   fComboBox684->Resize(50,22);
-   fComboBox684->Select(-1);
-   fHorizontalFrame682->AddFrame(fComboBox684, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fGroupFrame746->AddFrame(fHorizontalFrame682, new TGLayoutHints(kLHintsNormal));
-
-   fGroupFrame746->SetLayoutManager(new TGHorizontalLayout(fGroupFrame746));
-   fGroupFrame746->Resize(324,99);
-   fHorizontalFrame663->AddFrame(fGroupFrame746, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fVerticalFrame662->AddFrame(fHorizontalFrame663, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   fHorizontalFrame663->MoveResize(2,2,564,118);
-
-   // embedded canvas
-   TRootEmbeddedCanvas *fRootEmbeddedCanvas698 = new TRootEmbeddedCanvas(0,fVerticalFrame662,704,432);
-   Int_t wfRootEmbeddedCanvas698 = fRootEmbeddedCanvas698->GetCanvasWindowId();
-   TCanvas *c125 = new TCanvas("c125", 10, 10, wfRootEmbeddedCanvas698);
-   fRootEmbeddedCanvas698->AdoptCanvas(c125);
-   fVerticalFrame662->AddFrame(fRootEmbeddedCanvas698, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
-   fRootEmbeddedCanvas698->MoveResize(2,124,704,432);
-
-   // horizontal frame
-   TGHorizontalFrame *fHorizontalFrame1060 = new TGHorizontalFrame(fVerticalFrame662,704,82,kHorizontalFrame);
-
-   // "fGroupFrame750" group frame
-   TGGroupFrame *fGroupFrame711 = new TGGroupFrame(fHorizontalFrame1060,"cMsg Info.");
-   //TGLabel *fLabel1030 = new TGLabel(fGroupFrame711,"UDL = cMsg://127.0.0.1/cMsg/rootspy");
-   //string udl_label = "UDL = "+ROOTSPY_UDL;
-   TGLabel *fLabel1030 = new TGLabel(fGroupFrame711,udl_label.c_str());
-   fLabel1030->SetTextJustify(36);
-   fLabel1030->SetMargins(0,0,0,0);
-   fLabel1030->SetWrapLength(-1);
-   fGroupFrame711->AddFrame(fLabel1030, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-
-   TGHorizontalFrame *fHorizontalFrame690 = new TGHorizontalFrame(fGroupFrame711,400,50,kHorizontalFrame);
-   /*
-   // Get online button added by sdobbs 4/22/13
-   TGTextButton *fTextButtonOnline = new TGTextButton(fHorizontalFrame690,"Online");
-   //TGTextButton *fTextButtonOnline = new TGTextButton(fGroupFrame711,"Online");
-   fTextButtonOnline->SetTextJustify(36);
-   fTextButtonOnline->SetMargins(0,0,0,0);
-   fTextButtonOnline->SetWrapLength(-1);
-   fTextButtonOnline->Resize(150,22);
-   fHorizontalFrame690->AddFrame(fTextButtonOnline, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   //fGroupFrame711->AddFrame(fTextButtonOnline, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   //fGroupFrame711->AddFrame(fTextButtonOnline, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   */
-
-   TGTextButton *fTextButton1041 = new TGTextButton(fHorizontalFrame690,"modify");
-   //TGTextButton *fTextButton1041 = new TGTextButton(fGroupFrame711,"modify");
-   fTextButton1041->SetTextJustify(36);
-   fTextButton1041->SetMargins(0,0,0,0);
-   fTextButton1041->SetWrapLength(-1);
-   fTextButton1041->Resize(97,22);
-   fHorizontalFrame690->AddFrame(fTextButton1041, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-   //fGroupFrame711->AddFrame(fTextButton1041, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fHorizontalFrame690->SetLayoutManager(new TGHorizontalLayout(fHorizontalFrame690));
-   fGroupFrame711->AddFrame(fHorizontalFrame690, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   fGroupFrame711->SetLayoutManager(new TGVerticalLayout(fGroupFrame711));
-   fGroupFrame711->Resize(133,78);
-   fHorizontalFrame1060->AddFrame(fGroupFrame711, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-
-   TGVerticalFrame *fVerticalFrame3673 = new TGVerticalFrame(fHorizontalFrame1060,400,78,kVerticalFrame);
-   TGHorizontalFrame *fHorizontalFrame2060 = new TGHorizontalFrame(fVerticalFrame3673,400,30,kHorizontalFrame);
-
-   //TGTextButton *fTextButton1075 = new TGTextButton(fHorizontalFrame1060,"Quit");
-   TGTextButton *fTextButton1075 = new TGTextButton(fHorizontalFrame2060,"Quit");
-   fTextButton1075->SetTextJustify(36);
-   fTextButton1075->SetMargins(0,0,0,0);
-   fTextButton1075->SetWrapLength(-1);
-   fTextButton1075->Resize(97,22);
-   //fHorizontalFrame1060->AddFrame(fTextButton1075, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   fHorizontalFrame2060->AddFrame(fTextButton1075, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   /**
-   TGTextButton *fTextButtonTB = new TGTextButton(fHorizontalFrame1060,"TBrowser");
-   fTextButtonTB->SetTextJustify(36);
-   fTextButtonTB->SetMargins(0,0,0,0);
-   fTextButtonTB->SetWrapLength(-1);
-   fTextButtonTB->Resize(150,22);
-   fHorizontalFrame1060->AddFrame(fTextButtonTB, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   **/
-   //Save Canvas button added by Justinb 6.10.10
-   //TGTextButton *fTextButtonSave = new TGTextButton(fHorizontalFrame1060,"Save Canvas");
-   TGTextButton *fTextButtonSave = new TGTextButton(fHorizontalFrame2060,"Save Canvas");
-   fTextButtonSave->SetTextJustify(36);
-   fTextButtonSave->SetMargins(0,0,0,0);
-   fTextButtonSave->SetWrapLength(-1);
-   fTextButtonSave->Resize(200,22);
-   //fHorizontalFrame1060->AddFrame(fTextButtonSave, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   fHorizontalFrame2060->AddFrame(fTextButtonSave, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   /**
-   //Save Hists button added by Justinb 6.10.10
-   TGTextButton *fTextButtonSaveHists = new TGTextButton(fHorizontalFrame1060,"Save Hists");
-   fTextButtonSaveHists->SetTextJustify(36);
-   fTextButtonSaveHists->SetMargins(0,0,0,0);
-   fTextButtonSaveHists->SetWrapLength(-1);
-   fTextButtonSaveHists->Resize(250,22);
-   fHorizontalFrame1060->AddFrame(fTextButtonSaveHists, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-
-   //Save Hists button added by Justinb 6.10.10
-   TGTextButton *fTextButtonfinal = new TGTextButton(fHorizontalFrame1060,"finals");
-   fTextButtonfinal->SetTextJustify(36);
-   fTextButtonfinal->SetMargins(0,0,0,0);
-   fTextButtonfinal->SetWrapLength(-1);
-   fTextButtonfinal->Resize(300,22);
-   fHorizontalFrame1060->AddFrame(fTextButtonfinal, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-  
-   TGTextButton *fTextButton1297 = new TGTextButton(fHorizontalFrame1060,"Tree Info");
-   fTextButton1297->SetTextJustify(36);
-   fTextButton1297->SetMargins(0,0,0,0);
-   fTextButton1297->SetWrapLength(-1);
-   fTextButton1297->Resize(97,22);
-   fHorizontalFrame1060->AddFrame(fTextButton1297, new TGLayoutHints(kLHintsNormal));
-   **/
-   //TGTextButton *fTextButtonSetArchive = new TGTextButton(fHorizontalFrame1060,"Set Archive");
-   TGTextButton *fTextButtonSetArchive = new TGTextButton(fHorizontalFrame2060,"Set Archive");
-   fTextButtonSetArchive->SetTextJustify(36);
-   fTextButtonSetArchive->SetMargins(0,0,0,0);
-   fTextButtonSetArchive->SetWrapLength(-1);
-   fTextButtonSetArchive->Resize(300,22);
-   //fHorizontalFrame1060->AddFrame(fTextButtonSetArchive, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   fHorizontalFrame2060->AddFrame(fTextButtonSetArchive, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-
-   TGTextButton *fTextButtonTBrowser = new TGTextButton(fHorizontalFrame2060,"TBrowser");
-   fTextButtonSetArchive->SetTextJustify(36);
-   fTextButtonSetArchive->SetMargins(0,0,0,0);
-   fTextButtonSetArchive->SetWrapLength(-1);
-   fTextButtonSetArchive->Resize(300,22);
-   fHorizontalFrame2060->AddFrame(fTextButtonTBrowser, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
-
-   TGHorizontalFrame *fHorizontalFrame3060 = new TGHorizontalFrame(fVerticalFrame3673,400,30,kHorizontalFrame);
-
-   //TGLabel *fLabel2030 = new TGLabel(fHorizontalFrame1060,"");
-   TGLabel *fLabel2030 = new TGLabel(fHorizontalFrame3060,"");
-   fLabel2030->SetMargins(0,0,0,0);
-   fLabel2030->SetWrapLength(-1);
-   fLabel2030->SetTextJustify(kTextTop | kTextRight);
-   //fLabel2030->Resize(300,30);
-   //fHorizontalFrame1060->AddFrame(fLabel2030, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   //fHorizontalFrame3060->AddFrame(fLabel2030, new TGLayoutHints(kLHintsRight | kLHintsTop,2,2,2,2));
-   fHorizontalFrame3060->AddFrame(fLabel2030, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-
-
-   fVerticalFrame3673->AddFrame(fHorizontalFrame2060, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandX,2,2,2,2));
-   fVerticalFrame3673->AddFrame(fHorizontalFrame3060, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandX,2,2,2,2));
-   
-   fHorizontalFrame1060->AddFrame(fVerticalFrame3673, new TGLayoutHints(kLHintsRight | kLHintsTop | kLHintsExpandX,2,2,2,2));
-
-
-   //fVerticalFrame662->AddFrame(fHorizontalFrame1060, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
-   fVerticalFrame662->AddFrame(fHorizontalFrame1060, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
-   //fHorizontalFrame1060->MoveResize(2,560,704,82);
-
-   fCompositeFrame661->AddFrame(fVerticalFrame662, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
-   //fVerticalFrame662->MoveResize(2,2,708,640);
-
-   fCompositeFrame660->AddFrame(fCompositeFrame661, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
-   //fCompositeFrame661->MoveResize(0,0,833,700);
-
-   fCompositeFrame659->AddFrame(fCompositeFrame660, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
-   //fCompositeFrame660->MoveResize(0,0,833,700);
-
-   fCompositeFrame658->AddFrame(fCompositeFrame659, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
-
-   fCompositeFrame657->AddFrame(fCompositeFrame658, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
-
-   fMainFrame656->AddFrame(fCompositeFrame657, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
-
-// Temporarily disable old window contents
-//   fMainFrame1435->AddFrame(fMainFrame656, new TGLayoutHints(kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight));
-
-   fMainFrame1435->SetMWMHints(kMWMDecorAll,
-                        kMWMFuncAll,
-                        kMWMInputModeless);
-   fMainFrame1435->MapSubwindows();
-
-   //fMainFrame1435->Resize(fMainFrame1435->GetDefaultSize());
-   fMainFrame1435->MapWindow();
-   fMainFrame1435->Resize(833,700);
-
-
-   //==============================================================================================
-
-	// Connect GUI elements to methods
-//	TGTextButton* &quit = fTextButton1075;
-//	TGTextButton* &quit = bQuit;
-	//TGTextButton* &TB = fTextButtonTB;
-//	TGTextButton* &save = fTextButtonSave; //added Justin.b 06.10.10
-//	//TGTextButton* &savehists = fTextButtonSaveHists; //added Justin.b 06.15.10
-//	TGTextButton* &selectserver = fTextButton674;
-//	//TGTextButton* &treeinfobutton = fTextButton1297;
-//	//TGTextButton* &final = fTextButtonfinal;
-//	TGTextButton* &setarchive = fTextButtonSetArchive;
-//	TGTextButton* &tbrowser = fTextButtonTBrowser;
-//	//TGTextButton* &online = fTextButtonOnline;
-//	indiv = fTextButtonIndiv;
-
-	//this->VBServer = fRadioButton019;
-	selected_server = fLabel670;
-	selected_hist = fLabel671;
-	retrieved_lab = fLabel672;
-	archive_filename = fLabel2030;
-	delay = fComboBox684;
-	canvas = fRootEmbeddedCanvas698->GetCanvas();
-	auto_refresh = fCheckButton679;
-	loop_over_servers = fCheckButton680;
-	loop_over_hists = fCheckButton681;
-	show_archived_hists = fCheckButton6681;
-//	TGTextButton* &update = fTextButton676;
-//	TGTextButton* &next = fTextButton675;
-//	TGTextButton* &prev = fTextButton677;
-//	TGTextButton* &modify = fTextButton1041;
-#endif
-	
-
-	//TB->Connect("Clicked()","rs_mainframe", this, "MakeTB()");
-//        save->Connect("Clicked()", "rs_mainframe", this, "DoSave()");//added Justin.b 06.10.10
-	//savehists->Connect("Clicked()", "rs_mainframe", this, "DoSaveHists()");//added Justin.b 06.10.15
-//	selectserver->Connect("Clicked()","rs_mainframe", this, "DoSelectHists()");
-//	indiv->Connect("Clicked()","rs_mainframe", this, "DoIndiv()");
-	//this->VBServer->Connect("Clicked()","rs_mainframe", this, "DoSetVBServer()");
-//	next->Connect("Clicked()","rs_mainframe", this, "DoNext()");
-//	prev->Connect("Clicked()","rs_mainframe", this, "DoPrev()");
-
-	//online->Connect("Clicked()", "rs_mainframe", this, "DoOnline()");
-	//final->Connect("Clicked()", "rs_mainframe", this, "DoFinal()");
-	//treeinfobutton->Connect("Clicked()", "rs_mainframe", this, "DoTreeInfo()");
-//	setarchive->Connect("Clicked()", "rs_mainframe", this, "DoSetArchiveFile()");
-//	tbrowser->Connect("Clicked()", "rs_mainframe", this, "DoTBrowser()");
-//	update->Connect("Clicked()","rs_mainframe", this, "DoUpdate()");
-//	delay->Select(4, kTRUE);
-//	delay->GetTextEntry()->SetText("4s");
-//	delay->Connect("Selected(Int_t)","rs_mainframe", this, "DoSelectDelay(Int_t)");
-//	
-//	loop_over_servers->Connect("Clicked()","rs_mainframe",this, "DoLoopOverServers()");
-//	loop_over_hists->Connect("Clicked()","rs_mainframe",this, "DoLoopOverHists()");
-//	
-//	modify->SetEnabled(kFALSE);
-//	
-//	canvas->SetFillColor(kWhite);
-
 }
 
-
-
-/**
-// helper function
-// move this somewhere else?
-static void add_to_draw_hist_args(string &args, string toadd) 
-{
-    // we have to be careful about where we put spaces since ROOT is really picky about argument formatting
-    if(args == "") 
-	args = toadd;
-    else 
-	args = args + " " + toadd;	    
-}
-**/
-
-// wrapper for histogram drawing
-void rs_mainframe::DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
-			    hdef_t::histdimension_t hdim,
-			    hdisplay_info_t &display_info)
-{
-    string histdraw_args = "";
-    bool overlay_enabled = (show_archived_hists->GetState()==kButtonDown);
-    //bool overlay_enabled = false;
-    //double hist_line_width = 1.;
-    float overlay_ymin=0., overlay_ymax=0.;
-    
-    //the_canvas->Divide(1);
-    the_canvas->cd(0);
-
-    if(display_info.use_logx)
-	the_canvas->SetLogx();
-    else
-	the_canvas->SetLogx(0);
-    if(display_info.use_logy)
-	the_canvas->SetLogy();
-    else
-	the_canvas->SetLogy(0);
-
-    if(hdim == hdef_t::oneD) {
-	
-      //if(hdim == hdef_t::histdimension_t::oneD) {
-	bool do_overlay = false;
-	//TH1 *archived_hist = NULL;
-
-	// check for archived histograms and load them if they exist and we are overlaying
-	// we do this first to determine the parameters needed to overlay the histograms
-	if(overlay_enabled && (archive_file!=NULL) ) {
-	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
-	    TH1* archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
-	    
-	    if(archived_hist) { 
-		// only plot the archived histogram if we can find it
-		_DBG_<<"found it!"<<endl;
-		do_overlay = true;
-	
-		// only display a copy of the archived histogram so that we can 
-		// compare to the original
-		if(overlay_hist)
-		    delete overlay_hist;
-		overlay_hist = (TH1*)(archived_hist->Clone());   // memory leak?
-
-		overlay_hist->SetStats(0);  // we want to compare just the shape of the archived histogram
-		overlay_hist->SetFillColor(5); // draw archived histograms with shading
-
-		overlay_ymin = overlay_hist->GetMinimum();
-		overlay_ymax = 1.1*overlay_hist->GetMaximum();
-
-		gStyle->SetStatX(0.85);
-	    } else {
-		gStyle->SetStatX(0.95);
-	    }
-	    
-	    // update histogram with current style parameters
-	    // primarily used to update statistics box
-	    hist->UseCurrentStyle();
-	}
-	
-	
-	// draw summed histogram
-	if(!do_overlay) {
-	    hist->Draw();
-
-	} else {
-	    // set axis ranges so that we can sensibly overlay the histograms
-	    double hist_ymax = 1.1*hist->GetMaximum();
-	    //double hist_ymax = hist->GetMaximum();
-	    double hist_ymin = hist->GetMinimum();
-	    // make sure we at least go down to zero, so that we are displaying the whole
-	    // distribution - assumes we are just looking at frequency histograms
-	    if(hist_ymin > 0)
-		hist_ymin = 0;
-	    // add in a fix for logarithmic y axes
-	    if(display_info.use_logy && hist_ymin == 0)
-		hist_ymin = 0.1;
-	    
-	    hist->GetYaxis()->SetRangeUser(hist_ymin, hist_ymax); 
-
-	    // draw the current histogram with points/error bars if overlaying
-	    hist->SetMarkerStyle(20);
-	    hist->SetMarkerSize(0.7);
-	    
-	    // scale down archived histogram and display it to set the scale
-	    // appropriately scale the overlay histogram
-	    //overlay_hist->Scale(scale);
-	    if(display_info.overlay_scale_mode == 1) {   
-		// scale both to same overall peak value
-		float scale = hist_ymax/overlay_ymax;
-		overlay_hist->Scale(scale);
-	    } else if(display_info.overlay_scale_mode == 2) {
-		// scale to same integral over specified bin range (lo bin # - hi bin #)
-		float scale = hist->Integral(display_info.scale_range_low, display_info.scale_range_hi)
-		    / overlay_hist->Integral(display_info.scale_range_low, display_info.scale_range_hi);
-		overlay_hist->Scale(scale);
-	    } else if(display_info.overlay_scale_mode == 3) {
-		// scale to same integral over specified bin range (lo % of range - hi % of range)
-		int lo_bin = static_cast<int>( (double)(hist->GetNbinsX()) * display_info.scale_range_low/100. );
-		int hi_bin = static_cast<int>( (double)(hist->GetNbinsX()) * display_info.scale_range_hi/100. );
-		float scale = hist->Integral(lo_bin, hi_bin) / overlay_hist->Integral(lo_bin, hi_bin);
-		overlay_hist->Scale(scale);
-	    }
-
-	    overlay_hist->Draw();
-
-	    // now print the current histogram on top of it
-	    hist->Draw("SAME E1");
-
-	    // add axis to the right for scale of archived histogram
-	    if(overlay_yaxis != NULL)
-		delete overlay_yaxis;
-	    //overlay_yaxis = new TGaxis(gPad->GetUxmax(),hist_ymin,
-				       //gPad->GetUxmax(),hist_ymax,
-	    overlay_yaxis = new TGaxis(gPad->GetUxmax(),gPad->GetUymin(),
-				       gPad->GetUxmax(),gPad->GetUymax(),
-				       overlay_ymin,overlay_ymax,510,"+L");
-	    overlay_yaxis->SetLabelFont( hist->GetLabelFont() );
-	    overlay_yaxis->SetLabelSize( hist->GetLabelSize() );
-	    overlay_yaxis->Draw();
-	}
-
-    } else if(hdim == hdef_t::twoD) {
-
-	bool do_overlay = false;
-	TH1* archived_hist = NULL;
-	the_canvas->Clear();
-	the_canvas->cd(0);
-	if(overlay_enabled && (archive_file!=NULL) ) {
-	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
-	    archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
-	    
-	    if(archived_hist) { 
-		do_overlay = true;
-		the_canvas->Divide(2);
-		the_canvas->cd(2);
-		archived_hist->Draw("COLZ");
-		the_canvas->cd(1);
-	    }
-	}
-
-	// handle drawing 2D histograms differently
-	hist->Draw("COLZ");   // do some sort of pretty printing
-	
-    } else {
-	// default to drawing without arguments
-	hist->Draw();
-    }
-
-
-    // finally, after we've finished drawing on the screen, run any macros that may exist
-    map<string,string>::iterator macro_iter = macro_files.find(hnamepath);
-    if(macro_iter != macro_files.end()) {
-      stringstream ss;
-      ss << ".x " << macro_iter->second;
-      
-      _DBG_ << "running macro = " << macro_iter->second << endl;
-      
-      exec_shell->Exec(ss.str().c_str());
-    }
-}
+//// wrapper for histogram drawing
+//void rs_mainframe::DrawHist(TCanvas *the_canvas, TH1 *hist, string hnamepath,
+//			    hdef_t::histdimension_t hdim,
+//			    hdisplay_info_t &display_info)
+//{
+//    string histdraw_args = "";
+//    bool overlay_enabled = (show_archived_hists->GetState()==kButtonDown);
+//    //bool overlay_enabled = false;
+//    //double hist_line_width = 1.;
+//    float overlay_ymin=0., overlay_ymax=0.;
+//    
+//    //the_canvas->Divide(1);
+//    the_canvas->cd(0);
+//
+//    if(display_info.use_logx)
+//	the_canvas->SetLogx();
+//    else
+//	the_canvas->SetLogx(0);
+//    if(display_info.use_logy)
+//	the_canvas->SetLogy();
+//    else
+//	the_canvas->SetLogy(0);
+//
+//    if(hdim == hdef_t::oneD) {
+//	
+//      //if(hdim == hdef_t::histdimension_t::oneD) {
+//	bool do_overlay = false;
+//	//TH1 *archived_hist = NULL;
+//
+//	// check for archived histograms and load them if they exist and we are overlaying
+//	// we do this first to determine the parameters needed to overlay the histograms
+//	if(overlay_enabled && (archive_file!=NULL) ) {
+//	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
+//	    TH1* archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
+//	    
+//	    if(archived_hist) { 
+//		// only plot the archived histogram if we can find it
+//		_DBG_<<"found it!"<<endl;
+//		do_overlay = true;
+//	
+//		// only display a copy of the archived histogram so that we can 
+//		// compare to the original
+//		if(overlay_hist)
+//		    delete overlay_hist;
+//		overlay_hist = (TH1*)(archived_hist->Clone());   // memory leak?
+//
+//		overlay_hist->SetStats(0);  // we want to compare just the shape of the archived histogram
+//		overlay_hist->SetFillColor(5); // draw archived histograms with shading
+//
+//		overlay_ymin = overlay_hist->GetMinimum();
+//		overlay_ymax = 1.1*overlay_hist->GetMaximum();
+//
+//		gStyle->SetStatX(0.85);
+//	    } else {
+//		gStyle->SetStatX(0.95);
+//	    }
+//	    
+//	    // update histogram with current style parameters
+//	    // primarily used to update statistics box
+//	    hist->UseCurrentStyle();
+//	}
+//	
+//	
+//	// draw summed histogram
+//	if(!do_overlay) {
+//	    hist->Draw();
+//
+//	} else {
+//	    // set axis ranges so that we can sensibly overlay the histograms
+//	    double hist_ymax = 1.1*hist->GetMaximum();
+//	    //double hist_ymax = hist->GetMaximum();
+//	    double hist_ymin = hist->GetMinimum();
+//	    // make sure we at least go down to zero, so that we are displaying the whole
+//	    // distribution - assumes we are just looking at frequency histograms
+//	    if(hist_ymin > 0)
+//		hist_ymin = 0;
+//	    // add in a fix for logarithmic y axes
+//	    if(display_info.use_logy && hist_ymin == 0)
+//		hist_ymin = 0.1;
+//	    
+//	    hist->GetYaxis()->SetRangeUser(hist_ymin, hist_ymax); 
+//
+//	    // draw the current histogram with points/error bars if overlaying
+//	    hist->SetMarkerStyle(20);
+//	    hist->SetMarkerSize(0.7);
+//	    
+//	    // scale down archived histogram and display it to set the scale
+//	    // appropriately scale the overlay histogram
+//	    //overlay_hist->Scale(scale);
+//	    if(display_info.overlay_scale_mode == 1) {   
+//		// scale both to same overall peak value
+//		float scale = hist_ymax/overlay_ymax;
+//		overlay_hist->Scale(scale);
+//	    } else if(display_info.overlay_scale_mode == 2) {
+//		// scale to same integral over specified bin range (lo bin # - hi bin #)
+//		float scale = hist->Integral(display_info.scale_range_low, display_info.scale_range_hi)
+//		    / overlay_hist->Integral(display_info.scale_range_low, display_info.scale_range_hi);
+//		overlay_hist->Scale(scale);
+//	    } else if(display_info.overlay_scale_mode == 3) {
+//		// scale to same integral over specified bin range (lo % of range - hi % of range)
+//		int lo_bin = static_cast<int>( (double)(hist->GetNbinsX()) * display_info.scale_range_low/100. );
+//		int hi_bin = static_cast<int>( (double)(hist->GetNbinsX()) * display_info.scale_range_hi/100. );
+//		float scale = hist->Integral(lo_bin, hi_bin) / overlay_hist->Integral(lo_bin, hi_bin);
+//		overlay_hist->Scale(scale);
+//	    }
+//
+//	    overlay_hist->Draw();
+//
+//	    // now print the current histogram on top of it
+//	    hist->Draw("SAME E1");
+//
+//	    // add axis to the right for scale of archived histogram
+//	    if(overlay_yaxis != NULL)
+//		delete overlay_yaxis;
+//	    //overlay_yaxis = new TGaxis(gPad->GetUxmax(),hist_ymin,
+//				       //gPad->GetUxmax(),hist_ymax,
+//	    overlay_yaxis = new TGaxis(gPad->GetUxmax(),gPad->GetUymin(),
+//				       gPad->GetUxmax(),gPad->GetUymax(),
+//				       overlay_ymin,overlay_ymax,510,"+L");
+//	    overlay_yaxis->SetLabelFont( hist->GetLabelFont() );
+//	    overlay_yaxis->SetLabelSize( hist->GetLabelSize() );
+//	    overlay_yaxis->Draw();
+//	}
+//
+//    } else if(hdim == hdef_t::twoD) {
+//
+//	bool do_overlay = false;
+//	TH1* archived_hist = NULL;
+//	the_canvas->Clear();
+//	the_canvas->cd(0);
+//	if(overlay_enabled && (archive_file!=NULL) ) {
+//	    _DBG_<<"trying to get archived histogram: " << hnamepath << endl;
+//	    archived_hist = (TH1*)archive_file->Get(hnamepath.c_str());
+//	    
+//	    if(archived_hist) { 
+//		do_overlay = true;
+//		the_canvas->Divide(2);
+//		the_canvas->cd(2);
+//		archived_hist->Draw("COLZ");
+//		the_canvas->cd(1);
+//	    }
+//	}
+//
+//	// handle drawing 2D histograms differently
+//	hist->Draw("COLZ");   // do some sort of pretty printing
+//	
+//    } else {
+//	// default to drawing without arguments
+//	hist->Draw();
+//    }
+//
+//
+//    // finally, after we've finished drawing on the screen, run any macros that may exist
+//    map<string,string>::iterator macro_iter = macro_files.find(hnamepath);
+//    if(macro_iter != macro_files.end()) {
+//      stringstream ss;
+//      ss << ".x " << macro_iter->second;
+//      
+//      _DBG_ << "running macro = " << macro_iter->second << endl;
+//      
+//      exec_shell->Exec(ss.str().c_str());
+//    }
+//}
 
 
 void rs_mainframe::DrawMacro(TCanvas *the_canvas, hinfo_t &the_hinfo)
