@@ -8,7 +8,6 @@
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectTree.h"
 #include "Dialog_ConfigMacros.h"
-//#include "Dialog_AskReset.h"
 #include "Dialog_ScaleOpts.h"
 
 #include <TROOT.h>
@@ -58,10 +57,6 @@ extern string ROOTSPY_UDL;
 extern string CMSG_NAME;
 
 
-
-// globals for drawing histograms
-static TH1 *overlay_hist = NULL;
-static TGaxis *overlay_yaxis = NULL;
 
 
 // information for menu bar
@@ -814,58 +809,6 @@ void rs_mainframe::DoSelectDelay(Int_t index)
 	delay_time = (time_t)index;
 }
 
-////------------------
-//// DoLoopOverServers
-////------------------
-//void rs_mainframe::DoLoopOverServers(void)
-//{
-//	RS_INFO->Lock();
-//	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-//	if(loop_over_servers->GetState()==kButtonUp && hdef_iter->second.hists.size() > 0){
-//
-//		loop_over_hists->SetState(kButtonUp);
-//		
-//		_DBG_ << "I was here" << endl;	
-//			
-//		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();	
-//		hinfo_it->second.setDisplayed(true);
-//
-//	} else {
-//		loop_over_servers->SetState(kButtonDown);
-//		loop_over_hists->SetState(kButtonUp);
-//	}	
-//		
-//	RS_INFO->Unlock();
-//}
-
-////------------------
-//// DoLoopOverHists
-////------------------
-//void rs_mainframe::DoLoopOverHists(void)
-//{
-//	RS_INFO->Lock();
-//		
-//	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-//	if(loop_over_hists->GetState()==kButtonUp && hdef_iter->second.hists.size() > 0){
-//		loop_over_servers->SetState(kButtonUp);
-//
-//		_DBG_ << "I was here" << endl;	
-//
-//		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();	
-//		while(hinfo_it!=hdef_iter->second.hists.end()) {
-//			_DBG_ << "I was here" << endl;	
-//			hinfo_it->second.setDisplayed(false);	
-//			hinfo_it++;
-//			_DBG_ << "I was here" << endl;
-//		}	hinfo_it->second.setDisplayed(false);
-//
-//	} else {
-//		loop_over_hists->SetState(kButtonDown);
-//		loop_over_servers->SetState(kButtonUp);
-//	}		
-//	RS_INFO->Unlock();
-//}
-
 //-------------------
 // DoTimer
 //-------------------
@@ -921,244 +864,7 @@ void rs_mainframe::DoTimer(void) {
 		}
 	}
 
-//	//selecthists dialog
-//	if(delete_dialog_scaleopts) {
-//		delete_dialog_scaleopts = NULL;
-//	}
-//	delete_dialog_selecthists = false;
-//
-//	//savehists dialog
-//	if(delete_dialog_savehists) {
-//		dialog_savehists = NULL;
-//	}
-//	delete_dialog_savehists = false;
-//	
-//	//indivhists dialog
-//	if(delete_dialog_indivhists) {
-//		dialog_indivhists = NULL;
-//	}
-//	delete_dialog_indivhists = false;
-//
-//	//selecttree_dialog
-//	if(delete_dialog_selecttree){
-//		dialog_selecttree = NULL;
-//	}
-//	delete_dialog_selecttree = false;
-//
-//	//configmacros_dialog
-//	if(delete_dialog_configmacros){
-//		dialog_configmacros = NULL;
-//	}
-//	delete_dialog_configmacros = false;
-//
-//	//askreset_dialog
-//	if(delete_dialog_askreset){
-//		dialog_askreset = NULL;
-//	}
-//	delete_dialog_askreset = false;
-
-//	// Update server label if necessary
-//	if(selected_server){
-//		string s = selected_server->GetTitle();
-//		if(RS_INFO->servers.size() == 0){
-//			s = "No servers";
-//		} else if(RS_INFO->servers.size() == 1){
-//			s = RS_INFO->current.serverName;
-//		} else if(RS_INFO->servers.size() > 1){
-//			stringstream ss;
-//			ss << RS_INFO->servers.size();
-//			s = "("; 
-//			s += ss.str();  
-//			s += " servers)";
-//		}
-//		selected_server->SetText(TString(s));
-//	}
-//	
-//	// Update histo label if necessary
-//	if(selected_hist){
-//		string s = selected_hist->GetTitle();
-//		if(RS_INFO->current.hnamepath=="") {
-//		    selected_hist->SetText("-------------------------------------------------------");
-//		} else if(s!=RS_INFO->current.hnamepath){
-//		    selected_hist->SetText(RS_INFO->current.hnamepath.c_str());
-//		}
-//	}
-//	// Update histo label if necessary
-//	if(retrieved_lab){
-//		string s = "";
-//		if(RS_INFO->servers.size() == 0){
-//			s = "No servers";
-//		} else if(RS_INFO->servers.size() == 1){
-//			s = "One server: " + RS_INFO->current.serverName;
-//		} else if(RS_INFO->servers.size() > 1 && loop_over_servers->GetState() != kButtonDown){
-//			s = "Several servers: ";
-//			map<string, hdef_t>::iterator h_iter = RS_INFO->histdefs.begin();
-//			for(; h_iter != RS_INFO->histdefs.end(); h_iter++){
-//				if(h_iter->second.active) {
-//					map<string, bool>::iterator s_iter = h_iter->second.servers.begin();
-//					for(; s_iter != h_iter->second.servers.end(); s_iter++) {
-//						if(s_iter->second){
-//							s += s_iter->first;
-//							s += " - ";	
-//						}
-//					}
-//				}
-//
-//			}
-//		}
-//		retrieved_lab->SetText(TString(s));
-//	}
-
-	
-//	// Request histogram update if auto button is on. If either of the
-//	// "Loop over servers" or "Loop over hists" boxes are checked, we
-//	// call DoNext(), otherwise call DoUpdate(). If time the auto_refresh
-//	// time has not expired but the last requested hist is not what is
-//	// currently displayed, then go ahead and call DoUpdate() to make
-//	// the display current.
-//	if(auto_refresh->GetState()==kButtonDown){
-//		if((now-last_hist_requested) >= delay_time){
-//			if(loop_over_servers->GetState()==kButtonDown) DoNext();
-//			else if(loop_over_hists->GetState()==kButtonDown) DoNext();
-//			else DoUpdate();
-//		}else if(last_requested!=RS_INFO->current){
-//			DoUpdate();
-//		}
-//	}
-//	
-//	// Request update of currently displayed histo if update flag is set
-//	if(RS_INFO->update)DoUpdate();
-//	
-//	// Redraw histo if necessary
-//	RS_INFO->Lock();
-//	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-//	
-//	if(loop_over_servers->GetState()==kButtonDown && RS_INFO->servers.size() > 1 && hdef_iter->second.hists.size() > 0){
-//		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();
-//		while(!hinfo_it->second.getDisplayed() && hinfo_it != hdef_iter->second.hists.end()) {
-//				hinfo_it++;
-//		}
-//		
-//		if(hinfo_it != hdef_iter->second.hists.end() && !hinfo_it->second.hasBeenDisplayed){
-//		        canvas->cd();		
-//			if(hdef_iter->second.type == hdef_t::macro) {
-//				//_DBG_ << "DRAW MACRO" << endl;
-//				DrawMacro(canvas, hinfo_it->second);
-//			} else {
-//				if(hinfo_it->second.hist != NULL) {
-//				//_DBG_ << "Pointer to histogram was not NULL" << endl;
-//				//hinfo_it->second.hist->Draw();
-//					DrawHist(canvas, hinfo_it->second.hist, hinfo_it->second.hnamepath,
-//						 hdef_iter->second.type, hdef_iter->second.display_info);  
-//				} else {
-//					//_DBG_ << "Pointer to histogram was NULL" << endl;
-//				}
-//			}
-//			canvas->Modified();	
-//			canvas->Update();
-//			hinfo_it->second.hasBeenDisplayed = true;
-//		}
-//	} else if(hdef_iter!=RS_INFO->histdefs.end()){
-//		if(hdef_iter->second.type == hdef_t::macro) {
-//			// if we're looking at a macro, always execute it
-//			//_DBG_ << "DRAW MACRO" << endl;
-//			DrawMacro(canvas, hdef_iter->second);
-//		} else if(hdef_iter->second.sum_hist_modified && hdef_iter->second.sum_hist!=NULL){
-//			canvas->cd();
-//			//hdef_iter->second.sum_hist->Draw();
-//			DrawHist(canvas, hdef_iter->second.sum_hist, hdef_iter->second.hnamepath,
-//				 hdef_iter->second.type, hdef_iter->second.display_info);
-//			hdef_iter->second.sum_hist_modified = false;	// set flag indicating we've drawn current version
-//			canvas->Modified();
-//			canvas->Update();
-//		}
-//	}
-//	RS_INFO->Unlock();
-//
-//	// Check when the last time we heard from each of the servers was
-//	// and delete any that we haven't heard from in a while.
-//	RS_INFO->Lock();
-//	map<string,server_info_t>::iterator iter=RS_INFO->servers.begin();	
-//	for(; iter!=RS_INFO->servers.end(); iter++){
-//		time_t &last_heard_from = iter->second.lastHeardFrom;
-//		if((now>=last_heard_from) && ((now-last_heard_from) > 10)){
-//			cout<<"server: "<<iter->first<<" has gone away"<<endl;
-//			RS_INFO->servers.erase(iter);
-//		}
-//	}
-//	RS_INFO->Unlock();
-
 	last_called = now;
-}
-
-//-------------------
-// DoUpdate
-//-------------------
-void rs_mainframe::DoUpdate(void)
-{
-//	// Send a request to the server for an updated histogram
-//	RS_INFO->Lock();
-//	RS_INFO->update = false;
-//	
-//	bool request_sent = false;
-//	
-//	if(loop_over_servers->GetState()==kButtonDown){
-//
-//		map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-//		map<string, hinfo_t>::iterator hinfo_it = hdef_iter->second.hists.begin();
-//
-//		while(!hinfo_it->second.getDisplayed() && hinfo_it != hdef_iter->second.hists.end()) {
-//				hinfo_it++;
-//		}
-//		
-//		hinfo_it->second.hasBeenDisplayed = false;
-//			
-//		string &server = RS_INFO->current.serverName;
-//		string &hnamepath = RS_INFO->current.hnamepath;
-//		if(server!="" && hnamepath!=""){
-//			if(hdef_iter->second.type == hdef_t::macro)
-//				RS_CMSG->RequestMacro(server, hnamepath);
-//			else
-//				RS_CMSG->RequestHistogram(server, hnamepath);
-//			request_sent = true;
-//		}
-//
-//	}else if(RS_INFO->viewStyle==rs_info::kViewByObject){
-//		// Loop over servers requesting this hist from each one (that is active)
-//		map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-//		if(hdef_iter!=RS_INFO->histdefs.end()){
-//			map<string, bool> &servers = hdef_iter->second.servers;
-//			map<string, bool>::iterator server_iter = servers.begin();
-//			for(; server_iter!=servers.end(); server_iter++){
-//				if(server_iter->second){
-//					if(hdef_iter->second.type == hdef_t::macro)
-//						RS_CMSG->RequestMacro(server_iter->first, RS_INFO->current.hnamepath);
-//					else
-//						RS_CMSG->RequestHistogram(server_iter->first, RS_INFO->current.hnamepath);
-//					request_sent = true;
-//				}
-//			}
-//		}
-//	}else{
-//		// Request only a single histogram
-//		string &server = RS_INFO->current.serverName;
-//		string &hnamepath = RS_INFO->current.hnamepath;
-//		if(server!="" && hnamepath!=""){
-//			map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(RS_INFO->current.hnamepath);
-//			if(hdef_iter->second.type == hdef_t::macro)
-//				RS_CMSG->RequestMacro(server, hnamepath);
-//			else 
-//				RS_CMSG->RequestHistogram(server, hnamepath);
-//			request_sent = true;
-//		}
-//	}
-//	
-//	if(request_sent){
-//		time_t now = time(NULL);
-//		last_requested = RS_INFO->current;
-//	}
-//
-//	RS_INFO->Unlock();
 }
 
 //----------
@@ -1176,14 +882,6 @@ void rs_mainframe::DoSetArchiveFile(void) {
 	archive_file = new TFile(fileinfo->fFilename);
 	// check for errors?
 
-	// update display on GUI
-//	stringstream ss;
-//	ss << "Archive file: " << fileinfo->fFilename;
-//	//archive_filename->SetTitle(ss.str().c_str());
-//	archive_filename->SetText(ss.str().c_str());
-//	//archive_filename->Resize(300,30);
-//
-//	cout << "loaded archiver file = " << ss.str() << endl;
 }
 
 //-------------------
@@ -1325,18 +1023,6 @@ void rs_mainframe::DoLoadHistsList(void)
     _DBG_ << in_hist << endl;
     new_hnamepaths.push_back( in_hist );
   }
-  /**
-  while(!ifs.eof()) {
-    hid_t hid;
-    ifs >> hid;
-
-    if( (hid.hnamepath == "") || (hid.serverName=="") )
-      break;
-
-    _DBG_ << hid << endl;
-    hids.push_back( hid );
-  }
-  **/
 
   ifs.close();
   cout<<"Histogram list read from \""<<fileinfo->fFilename<<"\""<<endl;
@@ -1379,36 +1065,6 @@ void rs_mainframe::DoLoadHistsList(void)
     }
   }
   
-  /**
-  // now load the histograms that we want to display
-  // we do this differently depending on which view model we are using
-  for( vector<hid_t>::const_iterator hid_it = hids.begin();
-       hid_it != hids.end(); hid_it++ ) {
-
-    map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hid_it->hnamepath);
-    if(hdef_iter==RS_INFO->histdefs.end()) continue;
-    
-    if(RS_INFO->viewStyle == rs_info::kViewByObject) {
-      hdef_iter->second.active = true;
-      
-      // allow a wildcard "*" to select all servers
-      if(hid_it->serverName != "*") {
-	hdef_iter->second.servers[hid_it->serverName] = true;
-      } else {
-	for(map<string, bool>::iterator hdefserver_iter = hdef_iter->second.servers.begin();
-	    hdefserver_iter != hdef_iter->second.servers.end(); hdefserver_iter++) {
-	  hdefserver_iter->second = true;
-	}
-      }
-    } else {  // RS_INFO->viewStyle == rs_info::kViewByServer
-      map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(hid_it->serverName);
-      if(server_info_iter==RS_INFO->servers.end()) continue;
-
-      server_info_iter->second.active = true;
-      hdef_iter->second.servers[hid_it->serverName] = true;
-    }
-  }
-  **/
 
   // is setting current working right?
 
@@ -1423,8 +1079,6 @@ void rs_mainframe::DoLoadHistsList(void)
     }
   }
 
-//  RSMF->can_view_indiv = true;
-  //RS_INFO->viewStyle = viewStyle;
   RS_INFO->update = true;
   
   RS_INFO->Unlock();
@@ -1437,8 +1091,6 @@ void rs_mainframe::DoLoadHistsList(void)
 void rs_mainframe::DoSaveHistsList(void)
 {
   // get list of histo / server combinations
-  //vector<hid_t> hids;
-  //map<string, bool> hists_tosave;
   vector<string> hists_tosave;
 
   RS_INFO->Lock();
@@ -1463,23 +1115,6 @@ void rs_mainframe::DoSaveHistsList(void)
     if( hdef_iter->second.active || active_on_servers )
       hists_tosave.push_back( hdef_iter->second.hnamepath );
   }
-
-  /*
-  // Make list of all histograms from all servers
-  map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.begin();
-  for(; server_info_iter!=RS_INFO->servers.end(); server_info_iter++){//iterates over servers
-    const string &server = server_info_iter->first;
-    const vector<string> &hnamepaths = server_info_iter->second.hnamepaths;
-    for(unsigned int j=0; j<hnamepaths.size(); j++){//iterates over histogram paths
-
-      // add this hinfo_t object to the list, if it's part of the active set
-      if(RS_INFO->histdefs[hnamepaths[j]].active) {
-	hids.push_back(hid_t(server, hnamepaths[j]));
-      }
-
-    }
-  }
-  */
 
   RS_INFO->Unlock();
   
@@ -2005,17 +1640,6 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 		}
 		string the_macro( macro_str->GetString().Data() );
 
-		//cerr << "======= MACRO ==========" << endl;
-		//cerr << the_macro << endl;
-/*
-		// open the summed file
-		TFile *f = new TFile(TMP_FILENAME.c_str());
-		if(!f) { 
-			_DBG_ << "Could not open summed file!" << endl;
-			return;
-		}
-		//f->ls();
-		*/		
 		// move to the right canvas and draw!
 		the_canvas->cd();
 		ExecuteMacro(macro_data, the_macro);
@@ -2043,41 +1667,6 @@ void rs_mainframe::ExecuteMacro(TFile *f, string macro)
 
 	// restore
 	savedir->cd();	
-
-#if 0	
-	// configuration for file output
-	const string base_directory = "/tmp";
-	const string base_filename = "RootSpy.macro";   // maybe make this depend on the TMemFile name?
-
-	// write the macro to a temporary file
-        //char filename[] = "/tmp/RootSpy.macro.XXXXXX";
-	// we have to do a little dance here since the 'XXXXXX' in the filename is
-	// replaced by mkstemp() - a better solution should be found
-	stringstream ss;
-	ss << base_directory << "/" << base_filename << ".XXXXXX";
-	char *filename = new char[strlen(ss.str().c_str())+1];
-	strcpy(filename, ss.str().c_str());
-        int macro_fd = mkstemp(filename);
-        if (macro_fd == -1) {
-		_DBG_ << "Could not open macro file " << filename << endl;
-		delete filename;
-		return;
-	}
-	
-	// write the macro to a file
-	write(macro_fd, macro.c_str(), macro.length());
-	close(macro_fd);
-
-	// execute the macro
-	TExec *exec_shell = new TExec();
-	string cmd = string(".x ") + filename;
-	f->cd();
-	exec_shell->Exec(cmd.c_str());
-
-	// restore 
-	unlink(filename);
-	delete filename;
-#endif	
 
 }
 
