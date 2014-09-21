@@ -41,7 +41,6 @@ Dialog_IndivHists::Dialog_IndivHists(string hnamepath, const TGWindow *p, UInt_t
 	timer->Connect("Timeout()", "Dialog_IndivHists", this, "DoTimer()");
 	timer->Start(500, kFALSE);
 	requested = false;
-	display = true;
 	servers_changed = true;
 	num_servers = RS_INFO->servers.size();
 	displaystyle = COMBINED;
@@ -75,7 +74,6 @@ void Dialog_IndivHists::CloseWindow() {
 	RSMF->RaiseWindow();
 	RSMF->RequestFocus();
 	UnmapWindow();
-	RSMF->delete_dialog_indivhists = true;
 }
 
 //=====================
@@ -149,7 +147,6 @@ void Dialog_IndivHists::RequestCurrentIndividualHistograms(void) {
 	}
 	RS_INFO->Unlock();
 	requested = true;
-	display = true;
 }
 
 //============================
@@ -188,8 +185,6 @@ void Dialog_IndivHists::CombinedStyle(void) {
 	canvas->Modified();
 	canvas->Update();
 
-	// When the timer is called, do not attempt to display.
-	display = false;
 	RS_INFO->Unlock();
 }
 
@@ -215,16 +210,22 @@ void Dialog_IndivHists::DivideCanvas(unsigned int &row, unsigned int &col) {
 // DividedStyle
 //============================
 void Dialog_IndivHists::DividedStyle(void) {
-    unsigned int row = 1;
-    unsigned int col = 0;
-    num_servers = RS_INFO->servers.size();
-	canvas->Clear();
-    DivideCanvas(row, col);
-	// Divide the canvas appropriately.
-	//canvas->Divide(col, row);
-	//Iterate by individual histogram over all the servers.
+
+	// Lock the rs_info structure while we use it
 	RS_INFO->Lock();
 	hdef_t histodef = RS_INFO->histdefs[hnamepath];
+	
+	// We need to lock ROOT as well
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+	
+	// Divide canvas based on number of hists we have to display
+    unsigned int row = 1;
+    unsigned int col = 0;
+    num_servers = histodef.hists.size();
+	canvas->Clear();
+    DivideCanvas(row, col);	
+	
+	//Iterate by individual histogram over all the servers.
 	map<string, hinfo_t>::iterator hists_iter = histodef.hists.begin();
 	unsigned int colors[] = {kRed, kBlue, kOrange, kBlack, kGreen, kViolet};
 	unsigned int Ncolors = 6;
@@ -247,9 +248,9 @@ void Dialog_IndivHists::DividedStyle(void) {
 	}
 	canvas->Modified();
 	canvas->Update();
-
-	// When the timer is called, do not attempt to display.
-	display = false;
+	
+	// Unlock mutexes
+	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
 }
 
@@ -279,7 +280,6 @@ void Dialog_IndivHists::DoGridLines(void) {
 	} else {
 		gridstyle = true;
 	}
-	display = true;
 }
 
 //============================
@@ -292,7 +292,6 @@ void Dialog_IndivHists::DoTickMarks(void) {
 	} else {
 		tickstyle = true;
 	}
-	display = true;
 }
 
 //============================
@@ -310,7 +309,6 @@ void Dialog_IndivHists::DoCombined(void) {
 	dividedbut->SetState(kButtonUp);
 
 	displaystyle = COMBINED;
-	display = true;
 }
 
 //============================
@@ -321,9 +319,11 @@ void Dialog_IndivHists::DoDivided(void) {
 	dividedbut->SetState(kButtonDown);
 
 	displaystyle = DIVIDED;
-	display = true;
 }
 
+//============================
+// HandleConfigureNotify
+//============================
 Bool_t Dialog_IndivHists::HandleConfigureNotify(Event_t* event) {
 	TGFrame::HandleConfigureNotify(event);
 	return kTRUE;

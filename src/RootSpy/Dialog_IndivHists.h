@@ -66,7 +66,6 @@ class Dialog_IndivHists:public TGMainFrame{
 		//=====================================
 		TTimer* timer;
 		bool requested;
-		bool display;
 		bool servers_changed;
 		unsigned int num_servers;
 		TCanvas* canvas;
