@@ -330,6 +330,9 @@ void RSTab::DoUpdate(void)
 		Nrequests++; // avoid compiler warnings if above line is commented out
 	}
 	
+	// Lock ROOT
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+	
 	// Get Pointer to histogram to display the type of histogram (possibly a macro)
 	hdef_t::histdimension_t type = hdef_t::noneD;
 	double sum_hist_modified = 0.0;
@@ -376,11 +379,14 @@ void RSTab::DoUpdate(void)
 			RS_INFO->Unlock();
 			break;
 		default:
-			cout << "Unable to handle histogram type at the moment." << endl;
+			cout << "histogram/macro not available (is producer program running?)" << endl;
 		
 	}
 
 	canvas->Update();
+	
+	// Release ROOT
+	pthread_rwlock_unlock(ROOT_MUTEX);
 	
 	last_update = now;
 }
