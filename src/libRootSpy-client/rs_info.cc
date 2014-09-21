@@ -261,6 +261,7 @@ hid_t rs_info::FindPreviousActive(hid_t &current)
 //---------------------------------
 void rs_info::Reset()
 {
+	Lock();
 
     // delete histograms
     for(map<hid_t,hinfo_t>::iterator hit = hinfos.begin();
@@ -292,4 +293,6 @@ void rs_info::Reset()
     // zero out the current histogram def
     current = hid_t();
     //current.hnamepath = "";
+	
+	Unlock();
 }
