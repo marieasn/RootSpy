@@ -202,6 +202,8 @@ void Dialog_SelectHists::DoTimer(void)
 //---------------------------------
 void Dialog_SelectHists::DoOK(void)
 {	
+	// Replace existing list of hnamepaths
+	hnamepaths->clear();
 
 	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
 	for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
@@ -209,13 +211,15 @@ void Dialog_SelectHists::DoOK(void)
 		const hid_t &hid = hist_items_iter->first;
 		TGListTreeItem *item = hist_items_iter->second;
 		
-		// Look for this item in the list of hnamepaths to display
-		list<string>::iterator it = find(hnamepaths->begin(), hnamepaths->end(), hid.hnamepath);
-		if(it == hnamepaths->end()){
-			if(	item->IsChecked() ) hnamepaths->push_back(hid.hnamepath);
-		}else{
-			if(!item->IsChecked() ) hnamepaths->erase(it);
-		}
+		if(	item->IsChecked() ) hnamepaths->push_back(hid.hnamepath);
+		
+//		// Look for this item in the list of hnamepaths to display
+//		list<string>::iterator it = find(hnamepaths->begin(), hnamepaths->end(), hid.hnamepath);
+//		if(it == hnamepaths->end()){
+//			if(	item->IsChecked() ) hnamepaths->push_back(hid.hnamepath);
+//		}else{
+//			if(!item->IsChecked() ) hnamepaths->erase(it);
+//		}
 	}
 	
 	// If we were given an RSTab pointer, use it to update the current tab
@@ -274,7 +278,6 @@ void Dialog_SelectHists::DoClickedEntry(TGListTreeItem* entry, Int_t btn)
 
 	char path[512];
 	listTree->GetPathnameFromItem(entry, path);
-	_DBG_<<"Clicked entry \""<<path<<"\" with btn="<<btn<<endl;
 }
 
 //---------------------------------
@@ -283,7 +286,6 @@ void Dialog_SelectHists::DoClickedEntry(TGListTreeItem* entry, Int_t btn)
 void Dialog_SelectHists::DoCheckedEntry(TObject* obj, Int_t check)
 {
 	// Called whenever a checkbox is toggled in listTree
-	_DBG_<<"Checkbox toggled to "<<check<<" for object 0x"<<hex<< "-" <<(unsigned long)obj<<dec<<endl;
 	TGListTreeItem *item = (TGListTreeItem *)(obj);
 	if(!item) return;
 
