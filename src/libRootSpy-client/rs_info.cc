@@ -95,11 +95,17 @@ void rs_info::GetActiveHIDs(vector<hid_t> &active_hids)
 //---------------------------------
 // RequestHistograms
 //---------------------------------
-int rs_info::RequestHistograms(string hnamepath)
+int rs_info::RequestHistograms(string hnamepath, bool lock_mutex)
 {
+	/// Request the specified histogram or macro from all servers
+	/// that provide it. If the lock_mutex value is set to false,
+	/// then the RS_INFO lock will not be locked during the operation.
+	/// In that case it is assumed that the calling routine has already
+	/// locked it.
+
 	int NrequestsSent = 0;
 
-	Lock();
+	if(lock_mutex) Lock();
 
 	map<string,hdef_t>::iterator it = histdefs.find(hnamepath);
 	if(it != histdefs.end()){
@@ -118,7 +124,7 @@ int rs_info::RequestHistograms(string hnamepath)
 		}
 	}
 	
-	Unlock();
+	if(lock_mutex) Unlock();
 	
 	return NrequestsSent;
 }

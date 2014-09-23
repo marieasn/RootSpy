@@ -61,7 +61,7 @@ class rs_info{
 		bool update;				// flag indicating rs_mainframe::DoUpdate should be called on next DoTimer call
 
 		void  GetActiveHIDs(vector<hid_t> &active_hids);
-		int   RequestHistograms(string hnamepath); // returns number of servers a request was sent to
+		int   RequestHistograms(string hnamepath, bool lock_mutex=true); // returns number of servers a request was sent to
 		TH1*  GetSumHist(string &hnamepath, hdef_t::histdimension_t *type=NULL, double *sum_hist_modified=NULL, string *servers_str=NULL);
 		hid_t FindNextActive(hid_t &current);
 		hid_t FindPreviousActive(hid_t &current);

@@ -101,6 +101,8 @@ class hinfo_t:public hid_t{
 			isDisplayed = false;
 			macroData = NULL;
 			macroVersion = 0;
+			Nkeys = 0;
+			macroString = "";
 		}
 		hinfo_t():hid_t("",""){
 			received = 0;
@@ -110,6 +112,8 @@ class hinfo_t:public hid_t{
 			isDisplayed = false;
 			macroData = NULL;
 			macroVersion = 0;
+			Nkeys = 0;
+			macroString = "";
 		}
 		
 		bool operator== (const hinfo_t& hi);
@@ -122,7 +126,9 @@ class hinfo_t:public hid_t{
 		bool hasBeenDisplayed;		// makes sure that each hist is not displayed more than once
 
 		// saved data if this is really a macro
-		TMemFile* macroData;
+		TMemFile* macroData; // will contain macro plus any histograms sent with it
+		Int_t Nkeys;         // Number of keys in TMemFile macro was sent in (=1 if only macro sent)
+		string macroString;  // copy of macro so we don't have to keep pulling it from macroData
 		int macroVersion;
 				
 		bool getDisplayed() {return isDisplayed;}

@@ -329,10 +329,7 @@ void RSTab::DoUpdate(void)
 		//cout << "Sent " << Nrequests << " requests sent for " << hnamepath << endl;
 		Nrequests++; // avoid compiler warnings if above line is commented out
 	}
-	
-	// Lock ROOT
-	pthread_rwlock_wrlock(ROOT_MUTEX);
-	
+
 	// Get Pointer to histogram to display the type of histogram (possibly a macro)
 	hdef_t::histdimension_t type = hdef_t::noneD;
 	double sum_hist_modified = 0.0;
@@ -357,7 +354,6 @@ void RSTab::DoUpdate(void)
 	}
 
 	// Draw the histogram/macro
-	canvas->cd();
 	map<string,hdef_t>::iterator hdef_it;
 	switch(type){
 		case hdef_t::oneD:
@@ -368,26 +364,30 @@ void RSTab::DoUpdate(void)
 				if(sum_hist_modified > currently_displayed_modified){
 
 					// Draw histogram
-					sum_hist->Draw();					
+					pthread_rwlock_wrlock(ROOT_MUTEX);
+					canvas->cd();
+					sum_hist->Draw();
+					canvas->Update();
+					pthread_rwlock_unlock(ROOT_MUTEX);				
 				}
 			}
 			break;
 		case hdef_t::macro:
+			canvas->cd();
+			canvas->Clear();
+			canvas->Update();
+			currently_displayed_modified = now;
 			RS_INFO->Lock();
 			hdef_it = RS_INFO->histdefs.find(hnamepath);
 			if(hdef_it != RS_INFO->histdefs.end()) RSMF->DrawMacro(canvas, hdef_it->second);
 			RS_INFO->Unlock();
+			RequestUpdatedMacroHists();
 			break;
 		default:
 			cout << "histogram/macro not available (is producer program running?)" << endl;
 		
 	}
 
-	canvas->Update();
-	
-	// Release ROOT
-	pthread_rwlock_unlock(ROOT_MUTEX);
-	
 	last_update = now;
 }
 
@@ -420,5 +420,38 @@ void RSTab::DoSelectHists(void)
 	new Dialog_SelectHists(this, gClient->GetRoot(), 10, 10);
 }
 
+//----------
+// RequestUpdatedMacroHists
+//----------
+void RSTab::RequestUpdatedMacroHists(void)
+{
+	/// Request updated histograms based on what is currently displayed in
+	/// the canvas. This used when a macro has been used to draw on the canvas
+	/// and we need to get updated histograms from the servers. It looks through 
+	/// all of the pads and finds all TH1 objects associated with them. If the
+	/// TH1 is located in the sum hist directory ("RootSpy:/rootspy/") then a request
+	/// is sent out to all servers with the appropriate namepath.
+
+	for(int ipad=0; ipad<100; ipad++){
+		TVirtualPad *pad = canvas->GetPad(ipad);
+		if(!pad) break;
+		
+		pad->cd();
+		TIter next(pad->GetListOfPrimitives());
+		TObject *obj;
+		while ( (obj = next()) ){
+			TH1 *h = dynamic_cast<TH1*>(obj);
+			if(h != NULL){
+				TDirectory *dir = h->GetDirectory();
+				string path = dir->GetPath();
+				string prefix = "RootSpy:/rootspy/";
+				if(path.find(prefix) == 0){
+					string hnamepath = path.substr(prefix.length()-1) + "/" + h->GetName();
+					RS_INFO->RequestHistograms(hnamepath);
+				}
+			}			
+		}
+	}
+}
 
 

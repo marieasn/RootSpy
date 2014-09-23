@@ -35,6 +35,7 @@
 #include <TGDockableFrame.h>
 #include <TExec.h>
 #include <TMemFile.h>
+#include <TDirectory.h>
 #include <TGTab.h>
 
 
@@ -143,7 +144,7 @@ class rs_mainframe:public TGMainFrame {
 
 
 			viewStyle_t_rs viewStyle_rs;
-			void ExecuteMacro(TFile* f, string macro);
+			void ExecuteMacro(TDirectory* f, string macro);
 			void DrawMacro(TCanvas*the_canvas, hinfo_t &the_hinfo);
 			void DrawMacro(TCanvas*the_canvas, hdef_t &the_hdef);
 
@@ -154,7 +155,6 @@ class rs_mainframe:public TGMainFrame {
 		double last_called;				// last time DoTimer() was called
 		double last_ping_time;			// last time we broadcast for a server list
 		double last_hist_requested;	    // last time we requested list of histograms
-		
 		
 		TGRadioButton *VBServer;
 

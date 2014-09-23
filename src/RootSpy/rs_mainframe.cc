@@ -13,6 +13,7 @@
 #include <TROOT.h>
 #include <TStyle.h>
 #include <TApplication.h>
+#include <TInterpreter.h>
 #include <TPolyMarker.h>
 #include <TLine.h>
 #include <TMarker.h>
@@ -122,21 +123,9 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	last_requested.hnamepath = "N/A";
 	last_hist_plotted = NULL;
 	
-//	dialog_selectserverhist = NULL;
-//	dialog_selecthists = NULL;
-//	dialog_savehists = NULL;
-//	dialog_selecttree = NULL;
 	dialog_configmacros = NULL;
 	dialog_scaleopts = NULL;
-//	dialog_indivhists = NULL;
-//	dialog_askreset = NULL;
-//	delete_dialog_selectserverhist = false;
-//	delete_dialog_selecthists = false;
-//	delete_dialog_savehists = false;
 	delete_dialog_configmacros = false;
-//	delete_dialog_scaleopts = false;
-//	delete_dialog_askreset = false;
-//	can_view_indiv = false;
 
 	//overlay_mode = false;
 	archive_file = NULL;
@@ -1552,6 +1541,9 @@ void rs_mainframe::CreateGUI(void)
 //}
 
 
+//-------------------
+// DrawMacro
+//-------------------
 void rs_mainframe::DrawMacro(TCanvas *the_canvas, hinfo_t &the_hinfo)
 {
 	// we're given an hinfo_t which corresponds to just one server
@@ -1562,23 +1554,19 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hinfo_t &the_hinfo)
 		return;
 	}
 
-	// extract the macro
-	TObjString *macro_str = (TObjString *)the_hinfo.macroData->Get("macro");
-	if(!macro_str) {
-		_DBG_ << "Could not extract macro from " << the_hinfo.macroData->GetName() << endl;
-		return;
-	}
-	string the_macro( macro_str->GetString().Data() );
-
-	//cerr << "THIS IS THE STRING WE WANT TO RUN: " << endl
-	//     << the_macro << endl;
-
 	// move to the right canvas and draw!
 	the_canvas->cd();
-	ExecuteMacro(the_hinfo.macroData, the_macro);
+	if(the_hinfo.Nkeys == 1){
+		ExecuteMacro(RS_INFO->sum_dir, the_hinfo.macroString);
+	}else{
+		ExecuteMacro(the_hinfo.macroData, the_hinfo.macroString);
+	}
 	the_canvas->Update();
 }
 
+//-------------------
+// DrawMacro
+//-------------------
 void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 {
 	//const string TMP_FILENAME = ".summed_file.root";
@@ -1596,63 +1584,83 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 	} else {
 		// we could have different versions of these scripts, pick the latest
 		int best_version = 0;
+		const hinfo_t *hinfo_best_version = NULL;
 		for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
 		    hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
-			if( hinfo_itr->second.macroVersion > best_version )
-				best_version = hinfo_itr->second.macroVersion;
-		}
-
-		// now combine the data
-		TMemFile *first_file = NULL;
-		//vector<TFile *> file_list;
-		//TList file_list;
-		TList *file_list = new TList();
-		//file_list->SetOwner(kFALSE); // this doesn't work??
-
-		//cerr << "BUILD FILE LIST" << endl;
-		for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
-		    hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
-			//cerr << hinfo_itr->second.macroData->GetName() << endl;
-			//hinfo_itr->second.macroData->ls();
-			if( hinfo_itr->second.macroVersion == best_version ) {
-				if(first_file == NULL)   // save the first file so that we can get unique data out of it
-					first_file = hinfo_itr->second.macroData;
-				//file_list.push_back( hinfo_itr->second.macroData );
-				hinfo_itr->second.macroData->SetBit(kCanDelete, kFALSE);
-				file_list->Add( hinfo_itr->second.macroData );
+			if( hinfo_itr->second.macroVersion > best_version ){
+				hinfo_best_version = &hinfo_itr->second;
+				best_version = hinfo_best_version->macroVersion;
 			}
 		}
+		
+		// If the TMemfile only had 1 key, then we assume it was just a macro string
+		// and that it will be plotting histograms from the RS_INFO->sum_dir.
+		if(hinfo_best_version->Nkeys == 1){
+		
+			DrawMacro(the_canvas, the_hdef.hists.begin()->second);
 
-		//cerr << "MERGE FILES" << endl;
-		//file_list->SetOwner(kFALSE);
-		static TMemFile *macro_data = new TMemFile(".rootspy_macro_tmp.root", "RECREATE");
-		macro_data->Delete("T*;*");
-		MergeMacroFiles(macro_data, file_list);
+		}else{
+		
+			// Histograms came with TMemFile. Merge them before plotting
+		
+			// now combine the data
+			TMemFile *first_file = NULL;
+			//vector<TFile *> file_list;
+			//TList file_list;
+			TList *file_list = new TList();
+			//file_list->SetOwner(kFALSE); // this doesn't work??
 
-		//cerr << "======= MERGED FILES ==========" << endl;
-		//macro_data->ls();
+			//cerr << "BUILD FILE LIST" << endl;
+			for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
+				hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
+				//cerr << hinfo_itr->second.macroData->GetName() << endl;
+				//hinfo_itr->second.macroData->ls();
+				if( hinfo_itr->second.macroVersion == best_version ) {
+					if(first_file == NULL)   // save the first file so that we can get unique data out of it
+						first_file = hinfo_itr->second.macroData;
+					//file_list.push_back( hinfo_itr->second.macroData );
+					hinfo_itr->second.macroData->SetBit(kCanDelete, kFALSE);
+					file_list->Add( hinfo_itr->second.macroData );
+				}
+			}
 
-		// extract the macro
-		TObjString *macro_str = (TObjString *)first_file->Get("macro");
-		if(!macro_str) {
-			_DBG_ << "Could not extract macro from " << first_file->GetName() << endl;
-			return;
+			//cerr << "MERGE FILES" << endl;
+			//file_list->SetOwner(kFALSE);
+			static TMemFile *macro_data = new TMemFile(".rootspy_macro_tmp.root", "RECREATE");
+			macro_data->Delete("T*;*");
+			MergeMacroFiles(macro_data, file_list);
+
+			//cerr << "======= MERGED FILES ==========" << endl;
+			//macro_data->ls();
+
+			// extract the macro
+			TObjString *macro_str = (TObjString *)first_file->Get("macro");
+			if(!macro_str) {
+				_DBG_ << "Could not extract macro from " << first_file->GetName() << endl;
+				return;
+			}
+			string the_macro( macro_str->GetString().Data() );
+
+			// move to the right canvas and draw!
+			the_canvas->cd();
+			ExecuteMacro(macro_data, the_macro);
+			the_canvas->Update();
+			//f->Close();
+			//unlink( TMP_FILENAME.c_str() );
+			//file_list->Clear();
+			delete file_list;
 		}
-		string the_macro( macro_str->GetString().Data() );
-
-		// move to the right canvas and draw!
-		the_canvas->cd();
-		ExecuteMacro(macro_data, the_macro);
-		the_canvas->Update();
-		//f->Close();
-		//unlink( TMP_FILENAME.c_str() );
-		//file_list->Clear();
-		delete file_list;
 	}
 }
 
-void rs_mainframe::ExecuteMacro(TFile *f, string macro)
+//-------------------
+// ExecuteMacro
+//-------------------
+void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 {
+	// Lock ROOT
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+
 	TDirectory *savedir = gDirectory;
 	f->cd();
 
@@ -1662,14 +1670,38 @@ void rs_mainframe::ExecuteMacro(TFile *f, string macro)
 	while(!macro_stream.eof()) {
 		string s;
 		getline(macro_stream, s);
-		gROOT->ProcessLine(s.c_str());
+		
+		// Special comment lines allow macro to communicate to RootSpy system
+		string prefix = "// hnamepath:";
+		if(s.find(prefix) == 0){
+			int spos = prefix.length();
+			while( spos<s.length() && (s[spos]==' ' || s[spos]=='\t') ) spos++;
+			int epos = s.length()-1;
+			while(epos>spos && (s[epos]==' ' || s[epos]=='\t') ) epos--;
+
+			string h = s.substr(spos, epos-spos+1); // chop off prefix + whitespace
+			RS_INFO->RequestHistograms(h, false);
+		}
+
+		Long_t err = gROOT->ProcessLine(s.c_str());
+		if(err != TInterpreter::kNoError){
+			cout << "Error processing the following macro line:" << endl;
+			cout << s << endl;
+			break;
+		}
 	}
 
 	// restore
 	savedir->cd();	
 
+	// Unlock ROOT
+	pthread_rwlock_unlock(ROOT_MUTEX);
+
 }
 
+//-------------------
+// MergeMacroFiles
+//-------------------
 static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist)
 {
 	Bool_t status = kTRUE;

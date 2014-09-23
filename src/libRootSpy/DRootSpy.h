@@ -89,5 +89,8 @@ class DRootSpy:public cMsgCallback{
 
 };
 
+extern DRootSpy *gROOTSPY;
+
+
 #endif // _DRootSpy_
 

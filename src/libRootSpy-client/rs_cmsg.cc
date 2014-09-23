@@ -1001,6 +1001,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
       hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
       //hdef->sum_hist->SetDirectory(RS_INFO->sum_dir);
       hdef->sum_hist->SetDirectory(hist_sum_dir);
+	  hdef->sum_hist->SetName(h->GetName()); // set name back to original single hist name so macros work
     }
 
     // Record time we last modified the sum histo
@@ -1105,13 +1106,17 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     }
     if(verbose>=2) _DBG_ << " TMemFile name = " << tmpfile_name << endl;
     if(verbose>=2) _DBG_ << "     file size = " << length << endl;
-    TString filename(tmpfile_name);
+   TString filename(tmpfile_name);
 
     TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
+    if(verbose>=2) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
     //f->ls(); // debugging
     savedir->cd();
     
+	TObjString *macro_str = (TObjString *)f->Get("macro");
+	if(macro_str) hinfo->macroString = macro_str->GetString().Data();
     hinfo->macroData = f;
+	hinfo->Nkeys = f->GetNkeys();
 
     //TNamed *namedObj = NULL;
     /*

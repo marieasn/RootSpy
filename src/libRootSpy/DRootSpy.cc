@@ -33,9 +33,47 @@ using namespace std;
 #endif
 void *ReturnFinalsC(void * ptr);
 
+//...................................................
+// This is used to temporarily store simple macro
+// definitions until a DRootSpy object is created
+typedef struct{
+	string name;
+	string path;
+	string macro_data;
+}RS_QUEUED_MACRO_t;
+//...................................................
+
+
 // --------- GLOBALS ----------------
+DRootSpy *gROOTSPY = NULL;
 sem_t RootSpy_final_sem;
 pthread_mutex_t *gROOTSPY_MUTEX = NULL;
+vector<RS_QUEUED_MACRO_t> QUEUED_MACROS;
+
+//...................................................
+// REGISTER_ROOTSPY_MACRO
+//
+// The following allows us to optionally register macros iff the symbol
+// REGISTER_ROOTSPY_MACRO can be found by dlsym. This way, plugins with
+// macros can be used with or without the rootspy plugin attached. The
+// user's build system (SBMS for the online packages in GlueX) can be
+// made to automatically copy scripts into strings that are compiled
+// along with a call to REGISTER_ROOTSPY_MACRO so that the whole system
+// is automatic.
+extern "C"{
+void REGISTER_ROOTSPY_MACRO(string name, string path, string macro_data){
+	// If a DRootSpy object already exists, register the macro right away
+	// otherwise, just copy it to a global container to be regsitered later
+	if(gROOTSPY){
+		gROOTSPY->RegisterMacro(name, path, macro_data);
+	}else{
+		RS_QUEUED_MACRO_t rsqm = {name, path, macro_data};
+		QUEUED_MACROS.push_back(rsqm);
+	}
+}
+};
+//...................................................
+
 
 //---------------------------------
 // DRootSpy    (Constructor)
@@ -158,7 +196,16 @@ void DRootSpy::Initialize(pthread_mutex_t *mutex, string myUDL)
 		cout << "Unable to create semephore. Final Histograms feature disabled." << endl;
 	}
 	
+	// Register any macros that were queued up before the DRootSpy object was created
+	for(unsigned int i=0; i<QUEUED_MACROS.size(); i++){
+		RS_QUEUED_MACRO_t &rsqm = QUEUED_MACROS[i];
+		RegisterMacro(rsqm.name, rsqm.path, rsqm.macro_data);
+	}
+	QUEUED_MACROS.clear();
+	
 	VERBOSE=1;
+	
+	gROOTSPY = this;
 }
 
 //---------------------------------
@@ -870,6 +917,8 @@ bool DRootSpy::RegisterMacro(string name, string path, string macro_data)
 		_DBG_ << "trying to register a macro with no name!" << endl;
 		return false;
 	}
+	
+	cout << "ROOTSPY: Registering macro \""<<name<<"\""<<endl;
 
 	// validate path - if blank, then assume we're in the root directory
 	// right now we don't do anything else special...
