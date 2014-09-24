@@ -242,7 +242,7 @@ TGFrame* RSTab::AddSpacer(TGCompositeFrame* frame, UInt_t w, UInt_t h, ULong_t h
 void RSTab::DoNext(void)
 {
 	currently_displayed++;
-	if(currently_displayed >= hnamepaths.size()) currently_displayed = 0;
+	if((uint32_t)currently_displayed >= hnamepaths.size()) currently_displayed = 0;
 	DoUpdateWithFollowUp();
 }
 
@@ -313,7 +313,7 @@ void RSTab::DoUpdate(void)
 	hnamepaths_seeded = true;
 
 	// If the currently displayed histogram index is out of range, force it into range
-	if(currently_displayed >= hnamepaths.size()) currently_displayed = 0;
+	if((uint32_t)currently_displayed >= hnamepaths.size()) currently_displayed = 0;
 
 	// Get hnamepath of currently displayed histo/macro
 	list<string>::iterator h_it = hnamepaths.begin();

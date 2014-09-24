@@ -456,7 +456,7 @@ bool rs_mainframe::TokenizeFile(string fname, map<string, vector<config_item_t> 
 
 		// Break line into tokens, respecting double quotes
 		vector<string> tokens;
-		int pos=0;
+		uint32_t pos=0;
 		bool in_quotes = false;
 		bool in_token = false;
 		string token;
@@ -1677,9 +1677,9 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 		// Special comment lines allow macro to communicate to RootSpy system
 		string prefix = "// hnamepath:";
 		if(s.find(prefix) == 0){
-			int spos = prefix.length();
+			uint32_t spos = prefix.length();
 			while( spos<s.length() && (s[spos]==' ' || s[spos]=='\t') ) spos++;
-			int epos = s.length()-1;
+			uint32_t epos = s.length()-1;
 			while(epos>spos && (s[epos]==' ' || s[epos]=='\t') ) epos--;
 
 			string h = s.substr(spos, epos-spos+1); // chop off prefix + whitespace
