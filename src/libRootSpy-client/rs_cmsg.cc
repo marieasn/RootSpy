@@ -971,32 +971,24 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     // Add new histogram to sum and flag it as modified
     if(verbose>=2) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
     if(hdef->sum_hist){
-	// Reset sum histo first if showing only one histo at a time
-	if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
-	hdef->sum_hist->Add(h);
+		// Reset sum histo first if showing only one histo at a time
+		if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
+		hdef->sum_hist->Add(h);
     }else{
-      // get the direction in which to save the summed histogram
-
-      //cout << "get sum dir = " << hdef->path.c_str() << endl;
-      TDirectory *hist_sum_dir = NULL;
-      string sum_path = "/";
-      if(hdef->path == "/")
-	hist_sum_dir = RS_INFO->sum_dir;
-      else {
-	sum_path = join(hdef->dirs.begin(), hdef->dirs.end(), "/");
-	hist_sum_dir = RS_INFO->sum_dir->GetDirectory(sum_path.c_str());
-	//hist_sum_dir = RS_INFO->sum_dir->GetDirectory(hdef->path.c_str());
-      }
-
+      // get the directory in which to save the summed histogram
+	  
+	  // Make sure the full directory path exists
+	  string sum_path = "";
+	  TDirectory *hist_sum_dir = RS_INFO->sum_dir;
+	  for(uint32_t i=0; i<hdef->dirs.size(); i++){
+	  	sum_path += "/" + hdef->dirs[i];
+	  	TDirectory *dir = (TDirectory*)(hist_sum_dir->Get(hdef->dirs[i].c_str()));
+		if(!dir) dir = hist_sum_dir->mkdir(hdef->dirs[i].c_str());
+		hist_sum_dir = dir;
+	  }
+	  
       if(verbose>=2) cout << "saving in directory " << sum_path << endl;
 
-      // if the directory doesn't exist, make it
-      // (needs better error checking)
-      if(!hist_sum_dir) {
-	hist_sum_dir = RS_INFO->sum_dir->mkdir(sum_path.c_str());
-      }
-      
-      //_DBG_<<"Making summed histogram " << string(h->GetName())+"__sum" << endl;
       string sum_hist_name = string(h->GetName())+"__sum";
       hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
       //hdef->sum_hist->SetDirectory(RS_INFO->sum_dir);
