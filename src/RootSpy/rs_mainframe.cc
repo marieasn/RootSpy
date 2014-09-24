@@ -142,6 +142,9 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	viewStyle_rs = kViewByServer_rs;
 	exec_shell = new TExec();
 
+	// Setup interpretor so macros don't have to include these things.
+	gROOT->ProcessLine("#include <iostream>");
+	gROOT->ProcessLine("using namespace std;");
 }
 
 //-------------------
