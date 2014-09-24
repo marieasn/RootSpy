@@ -55,7 +55,7 @@ int main(int narg, char *argv[])
 	macro += "for(unsigned int iring=1; iring<28; iring++){\n";
 	macro += "char hname[256];\n";
 	macro += "sprintf(hname, \"ring%02d\", iring+1);\n";
-	macro += "h = gDirectory->Get(hname);\n";
+	macro += "TH1 *h = (TH1*)(gDirectory->Get(hname));\n";
 	macro += "h->Draw(\"col pol same\"); // draw remaining histos without overwriting color palette\n";
 	macro += "}\n";
 	macro += "}\n";
