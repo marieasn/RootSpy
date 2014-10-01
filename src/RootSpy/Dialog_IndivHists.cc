@@ -166,15 +166,30 @@ void Dialog_IndivHists::CombinedStyle(void) {
 	if(height>0.75) height = 0.75;
 	TLegend* legend = new TLegend(0.7, 0.895-height, 0.895, 0.895);
 	//legend->SetHeader("Histograms");
+	
+	// Find histogram with highest maximum and draw it first so
+	// that it draws axes able to accomodate all of them
+	double max = 0.0;
+	TH1 *hmax = NULL;
+	map<string, hinfo_t>::iterator hists_iter = histodef.hists.begin();
+	for(; hists_iter != histodef.hists.end(); hists_iter++) {
+		TH1* histogram = hists_iter->second.hist;
+		double mymax = histogram->GetMaximum();
+		if(mymax > max){
+			max = mymax;
+			hmax = histogram;
+		}
+	}
+	if(hmax) hmax->Draw(); // draw with whatever color. It will be overdrawn below
+	
 
 	//Iterate by individual histogram over all the servers.
-	map<string, hinfo_t>::iterator hists_iter = histodef.hists.begin();
+	hists_iter = histodef.hists.begin();
 	unsigned int color = 1;
 	for(; hists_iter != histodef.hists.end(); hists_iter++) {
 		TH1* histogram = hists_iter->second.hist;
 		histogram->SetLineColor(color);
-		if(color == 1) histogram->Draw();
-		else histogram->Draw("same");
+		histogram->Draw("same");
 
 		//Dynamically add Histograms to the Legend.
 		legend->AddEntry(histogram, hists_iter->second.serverName.c_str());
@@ -196,7 +211,7 @@ void Dialog_IndivHists::DivideCanvas(unsigned int &row, unsigned int &col) {
 	// Calculate rows and columns to give something roughly even
 	row = col = 1;
 	while(row*col < num_servers){
-		if(row >= col)
+		if(row <= col)
 			row++;
 		else
 			col++;
