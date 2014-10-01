@@ -1590,7 +1590,7 @@ void rs_mainframe::DrawMacro(TCanvas *the_canvas, hdef_t &the_hdef)
 		const hinfo_t *hinfo_best_version = NULL;
 		for(map<string, hinfo_t>::const_iterator hinfo_itr = the_hdef.hists.begin();
 		    hinfo_itr != the_hdef.hists.end(); hinfo_itr++) {
-			if( hinfo_itr->second.macroVersion > best_version ){
+			if( hinfo_itr->second.macroVersion >= best_version ){
 				hinfo_best_version = &hinfo_itr->second;
 				best_version = hinfo_best_version->macroVersion;
 			}
