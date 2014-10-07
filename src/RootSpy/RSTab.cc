@@ -75,10 +75,11 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	char cname[256];
 	static int cntr = 1;
 	sprintf(cname, "canvas%02d", cntr++);
-	TRootEmbeddedCanvas *embeddedcanvas = new TRootEmbeddedCanvas(0,fTabMain,900,600);
+	TRootEmbeddedCanvas *embeddedcanvas = new TRootEmbeddedCanvas(0,fTabMain,900,600);	
 	Int_t id = embeddedcanvas->GetCanvasWindowId();
 	canvas = new TCanvas(cname, 10, 10, id);
 	canvas->SetTicks();
+	canvas->SetDoubleBuffer();           // for smoother updates
 	embeddedcanvas->AdoptCanvas(canvas);
 	fTabMain->AddFrame(embeddedcanvas, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY | kFitWidth | kFitHeight,2,2,2,2));
 
@@ -375,12 +376,12 @@ void RSTab::DoUpdate(void)
 		case hdef_t::macro:
 			canvas->cd();
 			canvas->Clear();
-			canvas->Update();
 			currently_displayed_modified = now;
 			RS_INFO->Lock();
 			hdef_it = RS_INFO->histdefs.find(hnamepath);
 			if(hdef_it != RS_INFO->histdefs.end()) RSMF->DrawMacro(canvas, hdef_it->second);
 			RS_INFO->Unlock();
+			canvas->Update();
 			RequestUpdatedMacroHists();
 			break;
 		default:
