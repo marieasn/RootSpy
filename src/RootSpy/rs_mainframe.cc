@@ -291,6 +291,8 @@ void rs_mainframe::SaveConfigAs(void)
 //-------------------
 void rs_mainframe::SaveConfig(void)
 {
+	_DBG_ << "In rs_mainframe::SaveConfig()..." << endl;
+
 	// If config_filename is not set, then ask user for one
 	if(config_filename == ""){
 		TGFileInfo file_info;
@@ -298,16 +300,24 @@ void rs_mainframe::SaveConfig(void)
 		file_info.fFileTypes = filetypes;
 		file_info.fMultipleSelection = false;
 		file_info.fOverwrite = true;
-		file_info.fFilename = (char*)malloc(512);
+		file_info.fFilename = (char*)malloc(1024);
 		file_info.fFilename[0] = '\0';
-		file_info.fIniDir = (char*)malloc(512);
+		file_info.fIniDir = (char*)malloc(1024);
 		file_info.fIniDir[0] = '\0';
 		new TGFileDialog(gClient->GetRoot(), this, kFDSave, &file_info);
 		if(!file_info.fFilename) return; // user hit "cancel"
 
+		// The filename returned by the dialog box is the full pathname,
+		// so we don't need the directory name
 		string filename = file_info.fFilename;
-		string dirname  = file_info.fIniDir;
-		config_filename = dirname + filename;
+		//string dirname  = file_info.fIniDir;
+		//config_filename = dirname + filename;
+		config_filename = filename; 
+		// sanity check that it's actually a pathname, though
+		if( (config_filename.length() < 1) || (config_filename == "" ) )
+			return;
+		if( config_filename[0] != '/' ) 
+			config_filename = "/" + config_filename;
 		if(config_filename.length() < 9){
 			config_filename += ".rsconfig";
 		}else{
@@ -595,7 +605,7 @@ void rs_mainframe::HandleMenu(Int_t id)
      break;
 
    case M_FILE_SAVE_AS_CONFIG:
-     SaveConfig();
+     SaveConfigAs();
      break;
 
    case M_FILE_EXIT: 
