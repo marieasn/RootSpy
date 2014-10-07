@@ -299,7 +299,9 @@ void rs_mainframe::SaveConfig(void)
 		file_info.fMultipleSelection = false;
 		file_info.fOverwrite = true;
 		file_info.fFilename = (char*)malloc(512);
+		file_info.fFilename[0] = '\0';
 		file_info.fIniDir = (char*)malloc(512);
+		file_info.fIniDir[0] = '\0';
 		new TGFileDialog(gClient->GetRoot(), this, kFDSave, &file_info);
 		if(!file_info.fFilename) return; // user hit "cancel"
 
