@@ -61,6 +61,7 @@ class rs_cmsg:public cMsgCallback{
 			return t - start_time;
 		}
 
+		bool hist_default_active;
 		int verbose;
 		static double start_time;
 

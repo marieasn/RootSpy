@@ -60,6 +60,7 @@ rs_cmsg::rs_cmsg(string &udl, string &name)
 {
 
 	verbose = 2; // higher values=more messages. 0=minimal messages
+	hist_default_active = true;
 
 	// Connect to cMsg system
         is_online = true;
@@ -539,7 +540,10 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		else hdef.type = hdef_t::noneD;
 
 		hdef.title = (*hist_titles)[i];
-		hdef.active = true;
+		if(hist_default_active)
+			hdef.active = true;
+		else
+			hdef.active = false;
 		
 		// Look for entry in RS_INFO
 		RS_INFO -> Lock();
@@ -659,7 +663,10 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 
 		//hdef.title = (*hist_titles)[i];
 		macrodef.title = "";
-		macrodef.active = true;
+		if(hist_default_active)
+			macrodef.active = true;
+		else
+			macrodef.active = false;
 		
 		// Look for entry in RS_INFO
 		RS_INFO -> Lock();
