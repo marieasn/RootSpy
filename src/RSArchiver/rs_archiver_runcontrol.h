@@ -14,9 +14,9 @@ class rs_archiver : public cMsgCallback {
  public:
     // constructor
  rs_archiver(const string& udl, const string& name, const string& descr, const string &theSession) : runNumber(1) {
-	
-	cout << "rs_archiver constructor called" << endl;
 
+	cout << "rs_archiver constructor called" << endl;
+#if 0
 	cMsgSys = new cMsg(udl, name, descr);   
 	try {                         	          
 	    cMsgSys->connect(); 
@@ -30,6 +30,7 @@ class rs_archiver : public cMsgCallback {
 	// subscrube to run control requests
 	cMsgSys->subscribe("runcontrol", "*", this, NULL);
 	cMsgSys->start();
+#endif
     }
     
     // destructor
