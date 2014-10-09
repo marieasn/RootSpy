@@ -118,6 +118,7 @@ class rs_mainframe:public TGMainFrame {
 
 		TGTab *fMainTab;
 		TGLabel *lUDL;
+		TGLabel *lArchiveFile;
 		TGCheckButton *bAutoRefresh;
 		TGCheckButton *bAutoAdvance;
 		TGComboBox *fDelay;

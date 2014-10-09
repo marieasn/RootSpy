@@ -882,12 +882,27 @@ void rs_mainframe::DoSetArchiveFile(void) {
 	new TGFileDialog(gClient->GetRoot(), gClient->GetRoot(), kFDOpen, fileinfo);
 	if(!fileinfo->fFilename) return; // user hit cancel
 
-	if(archive_file)
+	if(archive_file) {
 	    archive_file->Close();
+	    delete archive_file;
+	}
 
 	archive_file = new TFile(fileinfo->fFilename);
 	// check for errors?
 
+	// update display
+	char *fullpathname = realpath(fileinfo->fFilename,NULL);
+	if(fullpathname==NULL) {
+		fullpathname = (char*)malloc(10);  // get more space than we need
+		fullpathname[0] = '\0';
+	}	
+	string labeltext = "Archive = " + string(fullpathname);
+	lArchiveFile->SetTitle(labeltext.c_str());
+	lArchiveFile->Draw();
+	
+	cout << "Opened ROOT file = " << fullpathname << endl;
+
+	free(fullpathname);
 }
 
 //-------------------
@@ -1349,13 +1364,16 @@ void rs_mainframe::CreateGUI(void)
 	// UDL Label
 	string udl_label = "UDL = "+ROOTSPY_UDL;
 	lUDL = AddLabel(fMainTopLeft, udl_label);
-	
+
 	// Buttons
 	TGHorizontalFrame *fMainTopLeftButtons = new TGHorizontalFrame(fMainTopLeft);
 	fMainTopLeft->AddFrame(fMainTopLeftButtons, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
 	TGTextButton *bSetArchive = AddButton(fMainTopLeftButtons, "Set Archive");
-	
+
+	// label for archive file name display
+	lArchiveFile = AddLabel(fMainTopLeft, "No Archive Loaded", kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
+		
 	// Update options
 	bAutoRefresh = AddCheckButton(fMainTopRightOptions, "Auto-refresh");
 	bAutoAdvance = AddCheckButton(fMainTopRightOptions, "Auto-advance");
