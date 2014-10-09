@@ -236,27 +236,27 @@ void Dialog_SelectHists::DoSelectSingleHist(TGListTreeItem* entry, Int_t btn)
     char path[512];
     listTree->GetPathnameFromItem(entry, path);
 
-    // allow double clicks to select a particular histrogram to display
-	_DBG_ << " selected entry " << entry->GetText() << " with path = " << path << endl;
+    // allow double clicks to select a particular histogram to display
+    _DBG_ << " selected entry " << entry->GetText() << " with path = " << path << endl;
     bool found = false;
-
+    
     RS_INFO->Lock();
-
-    // to start with, only display histograms that correspon to the one that is clicked
-	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
-	for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
-		if(hist_items_iter->second == entry) {
-			found = true;
-			if(rstab) rstab->SetTo(hist_items_iter->first.hnamepath);
-			break;
-		}
-	}
-
+    
+    // to start with, only display histograms that correspond to the one that is clicked
+    map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
+    for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
+	    if(hist_items_iter->second == entry) {
+		    found = true;
+		    if(rstab) rstab->SetTo(hist_items_iter->first.hnamepath);
+		    break;
+	    }
+    }
+    
     RS_INFO->Unlock();
-
+    
     // Finish off like we normally would
     if(found)
-	DoOK();
+	    DoOK();
 }
 
 
@@ -476,14 +476,26 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 				TGListTreeItem *last_item = items.size()>0 ? items[items.size()-1]:NULL;
 				item = listTree->AddItem(last_item, path[j].c_str());
 			 	item->SetUserData(last_item);
-				listTree->SetCheckBox(item, kTRUE);
+				listTree->SetCheckBox(item, kTRUE);  // <------
 				item->SetCheckBoxPictures(checked_t, unchecked_t);
-				
+
+				bool show_open = false;
+				/*
 				// Sets the directories to show all, with the 
 				// exception of the servers if viewStyle is by object
-				bool show_open = false;
 				if((j+2)<path.size()) show_open = true; // show open if not last item in path (i.e. server)
 				if(viewStyle!=rs_info::kViewByObject) show_open = true; // show eveything open if viewing by server
+				*/
+
+				// by default, leave all directories collapsed except the first level
+				// to prevent overwhelming the user
+				if( viewStyle==rs_info::kViewByObject ) {
+					if( j==0 && ((j+2)<path.size()) )
+						show_open = true;   // show first level, and not servers
+				} else {
+					// if viewing by server, show everything
+					show_open = true; 
+				}
 				item->SetOpen(show_open);
 			}
 			items.push_back(item);
@@ -537,6 +549,9 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 	
 	// Remember the this list so we can easily check for changes
 	last_hids = hids;
+
+	// Default to only showing histograms that are explicitly selected
+	//DoSelectNone();
 	
 	// This is needed to force the list tree to draw its contents
 	// without being clicked on. Without it (on at least one platform)

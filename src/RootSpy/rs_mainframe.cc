@@ -1033,18 +1033,19 @@ void rs_mainframe::DoLoadHistsList(void)
 
   RS_INFO->Lock();
 
-
+  
   // loop through all current servers and histograms, and set all of them to not display
   for(map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.begin();
       hdef_iter != RS_INFO->histdefs.end(); hdef_iter++) {
-    hdef_iter->second.active = false; 
-    for(map<string, bool>::iterator hdefserver_iter = hdef_iter->second.servers.begin();
-	hdefserver_iter != hdef_iter->second.servers.end(); hdefserver_iter++) {
-      hdefserver_iter->second = false;
-    }
+	  hdef_iter->second.active = false; 
+	  for(map<string, bool>::iterator hdefserver_iter = hdef_iter->second.servers.begin();
+	      hdefserver_iter != hdef_iter->second.servers.end(); hdefserver_iter++) {
+		  hdefserver_iter->second = false;
+	  }
   }
-  for(map<string,server_info_t>::iterator server_iter = RS_INFO->servers.begin();                            server_iter != RS_INFO->servers.end(); server_iter++) {         
-    server_iter->second.active = false;
+  for(map<string,server_info_t>::iterator server_iter = RS_INFO->servers.begin();
+      server_iter != RS_INFO->servers.end(); server_iter++) {         
+	  server_iter->second.active = false;
   }
   
   // server names are usually ephemeral, so we only load histogram path/name combos
@@ -1071,7 +1072,9 @@ void rs_mainframe::DoLoadHistsList(void)
   
 
   // is setting current working right?
-
+  
+  // For production use, don't displaying anything by default when starting out
+/*
   // If the RS_INFO->current value is not set, then set it to the first server/histo
   // and set the flag to have DoUpdate called
   if(RS_INFO->servers.find(RS_INFO->current.serverName)==RS_INFO->servers.end()){
@@ -1084,7 +1087,7 @@ void rs_mainframe::DoLoadHistsList(void)
   }
 
   RS_INFO->update = true;
-  
+*/
   RS_INFO->Unlock();
 
 }

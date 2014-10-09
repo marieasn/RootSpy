@@ -17,8 +17,6 @@ pthread_rwlock_t *ROOT_MUTEX = NULL;
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 string CMSG_NAME = "<not set here. see below>";
 
-bool MULTIFRAME_MODE = false;
-
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
 
@@ -49,6 +47,7 @@ int main(int narg, char *argv[])
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
 	RS_CMSG->verbose = 1;
+	RS_CMSG->hist_default_active = false;
 	
 	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
 	if(ROOTSPY_VERBOSE) RS_CMSG->verbose = atoi(ROOTSPY_VERBOSE);
@@ -57,9 +56,6 @@ int main(int narg, char *argv[])
 	//cout<<__FILE__<<__LINE__<<" "<<gClient->ClassName();
 
 	// Create the GUI window
-	//if(MULTIFRAME_MODE) {
-	//  RSMF = new rs_mainframe_multi(gClient->GetRoot(), 10, 10, true);
-	//} else
 	RSMF = new rs_mainframe(gClient->GetRoot(), 10, 10, true);
 	
 	// Hand control to the ROOT "event" loop
@@ -112,16 +108,6 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 					ROOTSPY_UDL += "/cMsg/rootspy";
 				}
 				break;
-		        case 'm':
-			    if(strcmp("-multi",argv[i])==0) { 
-				MULTIFRAME_MODE = true;
-				if(i>=(narg-1)){
-				    cerr<<"-multi option requires an argument"<<endl;
-				}else{
-				    ;  // load filename
-				}
-				break;
-			    }
 		}
 	}
 }

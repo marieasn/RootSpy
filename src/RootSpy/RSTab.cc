@@ -125,6 +125,9 @@ void RSTab::SeedHistos(void)
 	/// flag is set then this returns immediately without doing
 	/// anything.
 
+	//// For production use, default to not showing anything to start out with
+
+	/*
 	if(hnamepaths_seeded) return;
 
 	RS_INFO->Lock();
@@ -147,6 +150,7 @@ void RSTab::SeedHistos(void)
 		hnamepaths_seeded = true;
 		DoUpdateWithFollowUp();
 	}
+	*/
 }
 
 //-------------------
@@ -166,6 +170,13 @@ void RSTab::SetTo(string hnamepath)
 			}
 		}
 	}
+
+	// If this wasn't in the current list, then add it to our list!
+	hnamepaths.push_back(hnamepath);
+	currently_displayed = 1;
+	TTimer::SingleShot(1, "RSTab", this, "DoUpdate()"); // have canvas updated quickly
+	TTimer::SingleShot(250, "RSTab", this, "DoUpdate()");
+	return;
 }
 
 //-------------------
