@@ -813,7 +813,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     myTM->ReadTString(filename);
     myTM->ReadLong64(length);
     TDirectory *savedir = gDirectory;
-    TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length, "RECREATE");
+    TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
     savedir->cd();
     
     TNamed *namedObj = NULL;
