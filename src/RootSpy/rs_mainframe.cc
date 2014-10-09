@@ -228,7 +228,8 @@ void rs_mainframe::ReadPreferences(void)
 
 		if(type == "config-file"){
 			if(tokens.size()>1){
-				config_filename = tokens[1];
+				if(config_filename == "")
+					config_filename = tokens[1];
 			}
 		}
 		if(type == "window-size"){

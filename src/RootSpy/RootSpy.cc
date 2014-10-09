@@ -17,6 +17,8 @@ pthread_rwlock_t *ROOT_MUTEX = NULL;
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 string CMSG_NAME = "<not set here. see below>";
 
+string CONFIG_FILENAME = "";
+
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
 
@@ -57,6 +59,7 @@ int main(int narg, char *argv[])
 
 	// Create the GUI window
 	RSMF = new rs_mainframe(gClient->GetRoot(), 10, 10, true);
+	RSMF->config_filename = CONFIG_FILENAME;
 	
 	// Hand control to the ROOT "event" loop
 	app.SetReturnFromRun(true);
@@ -108,6 +111,13 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 					ROOTSPY_UDL += "/cMsg/rootspy";
 				}
 				break;
+			case 'c':
+				if(i>=(narg-1)){
+					cerr<<"-c option requires an argument"<<endl;
+				}else{
+					CONFIG_FILENAME = argv[i+1];
+				}
+				break;
 		}
 	}
 }
@@ -121,7 +131,7 @@ void Usage(void)
 	cout<<"       RootSpy [options]"<<endl;
 	cout<<endl;
 	cout<<"Connect to programs with the rootspy plugin attached"<<endl;
-	cout<<"and spy on thier histograms."<<endl;
+	cout<<"and spy on their histograms."<<endl;
 	cout<<endl;
 	cout<<"Options:"<<endl;
 	cout<<endl;
