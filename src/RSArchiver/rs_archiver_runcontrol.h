@@ -36,8 +36,11 @@ class rs_archiver : public cMsgCallback {
     // destructor
     ~rs_archiver(void)  {
 	DONE=true;
+
+#if 0
 	// Stop cMsg system
 	cMsgSys->stop();
+#endif
     }
 
     //---------------------------------

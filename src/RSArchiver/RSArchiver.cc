@@ -80,6 +80,7 @@ using namespace config;
 
 
 void MainLoop(rs_archiver &c);
+void EndRunProcessing(rs_archiver &c);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
 //void SaveDirectory( TDirectory *the_dir, TFile *the_file );
@@ -183,6 +184,9 @@ int main(int narg, char *argv[])
     //  regularly poll servers for new histograms
     MainLoop(c);
 
+    // Get the "final" histograms and archive them to disk
+    EndRunProcessing(c);
+
 
     // clean up and write out the current state of the summed histograms to a file
     // before quitting
@@ -208,13 +212,53 @@ int main(int narg, char *argv[])
 
 
 //-----------
+// EndRUnProcessing
+//-----------
+void EndRunProcessing(rs_archiver &c)
+{
+	if(VERBOSE>0) 
+		_DBG_ << "in finalize logic..." << endl;
+
+	RS_INFO->Lock();
+	//pthread_t the_thread; 
+	
+	// ask each server for their "final" histograms
+	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
+	    server_it != RS_INFO->servers.end(); server_it++) {
+		// don't ask for zero histograms, it will crash cMsg
+		if( server_it->second.hnamepaths.size() == 0 ) continue;
+		
+		if(VERBOSE>0) 
+			_DBG_ << "sending request to" << server_it->first 
+			      << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
+		
+		RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
+	}		
+	
+	map<string,server_info_t> *current_servers = new map<string,server_info_t>(RS_INFO->servers);
+	
+	RS_INFO->Unlock();
+		
+	  
+	// make a thread to handle collecting the final histograms
+	//pthread_create(&the_thread, NULL, ArchiveFile, 
+	//new map<string,server_info_t>(RS_INFO->servers) ); 
+	//thread_ids.push_back(the_thread);
+	
+	ArchiveFile( c.getRunNumber(), current_servers );
+		
+	FINALIZE=false;   // done getting final histograms
+}
+
+
+//-----------
 // MainLoop
 //-----------
 void MainLoop(rs_archiver &c)
 {
     //time_t time_last_run = time(NULL);	
 	
-    while(!DONE && !FINALIZE) {
+    while(!DONE) {
 		
 	if(VERBOSE>0) {
 	    _DBG_ << "Running main event loop..." << endl;
@@ -224,6 +268,7 @@ void MainLoop(rs_archiver &c)
 	// keeps the connections alive, and keeps the list of servers up-to-date
 	RS_CMSG->PingServers();
 	
+#if 0
 	// end-of-run processing
 	if(FINALIZE) {
 	  if(VERBOSE>0) 
@@ -259,6 +304,7 @@ void MainLoop(rs_archiver &c)
 		
 	  FINALIZE=false;   // done getting final histograms
 	}
+#endif
 
 	if(!RUN_IN_PROGRESS) {
 	    if(VERBOSE>0) 
