@@ -171,11 +171,13 @@ void RSTab::SetTo(string hnamepath)
 		}
 	}
 
+/**
 	// If this wasn't in the current list, then add it to our list!
 	hnamepaths.push_back(hnamepath);
-	currently_displayed = 1;
+	currently_displayed = 0;
 	TTimer::SingleShot(1, "RSTab", this, "DoUpdate()"); // have canvas updated quickly
 	TTimer::SingleShot(250, "RSTab", this, "DoUpdate()");
+**/
 	return;
 }
 

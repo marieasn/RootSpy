@@ -238,6 +238,7 @@ void Dialog_SelectHists::DoSelectSingleHist(TGListTreeItem* entry, Int_t btn)
 
     // allow double clicks to select a particular histogram to display
     _DBG_ << " selected entry " << entry->GetText() << " with path = " << path << endl;
+    entry->CheckItem();
     bool found = false;
     
     RS_INFO->Lock();
@@ -476,7 +477,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 				TGListTreeItem *last_item = items.size()>0 ? items[items.size()-1]:NULL;
 				item = listTree->AddItem(last_item, path[j].c_str());
 			 	item->SetUserData(last_item);
-				listTree->SetCheckBox(item, kTRUE);  // <------
+				listTree->SetCheckBox(item, kTRUE);
 				item->SetCheckBoxPictures(checked_t, unchecked_t);
 
 				bool show_open = false;
@@ -511,12 +512,14 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		bool server_checkbox=true;
 		bool hist_checkbox=true;
 		
-		// If hnamepaths list passed to us is empty, assume it has never been
-		// filled and leave all checkboes on. Otherwise, turn off all hists
+		// If hnamepaths list passed to us is empty, assume it is new and 
+		// check it only if is marked as active. Otherwise, turn off all hists
 		// no appearing in the hnamepaths list
 		if(!hnamepaths->empty()){
 			list<string>::iterator it = find(hnamepaths->begin(), hnamepaths->end(), hnamepath);
 			hist_checkbox = (it != hnamepaths->end());
+		} else {
+			hist_checkbox = hdef->active;
 		}
 
 		if(viewStyle==rs_info::kViewByObject){
