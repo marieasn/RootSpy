@@ -437,7 +437,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         {"udl",            required_argument, 0,  'u' },
         {"daq-udl",        required_argument, 0,  'q' },
         {"server",         required_argument, 0,  's' },
-        {"archive-path",   required_argument, 0,  'A' },
+        {"archive-dir",   required_argument, 0,  'A' },
         {"output-file",    required_argument, 0,  'F' },
         //{"cmsg-name",      required_argument, 0,  'n' },
 	
@@ -455,6 +455,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
   while ((opt = getopt_long(narg, argv,"hRpuqsAFnPHSY", 
 			    long_options, &long_index )) != -1) {
     switch (opt) {
+    case 'R':
       if(optarg == NULL) Usage();
       RUN_NUMBER = atoi(optarg);
     case 'f' : 
@@ -559,8 +560,8 @@ void Usage(void)
     cout<<"   -S,--session-name name    Name of CODA session"<<endl; 
     //cout<<"   -n name   Specify name this program registers with cMsg server"<<endl;
     //cout<<"             (def. "<<CMSG_NAME<<")"<<endl;
-
-    cout<<"   -f,--force                Start program assuming run is already in progress"<<endl;
+    cout<<"   -R,--run-number number    The number of the current run" << endl;
+    //cout<<"   -f,--force                Start program assuming run is already in progress"<<endl;
     cout<<"   -p,--poll-delay time      Time (in seconds) to wait between polling seconds" << endl;
     //cout<<"   -m,--min-poll-delay time  Time"<<endl;
 
