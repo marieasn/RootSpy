@@ -452,7 +452,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 
   int opt = 0;
   int long_index = 0;
-  while ((opt = getopt_long(narg, argv,"hRpuqsAFnPHSY", 
+  while ((opt = getopt_long(narg, argv,"hR:p:u:q:s:A:F:PHSY:", 
 			    long_options, &long_index )) != -1) {
     switch (opt) {
     case 'R':
@@ -570,7 +570,7 @@ void Usage(void)
     cout<<"   -A,--archive-dir path     Directory used to store archived ROOT files" << endl;
     cout<<"   -P,--pdf-output           Enable output of summary PDF"<<endl;
     cout<<"   -H,--html-output          Enable output of summary web pages"<<endl;
-    cout<<"   -R,--summary-dir path     Directory used to store summary files"<<endl;
+    cout<<"   -Y,--summary-dir path     Directory used to store summary files"<<endl;
     cout<<endl;
     
     exit(0);
