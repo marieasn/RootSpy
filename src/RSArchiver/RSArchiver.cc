@@ -50,7 +50,7 @@ namespace config {
 	
 	static TFile *CURRENT_OUTFILE = NULL;
 	static string OUTPUT_FILENAME = "current_run.root";
-	static string ARCHIVE_PATHNAME = "<nopath>";
+	static string ARCHIVE_FILENAME = "<nofile>";
 	
 	static double POLL_DELAY = 60;   // time between polling runs
 	static double MIN_POLL_DELAY = 10;
@@ -108,11 +108,13 @@ int main(int narg, char *argv[])
   // Parse the command line arguments
   ParseCommandLineArguments(narg, argv);
 
+  /*
     if(ARCHIVE_PATHNAME == "<nopath>") {
 	char *cwd_buf = getcwd(NULL, 0);
 	ARCHIVE_PATHNAME = cwd_buf;
 	free(cwd_buf);
     }
+  */
 
     // register signal handlers to properly stop running
     if(signal(SIGHUP, signal_stop_handler)==SIG_ERR)
@@ -216,6 +218,11 @@ int main(int narg, char *argv[])
 //-----------
 void EndRunProcessing(rs_archiver &c)
 {
+	if(ARCHIVE_FILENAME == "<nofile>") {
+		cout << "No archive file specified, skipping..." << endl;
+		return;
+	}
+
 	if(VERBOSE>0) 
 		_DBG_ << "in finalize logic..." << endl;
 
@@ -449,7 +456,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
     SESSION     = config_reader.Get("main", "session_name", "");
 
     OUTPUT_FILENAME  = config_reader.Get("main", "output_filename", "current_run.root");
-    ARCHIVE_PATHNAME = config_reader.Get("main", "archive_pathname", "<nopath>");
+    ARCHIVE_FILENAME = config_reader.Get("main", "archive_filename", "<nopath>");
 
     POLL_DELAY      = config_reader.GetInteger("main", "poll_delay", 60);
     MIN_POLL_DELAY  = config_reader.GetInteger("main", "min_poll_delay", 10);
@@ -466,12 +473,12 @@ void ParseCommandLineArguments(int &narg, char *argv[])
   const char *ptr = getenv("ROOTSPY_UDL");
   if(ptr)ROOTSPY_UDL = ptr;
   
-  const char *ptr2 = getenv("ROOTSPY_ARCHIVE_PATHNAME");
-  if(ptr2)ARCHIVE_PATHNAME = ptr2;
-  
+  const char *ptr2 = getenv("ROOTSPY_ARCHIVE_FILENAME");
+  if(ptr2)ARCHIVE_FILENAME = ptr2;
+  /*
   const char *ptr3 = getenv("ROOTSPY_DAQ_UDL");
   if(ptr3)DAQ_UDL = ptr3;
-    
+  */
 
   // check command line options
   static struct option long_options[] = {
@@ -481,9 +488,9 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         {"poll-delay",     required_argument, 0,  'p' },
         //{"min-poll-delay", required_argument, 0,  'm' },
         {"udl",            required_argument, 0,  'u' },
-        {"daq-udl",        required_argument, 0,  'q' },
+        //{"daq-udl",        required_argument, 0,  'q' },
         {"server",         required_argument, 0,  's' },
-        {"archive-dir",   required_argument, 0,  'A' },
+        {"archive-file",   required_argument, 0,  'A' },
         {"output-file",    required_argument, 0,  'F' },
         //{"cmsg-name",      required_argument, 0,  'n' },
 	
@@ -498,7 +505,8 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 
   int opt = 0;
   int long_index = 0;
-  while ((opt = getopt_long(narg, argv,"hR:p:u:q:s:A:F:PHSY:", 
+  //while ((opt = getopt_long(narg, argv,"hR:p:u:q:s:A:F:PHSY:", 
+  while ((opt = getopt_long(narg, argv,"hR:p:u:s:A:F:PHY:", 
 			    long_options, &long_index )) != -1) {
     switch (opt) {
     case 'R':
@@ -531,7 +539,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
       break;
     case 'A' :
       if(optarg == NULL) Usage();
-      ARCHIVE_PATHNAME = optarg;
+      ARCHIVE_FILENAME = optarg;
       break;
     case 'F' :
       if(optarg == NULL) Usage();
@@ -570,10 +578,12 @@ void ParseCommandLineArguments(int &narg, char *argv[])
   cerr << "-------------------------------------------------" << endl;
   cerr << "Current configuration:" << endl;
   cerr << "ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
-  cerr << "DAQ_UDL = " << DAQ_UDL << endl;
+  //cerr << "DAQ_UDL = " << DAQ_UDL << endl;
   cerr << "SESSION = " << SESSION << endl;
+
+  cerr << "RUN_NUMBER = " << RUN_NUMBER << endl;
   cerr << "OUTPUT_FILENAME = " << OUTPUT_FILENAME << endl;
-  cerr << "ARCHIVE_PATHNAME = " << ARCHIVE_PATHNAME << endl;
+  cerr << "ARCHIVE_FILENAME = " << ARCHIVE_FILENAME << endl;
   cerr << "POLL_DELAY = " << POLL_DELAY << endl;
   cerr << "MIN_POLL_DELAY = " << MIN_POLL_DELAY << endl;
 
@@ -601,9 +611,9 @@ void Usage(void)
     cout<<endl;
     cout<<"   -h,--help                 Print this message"<<endl;
     cout<<"   -u,--udl udl              UDL of cMsg RootSpy server"<<endl;
-    cout<<"   -q,--daq-udl udl          UDL of cMsg CODA server"<<endl;
+    //cout<<"   -q,--daq-udl udl          UDL of cMsg CODA server"<<endl;
     cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
-    cout<<"   -S,--session-name name    Name of CODA session"<<endl; 
+    //cout<<"   -S,--session-name name    Name of CODA session"<<endl; 
     //cout<<"   -n name   Specify name this program registers with cMsg server"<<endl;
     //cout<<"             (def. "<<CMSG_NAME<<")"<<endl;
     cout<<"   -R,--run-number number    The number of the current run" << endl;
@@ -611,9 +621,8 @@ void Usage(void)
     cout<<"   -p,--poll-delay time      Time (in seconds) to wait between polling seconds" << endl;
     //cout<<"   -m,--min-poll-delay time  Time"<<endl;
 
-    cout<<"   -F,--output-file file     Name of ROOT file used to store output of" 
-	<<"                             current run" << endl;
-    cout<<"   -A,--archive-dir path     Directory used to store archived ROOT files" << endl;
+    cout<<"   -F,--output-file file     Name of ROOT file used during run" << endl;
+    cout<<"   -A,--archive-file file    Name of ROOT file used to archive the final results" << endl;
     cout<<"   -P,--pdf-output           Enable output of summary PDF"<<endl;
     cout<<"   -H,--html-output          Enable output of summary web pages"<<endl;
     cout<<"   -Y,--summary-dir path     Directory used to store summary files"<<endl;
@@ -744,12 +753,12 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 
 
     // make file and directory to save histograms in
-    stringstream ss;
-    //ss << ARCHIVE_PATHNAME << "/" << "run" << RUN_NUMBER << "_output.root";
-    ss << ARCHIVE_PATHNAME << "/" << "run" << run_number << "_output.root";
+    //stringstream ss;
+    //ss << ARCHIVE_PATHNAME << "/" << "run" << run_number << "_output.root";
     
     pthread_rwlock_wrlock(ROOT_MUTEX);
-    TFile *archive_file = new TFile(ss.str().c_str(), "create");
+    //TFile *archive_file = new TFile(ss.str().c_str(), "create");
+    TFile *archive_file = new TFile(ARCHIVE_FILENAME.c_str(), "create");
     if(!IsGoodTFile(archive_file)) {
 	delete the_servers;
 	return;
@@ -764,6 +773,9 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
     time_t now = time(NULL);
     time_t start_time = now;
 	
+    // keep track of which servers we've received responses from
+    stringstream responded_server_stream;
+    
     while(true) {
 	// eventually give up and write out to disk
 	if( now - start_time > FINAL_TIMEOUT ) {
@@ -852,9 +864,11 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 			hist_dir = (TDirectory*)archive_file->GetDirectory(path.c_str());
 		    }
 
-		    if(VERBOSE>0) 
+		    if(VERBOSE>0) {
 		        _DBG_<<"histogram path = \"" << path << "\"  " << hist_dir << endl;
-		    hist_dir->Print();
+			if(VERBOSE>2)
+				hist_dir->Print();
+		    }
 		
 		    // put the histogram in the right location
 		    // once it's file bound, we dont' have to worry about
@@ -872,7 +886,7 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 		pthread_rwlock_unlock(ROOT_MUTEX);
 		
 		// remove histogram from list of hists we are waiting for
-		if(VERBOSE>0) 
+		if(VERBOSE>2) 
 		      _DBG_ << "num hists before erase " << server_info_iter->second.hnamepaths.size() << endl;
 		vector<string>::iterator hnamepath_itr = find(server_info_iter->second.hnamepaths.begin(),
 							      server_info_iter->second.hnamepaths.end(),
@@ -882,7 +896,7 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 		else
 		    _DBG_ << "couldn't find histogram!" << endl;
 		
-		if(VERBOSE>0) 
+		if(VERBOSE>2) 
 		  _DBG_ << "num hists after erase " << server_info_iter->second.hnamepaths.size() << endl;
 	    } else {
 		// error reporting is good
@@ -890,8 +904,10 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 	    }
 		
 	    // if we aren't waiting for any more histograms from this server, then kill it
-	    if(server_info_iter->second.hnamepaths.empty())
-		the_servers->erase(sender);
+	    if(server_info_iter->second.hnamepaths.empty()) {
+		    responded_server_stream << sender << " ";
+		    the_servers->erase(sender);
+	    }
 	    RS_INFO->final_hists.pop_front();
 	    
 	}
@@ -908,6 +924,12 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
     
     if(VERBOSE>0) 
 	_DBG_<<"Finishing up ArchiveFile()..."<<endl;
+
+    // save any extra data that you want
+    archive_file->mkdir("RootSpyInfo");
+    archive_file->cd("RootSpyInfo");
+    TNamed responded_servers("servers", responded_server_stream.str().c_str());
+    responded_servers.Write();
 
     // close file and clean up
     pthread_rwlock_wrlock(ROOT_MUTEX);
