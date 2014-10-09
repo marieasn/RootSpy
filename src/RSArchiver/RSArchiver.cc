@@ -627,6 +627,7 @@ void Usage(void)
     cout<<"   -H,--html-output          Enable output of summary web pages"<<endl;
     cout<<"   -Y,--summary-dir path     Directory used to store summary files"<<endl;
     cout<<endl;
+    cout<<endl;
     
     exit(0);
 }
