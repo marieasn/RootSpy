@@ -1,12 +1,13 @@
 #ifndef _RS_ARCHIVER_RUNCONTROL_H_
 #define _RS_ARCHIVER_RUNCONTROL_H_
 
-#ifdef NO_CODAOBJECTROOT
+////#ifdef NO_CODAOBJECTROOT
 
 //#pragma message ("Using cMsg interface...")
 
 #include <cMsg.hxx>
 using namespace cmsg;
+
 
 class rs_archiver : public cMsgCallback {
     
@@ -47,6 +48,11 @@ class rs_archiver : public cMsgCallback {
     // getRunNumber
     //---------------------------------
     int getRunNumber()  { return runNumber; }
+
+    //---------------------------------
+    // setRunNumber
+    //---------------------------------
+    void setRunNumber(int newRunNumber)  { runNumber = newRunNumber; }
 
 
     //---------------------------------
@@ -96,20 +102,22 @@ class rs_archiver : public cMsgCallback {
     int runNumber;
 };
 
-#else
+#if 0
 
-#if __GNUC__ < 4 || (__GNUC__ == 4 && (__GNUC_MINOR__ < 8 ) ) 
-#error "CodaObject interface requires >= gcc 4.8"
-#endif
+///#else
 
-#pragma message ("Using CODAObject interface...")
+///#if __GNUC__ < 4 || (__GNUC__ == 4 && (__GNUC_MINOR__ < 8 ) ) 
+///#error "CodaObject interface requires >= gcc 4.8"
+///#endif
+
+///#pragma message ("Using CODAObject interface...")
 
 
 // class for communication with CODA
 #include <RunObject.hxx>
 using namespace codaObject;
 
-class rs_archiver : public RunObject {
+vclass rs_archiver : public RunObject {
 
 public:
   rs_archiver(const string& UDL, const string& name, const string& descr, const string &theSession) : 

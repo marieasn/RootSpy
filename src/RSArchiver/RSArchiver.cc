@@ -38,34 +38,35 @@ pthread_rwlock_t *ROOT_MUTEX = NULL;
 HTMLOutputGenerator *html_generator = NULL;
 PDFOutputGenerator *pdf_generator = NULL;
 
+static int VERBOSE = 1;
 //static vector<pthread_t> thread_ids;
 
 // configuration variables
 namespace config {
-  static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
-  static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
-  static string CMSG_NAME = "<not set here. see below>";
-  static string SESSION = "";
-
-  static TFile *CURRENT_OUTFILE = NULL;
-  static string OUTPUT_FILENAME = "current_run.root";
-  static string ARCHIVE_PATHNAME = "<nopath>";
-
-  static double POLL_DELAY = 60;   // time between polling runs
-  static double MIN_POLL_DELAY = 10;
-  
-  // run management 
-  //bool KEEP_RUNNING = true;
-  static bool FORCE_START = false;
-  
-  bool DONE = false;
-  bool RUN_IN_PROGRESS = false;
-  // int RUN_NUMBER = 1;   // we take the run number from cMsg
-  bool FINALIZE = false;
-
-  static bool HTML_OUTPUT = false;
-  static string HTML_BASE_DIR = "<nopath>";
-  static bool PDF_OUTPUT = false;  
+	static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
+	static string DAQ_UDL = "cMsg://127.0.0.1/cMsg";
+	static string CMSG_NAME = "<not set here. see below>";
+	static string SESSION = "";
+	
+	static TFile *CURRENT_OUTFILE = NULL;
+	static string OUTPUT_FILENAME = "current_run.root";
+	static string ARCHIVE_PATHNAME = "<nopath>";
+	
+	static double POLL_DELAY = 60;   // time between polling runs
+	static double MIN_POLL_DELAY = 10;
+	
+	// run management 
+	//bool KEEP_RUNNING = true;
+	static bool FORCE_START = false;
+	
+	bool DONE = false;
+	bool RUN_IN_PROGRESS = false;
+	int RUN_NUMBER = 99999;   
+	bool FINALIZE = false;
+	
+	static bool HTML_OUTPUT = false;
+	static string HTML_BASE_DIR = "<nopath>";
+	static bool PDF_OUTPUT = false;  
 }
 
 using namespace config;
@@ -89,10 +90,7 @@ void signal_stop_handler(int signum);
 void signal_switchfile_handler(int signum);
 void signal_finalize_handler(int signum);
 
-
 void GenerateHtmlOutput(TDirectory *the_dir, string output_basedir, string output_subdir);
-
-
 //void *ArchiveFile(void * ptr);
 void ArchiveFile(int run_number, map<string,server_info_t> *the_servers );
 
@@ -111,7 +109,6 @@ int main(int narg, char *argv[])
 
     if(ARCHIVE_PATHNAME == "<nopath>") {
 	char *cwd_buf = getcwd(NULL, 0);
-	//char *cwd_buf = get_current_dir_name();
 	ARCHIVE_PATHNAME = cwd_buf;
 	free(cwd_buf);
     }
@@ -122,11 +119,11 @@ int main(int narg, char *argv[])
     if(signal(SIGINT, signal_stop_handler)==SIG_ERR)
 	cerr << "unable to set INT signal handler" << endl;
     
-    // and some for IPC (for now..)
-    //signal(SIGUSR1, signal_switchfile_handler);
+    /*
+    // On USR2, finish run and start another
     if(signal(SIGUSR2, signal_finalize_handler)==SIG_ERR)
 	cerr << "unable to set USR2 signal handler" << endl;
-
+    */
 
     // make file to store "current" status of summed histograms
     CURRENT_OUTFILE = new TFile(OUTPUT_FILENAME.c_str(), "recreate"); 
@@ -177,11 +174,12 @@ int main(int narg, char *argv[])
     
     // connect to run management system
     rs_archiver c(DAQ_UDL, CMSG_NAME, "RSArchiver", SESSION);
+    c.setRunNumber(RUN_NUMBER);
     c.startProcessing();
     cout << "Process startup:  " << CMSG_NAME << " in session " << SESSION <<endl;
     
-    if(FORCE_START)
-	RUN_IN_PROGRESS = true;
+    //if(FORCE_START)
+    RUN_IN_PROGRESS = true;   // always start processing when we are called!
 
     //  regularly poll servers for new histograms
     MainLoop(c);
@@ -215,19 +213,22 @@ int main(int narg, char *argv[])
 //-----------
 void MainLoop(rs_archiver &c)
 {
-  //time_t time_last_run = time(NULL);	
+    //time_t time_last_run = time(NULL);	
+	
+    while(!DONE && !FINALIZE) {
+		
+	if(VERBOSE>0) {
+	    _DBG_ << "Running main event loop..." << endl;
+	    _DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
+	}
 
-    while(!DONE) {
-	
-	_DBG_ << "Running main event loop..." << endl;
-	_DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
-	
 	// keeps the connections alive, and keeps the list of servers up-to-date
 	RS_CMSG->PingServers();
 	
 	// end-of-run processing
 	if(FINALIZE) {
-	  _DBG_ << "in finalize logic..." << endl;
+	  if(VERBOSE>0) 
+	    _DBG_ << "in finalize logic..." << endl;
 
 	  RS_INFO->Lock();
 	  //pthread_t the_thread; 
@@ -238,8 +239,8 @@ void MainLoop(rs_archiver &c)
 	    // don't ask for zero histograms, it will crash cMsg
 	    if( server_it->second.hnamepaths.size() == 0 ) continue;
 	    
-	    //_DBG_ << "sending request to" << server_it->first.serverName 
-	    _DBG_ << "sending request to" << server_it->first 
+	    if(VERBOSE>0) 
+	      _DBG_ << "sending request to" << server_it->first 
 		  << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
 	    
 	    RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
@@ -257,18 +258,18 @@ void MainLoop(rs_archiver &c)
 	  
 	  ArchiveFile( c.getRunNumber(), current_servers );
 		
-	  //RUN_NUMBER += 1;    // mutex lock?
-	  FINALIZE=false;
+	  FINALIZE=false;   // done getting final histograms
 	}
 
 	if(!RUN_IN_PROGRESS) {
+	    if(VERBOSE>0) 
 	    _DBG_ << "no current run, sleeping..." << endl;
 	    sleep(1);
 	    continue;
 	}
 
 	
-	// Okay, we are running, let's do stuff
+	// Okay, we are running, let's do some processing
 	RS_INFO->Lock();
 	// update list of histograms
 	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
@@ -353,17 +354,20 @@ void MainLoop(rs_archiver &c)
 
 void signal_stop_handler(int signum)
 {
+	
     cerr << "received signal " << signum << "..." << endl;
     cerr << "cleaning up and exiting..." << endl;
 
     // let main loop know that it's time to stop
     //KEEP_RUNNING = false;
     DONE = true;
+    FINALIZE = true;    // only run program once per run, so get final histograms when we are done
 }
 
 void signal_finalize_handler(int signum)
 {
     FINALIZE = true;
+    
 }
 
 
@@ -374,7 +378,8 @@ void signal_finalize_handler(int signum)
 //-----------
 void ParseCommandLineArguments(int &narg, char *argv[])
 {
-  _DBG_ << "In ParseCommandLineArguments().." << endl;
+  if(VERBOSE>0) 
+     _DBG_ << "In ParseCommandLineArguments().." << endl;
 
 
   // read from configuration file
@@ -426,7 +431,8 @@ void ParseCommandLineArguments(int &narg, char *argv[])
   // check command line options
   static struct option long_options[] = {
         {"help",           no_argument,       0,  'h' },
-        {"force",          no_argument,       0,  'f' },
+        {"run-number",     required_argument, 0,  'R' },
+        //{"force",          no_argument,       0,  'f' },
         {"poll-delay",     required_argument, 0,  'p' },
         //{"min-poll-delay", required_argument, 0,  'm' },
         {"udl",            required_argument, 0,  'u' },
@@ -439,7 +445,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         {"pdf-output",     no_argument,       0,  'P' },
         {"html-output",    no_argument,       0,  'H' },
         {"session-name",   no_argument,       0,  'S' },
-	{"summary-dir",    required_argument, 0,  'R' },
+	{"summary-dir",    required_argument, 0,  'Y' },
         //{"", required_argument, 0,  '' },
 
         {0, 0, 0, 0  }
@@ -447,9 +453,11 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 
   int opt = 0;
   int long_index = 0;
-  while ((opt = getopt_long(narg, argv,"hfpmuqsAFn", 
+  while ((opt = getopt_long(narg, argv,"hRpuqsAFnPHSY", 
 			    long_options, &long_index )) != -1) {
     switch (opt) {
+      if(optarg == NULL) Usage();
+      RUN_NUMBER = atoi(optarg);
     case 'f' : 
       FORCE_START = true;
       break;
@@ -483,7 +491,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
       if(optarg == NULL) Usage();
       OUTPUT_FILENAME = optarg;
       break;
-    case 'R' :
+    case 'Y' :
       if(optarg == NULL) Usage();
       HTML_BASE_DIR = optarg;
       break;
@@ -677,7 +685,8 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
   //map<string,server_info_t> *the_servers = static_cast< map<string,server_info_t> *>(ptr);
     const int FINAL_TIMEOUT = 600;   // only wait 5 minutes for everyone to report in
 
-    _DBG_<<"Starting in ArchiveFile()..."<<endl;
+    if(VERBOSE>0) 
+        _DBG_<<"Starting in ArchiveFile()..."<<endl;
 
     // clean up server list - any servers containing zero histograms should be removed
     for( map<string,server_info_t>::iterator server_itr = the_servers->begin();
@@ -719,15 +728,17 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 
 	RS_INFO->Lock();
 
-	_DBG_<<" number of servers left = "<<the_servers->size()
-	     <<" number of queued messages = "<<RS_INFO->final_hists.size()<<endl;
-	cout << "we are still waiting on these servers: ";
-	for( map<string,server_info_t>::iterator server_itr = the_servers->begin();
-	     server_itr!=the_servers->end(); server_itr++) { 
-	    cout << server_itr->first << " ";
+	if(VERBOSE>0) { 
+	     _DBG_<<" number of servers left = "<<the_servers->size()
+		  <<" number of queued messages = "<<RS_INFO->final_hists.size()<<endl;
+	     cout << "we are still waiting on these servers: ";
+	
+	     for( map<string,server_info_t>::iterator server_itr = the_servers->begin();
+		  server_itr!=the_servers->end(); server_itr++) { 
+		     cout << server_itr->first << " ";
+	     }
+	     cout << endl;
 	}
-	cout << endl;
-
 	
 	//for(deque<cMsgMessage>::iterator it_cmsg = RS_INFO->final_messages.begin();
 	//it_cmsg != RS_INFO->final_messages.end(); it_cmsg++) {
@@ -740,13 +751,15 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 	    string &hnamepath = final_hist_info.hnamepath;
 	    TH1 *h = final_hist_info.hist;
 	    
-	    _DBG_<<"got message from " << sender << endl;
+	    if(VERBOSE>0) 
+	      _DBG_<<"got message from " << sender << endl;
 	    
 	    // make sure that the sender is one of the servers we are waiting
 	    map<string,server_info_t>::iterator server_info_iter = the_servers->find(sender);
 	    if(server_info_iter!=the_servers->end()) {
 
-		_DBG_<<"it contained histogram "<<hnamepath<<endl;
+		if(VERBOSE>0) 
+		     _DBG_<<"it contained histogram "<<hnamepath<<endl;
 		h->Print();
 
 		// Lock ROOT mutex while working with ROOT objects
@@ -771,8 +784,10 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 		}
 
 
-		_DBG_<<"saving histogram (" << hnamepath << ")..."<<endl;
-		_DBG_<<"histogram path = \"" << path << "\"" << endl;
+		if(VERBOSE>0) {
+		    _DBG_<<"saving histogram (" << hnamepath << ")..."<<endl;
+		    _DBG_<<"histogram path = \"" << path << "\"" << endl;
+		}
 
 		// let's see if the histogram exists alrady
 		TH1 *hfinal = (TH1*)archive_file->Get(hnamepath.c_str());
@@ -791,7 +806,8 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 			hist_dir = (TDirectory*)archive_file->GetDirectory(path.c_str());
 		    }
 
-		    _DBG_<<"histogram path = \"" << path << "\"  " << hist_dir << endl;
+		    if(VERBOSE>0) 
+		        _DBG_<<"histogram path = \"" << path << "\"  " << hist_dir << endl;
 		    hist_dir->Print();
 		
 		    // put the histogram in the right location
@@ -810,7 +826,8 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 		pthread_rwlock_unlock(ROOT_MUTEX);
 		
 		// remove histogram from list of hists we are waiting for
-		_DBG_ << "num hists before erase " << server_info_iter->second.hnamepaths.size() << endl;
+		if(VERBOSE>0) 
+		      _DBG_ << "num hists before erase " << server_info_iter->second.hnamepaths.size() << endl;
 		vector<string>::iterator hnamepath_itr = find(server_info_iter->second.hnamepaths.begin(),
 							      server_info_iter->second.hnamepaths.end(),
 							      hnamepath);
@@ -819,7 +836,8 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 		else
 		    _DBG_ << "couldn't find histogram!" << endl;
 		
-		_DBG_ << "num hists after erase " << server_info_iter->second.hnamepaths.size() << endl;
+		if(VERBOSE>0) 
+		  _DBG_ << "num hists after erase " << server_info_iter->second.hnamepaths.size() << endl;
 	    } else {
 		// error reporting is good
 		_DBG_ << " received message from invalid server in ArchiveFile()" << endl;
@@ -842,7 +860,8 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
 	sleep(1);
     }
     
-    _DBG_<<"Finishing up ArchiveFile()..."<<endl;
+    if(VERBOSE>0) 
+	_DBG_<<"Finishing up ArchiveFile()..."<<endl;
 
     // close file and clean up
     pthread_rwlock_wrlock(ROOT_MUTEX);
