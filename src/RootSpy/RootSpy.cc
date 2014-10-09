@@ -49,6 +49,10 @@ int main(int narg, char *argv[])
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
 	RS_CMSG->verbose = 1;
+	
+	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
+	if(ROOTSPY_VERBOSE) RS_CMSG->verbose = atoi(ROOTSPY_VERBOSE);
+
 
 	//cout<<__FILE__<<__LINE__<<" "<<gClient->ClassName();
 
