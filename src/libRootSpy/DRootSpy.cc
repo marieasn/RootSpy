@@ -204,6 +204,8 @@ void DRootSpy::Initialize(pthread_mutex_t *mutex, string myUDL)
 	QUEUED_MACROS.clear();
 	
 	VERBOSE=1;
+	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
+	if(ROOTSPY_VERBOSE) VERBOSE = atoi(ROOTSPY_VERBOSE);
 	
 	gROOTSPY = this;
 }

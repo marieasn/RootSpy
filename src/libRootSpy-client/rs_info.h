@@ -52,6 +52,7 @@ class rs_info{
 		map<string,server_info_t> servers;	    // key=server	    val=server info.
 		map<string,hdef_t> histdefs;			// key=hnamepath    val=histogram definition
 		map<hid_t,hinfo_t> hinfos;				// key=server/hist	val=histogram info
+		map<string,tree_id_t> treedefs;    // key=tnamepath val=tree definition
 		
 		TDirectory *sum_dir;	// holds sum histograms
 		

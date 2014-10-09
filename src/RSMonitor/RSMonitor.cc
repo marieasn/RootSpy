@@ -104,7 +104,7 @@ string PrintToString(hinfo_t &hinfo, hdef_t &hdef)
 //------------------------------
 // RedrawScreen
 //------------------------------
-void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos)
+void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos, uint32_t Ntdefs)
 {
 	// Get size of terminal
 	struct winsize w;
@@ -119,15 +119,16 @@ void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos)
 	PRINTCENTERED(2, "ROOTSpy Monitor");
 	PRINTAT(1, 3, string(Ncols,'-'));
 
-	MOVETO( 3, 4); cout << "Number of histograms  published: " << Nhdefs;
+	MOVETO( 3, 4); cout << " Number of histograms published: " << Nhdefs;
 	MOVETO( 3, 5); cout << "Number of histograms downloaded: " << Nhinfos;
+	MOVETO( 3, 6); cout << "      Number of trees published: " << Ntdefs;
 	MOVETO(40, 4); cout << "Number of requests   issued: " << REQUESTS_SENT;
 	MOVETO(40, 5); cout << "Number of requests received: " << REQUESTS_SATISFIED;
-	PRINTAT(1, 6, string(Ncols,'.'));
+	PRINTAT(1, 7, string(Ncols,'.'));
 
 	for(unsigned int i=0; i<lines.size(); i++){
-		int row = i+9;
-		MOVETO(1, i+9);
+		int row = i+10;
+		MOVETO(1, row);
 		if(row == (Nrows-1)){ cout << " ..."; break; }
 		cout << lines[i];
 	}
@@ -271,10 +272,13 @@ int main(int narg, char *argv[])
 		// to request because they have been updated since our last request 
 		// or have never been updated
 		RS_INFO->Lock();
+//		map<string,server_info_t> &servers = RS_INFO->servers;
 		map<string,hdef_t> &hdefs = RS_INFO->histdefs;
 		map<hid_t,hinfo_t> &hinfos = RS_INFO->hinfos;
+		map<string,tree_id_t> &treedefs = RS_INFO->treedefs;
 		uint32_t Nhdefs = hdefs.size();
 		uint32_t Nhinfos = hinfos.size();
+		uint32_t Ntdefs = treedefs.size();
 		vector<hid_t> hists_to_request;
 		map<string,hdef_t>::iterator hdef_iter = hdefs.begin();
 		for(; hdef_iter!= hdefs.end() ; hdef_iter++){
@@ -320,6 +324,7 @@ int main(int narg, char *argv[])
 			}
 			
 		}
+
 		RS_INFO->Unlock();
 		
 		// Request histograms outside of mutex lock
@@ -347,10 +352,13 @@ int main(int narg, char *argv[])
 			
 			RS_INFO->Unlock();
 			
-			RedrawScreen(lines, Nhdefs, Nhinfos);
+			RedrawScreen(lines, Nhdefs, Nhinfos, Ntdefs);
 			
 			// Request new histogram list from all servers
 			RS_CMSG->RequestHists("rootspy");
+
+			// Request new tree list from all servers
+			RS_CMSG->RequestTreeInfo("rootspy");
 
 			next_update = now + 1.0; // update again in 1s
 		}		

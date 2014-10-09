@@ -585,8 +585,10 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 	if(!duplicate) {
 	    // assume that branches are defined at initialization
 	    // and don't change during running
-	    _DBG_ << "tree info from " << server << " Tree " << name << " in " << path << endl;
 	    rs_trees.push_back(tree_info_t(server, name, path, branch_info));
+		 
+		 tree_id_t tid(server, name, path);
+		 RS_INFO->treedefs[tid.tnamepath] = tid;
 	} 
 	RS_INFO->Unlock();
 
@@ -756,7 +758,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     string name = msg->getString("tree_name");
     string path = msg->getString("tree_path");
 
-    //_DBG_ << "got the following tree from " << server << ": " << name << " from " << path << endl;
+    if(verbose>2) _DBG_ << "got the following tree from " << server << ": " << name << " from " << path << endl;
 
     // Get pointer to server_info_t
     map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
@@ -782,6 +784,12 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 	// tree_info_t object doesn't exist - add it
 	vector<string> branch_info = *(msg->getStringVector("branch_info"));
 	rs_trees.push_back(tree_info_t(server, name, path, branch_info));
+	if(verbose>3){
+		cout << "branch_info:" << endl;
+		for(uint32_t i=0; i<branch_info.size(); i++){
+			cout << "  " << branch_info[i] << endl;
+		}
+	}
 
 	// get the pointer
 	tree_info = &(rs_trees.back());
@@ -805,7 +813,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     // Get ROOT object from message and cast it as a TNamed*
     pthread_rwlock_wrlock(ROOT_MUTEX);
 
-    _DBG_ << "unpacking tree..." << endl;
+    if(verbose>1) _DBG_ << "unpacking tree..." << endl;
 
     MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
     Long64_t length;
@@ -832,7 +840,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     }
     
     if(!namedObj){
-	_DBG_<<"No valid object returned in histogram message."<<endl;
+	_DBG_<<"No valid object returned in tree message."<<endl;
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
 	return;
@@ -847,7 +855,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 	return;
     }
 
-    _DBG_ << "unpacked tree!" << endl;
+    if(verbose>2)_DBG_ << "unpacked tree!" << endl;
     T->Print();
 
     // Update tree_info
