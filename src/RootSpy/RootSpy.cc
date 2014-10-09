@@ -58,8 +58,7 @@ int main(int narg, char *argv[])
 	//cout<<__FILE__<<__LINE__<<" "<<gClient->ClassName();
 
 	// Create the GUI window
-	RSMF = new rs_mainframe(gClient->GetRoot(), 10, 10, true);
-	RSMF->config_filename = CONFIG_FILENAME;
+	RSMF = new rs_mainframe(gClient->GetRoot(), 10, 10, true, CONFIG_FILENAME);
 	
 	// Hand control to the ROOT "event" loop
 	app.SetReturnFromRun(true);
@@ -114,8 +113,14 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 			case 'c':
 				if(i>=(narg-1)){
 					cerr<<"-c option requires an argument"<<endl;
-				}else{
+				}else{					
 					CONFIG_FILENAME = argv[i+1];
+					if(CONFIG_FILENAME.length() > 0) {
+						char *buf = NULL;
+						// make sure we have an absolute pathname
+						CONFIG_FILENAME = getcwd(buf,0) + string("/") + CONFIG_FILENAME;
+						free(buf);
+					}
 				}
 				break;
 		}

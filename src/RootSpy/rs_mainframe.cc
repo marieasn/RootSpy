@@ -91,10 +91,10 @@ static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist);
 //-------------------
 // Constructor
 //-------------------
-rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gui):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame)
+rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gui, string startup_config_filename=""):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame),config_filename(startup_config_filename)
 {
 	current_tab = NULL;
-	config_filename = "";
+	//config_filename = "";
 
 	//Define all of the -graphics objects. 
         if(build_gui) {
@@ -230,6 +230,7 @@ void rs_mainframe::ReadPreferences(void)
 			if(tokens.size()>1){
 				if(config_filename == "")
 					config_filename = tokens[1];
+				
 			}
 		}
 		if(type == "window-size"){

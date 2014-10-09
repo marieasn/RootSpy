@@ -71,7 +71,7 @@ class rs_mainframe:public TGMainFrame {
 
 
 
-		rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h, bool build_gui);
+		rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h, bool build_gui, string startup_config_filename);
 		~rs_mainframe();
 
 		void SavePreferences(void);
