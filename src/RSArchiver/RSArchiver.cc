@@ -168,7 +168,7 @@ int main(int narg, char *argv[])
     cout << "Full UDL is " << ROOTSPY_UDL << endl;
     RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
 
-
+#if 0     // take out CODA connection
     // set session name
     if(SESSION.empty()) SESSION="halldsession";
     
@@ -180,6 +180,7 @@ int main(int narg, char *argv[])
     
     //if(FORCE_START)
     RUN_IN_PROGRESS = true;   // always start processing when we are called!
+#endif 
 
     //  regularly poll servers for new histograms
     MainLoop(c);
