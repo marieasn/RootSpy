@@ -380,7 +380,10 @@ void RSTab::DoUpdate(void)
 					// Draw histogram
 					pthread_rwlock_wrlock(ROOT_MUTEX);
 					canvas->cd();
-					sum_hist->Draw();
+					if(type == hdef_t::twoD)
+						sum_hist->Draw("COLZ");
+					else
+						sum_hist->Draw();
 					canvas->Update();
 					pthread_rwlock_unlock(ROOT_MUTEX);				
 				}
