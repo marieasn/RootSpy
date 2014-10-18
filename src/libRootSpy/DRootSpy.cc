@@ -586,34 +586,13 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 		return;
 	}
 
+	// Copy requested number of entries
 	for(int64_t i=0; i<nentries; i++) {
 		tree->GetEntry(firstentry + i);
 		tree_copy->Fill();
 	}
 
-
-#if 0
-	// if we're given a positive number of events to save
-	// then save the last N events in the tree
-	if( nentries_to_save > 0 ) {
-
-	    TTree *newtree = tree->CloneTree(0);
-	    
-	    int64_t istart = nentries-nentries_to_save;
-	    if(istart<0) istart=0;
-	    cout << "  (only sending " << nentries_to_save - istart << " entries by request)" << endl;
-	    for(int64_t i=istart; i<nentries; i++) {
-		tree->GetEntry(i);
-		newtree->Fill();
-	    }
-	    obj = (TObject*)newtree;
-	}
-#endif
-
 	// Serialize object and put it into a response message
-	//TMessage *tm = new TMessage(kMESS_OBJECT);
-	//tm->WriteObject(tree_copy);
-
 	TMessage *tm = new TMessage(kMESS_ANY);
 	f->Write();
 	tm->WriteTString(f->GetName());
