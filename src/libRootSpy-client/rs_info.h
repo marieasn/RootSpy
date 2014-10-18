@@ -17,6 +17,7 @@
 #include <list>
 #include <map>
 #include <deque>
+#include <TFile.h>
 #include <TDirectory.h>
 #include <TH1.h>
 
@@ -63,9 +64,14 @@ class rs_info{
 
 		void  GetActiveHIDs(vector<hid_t> &active_hids);
 		int   RequestHistograms(string hnamepath, bool lock_mutex=true); // returns number of servers a request was sent to
+		int   RequestTrees(string tnamepath, int64_t num_entries, bool lock_mutex);
 		TH1*  GetSumHist(string &hnamepath, hdef_t::histdimension_t *type=NULL, double *sum_hist_modified=NULL, string *servers_str=NULL);
 		hid_t FindNextActive(hid_t &current);
 		hid_t FindPreviousActive(hid_t &current);
+		void  LoadRootFile(string fname);
+		void  AddRootObjectsToList(TDirectory *dir);
+		void  TraverseTree(TObjArray *branch_list, vector<string>  &treeinfo);
+		void  LoadMacro(string name, string path, string macro_data);
 
 		void Reset();
 
@@ -73,6 +79,8 @@ class rs_info{
 		deque<final_hist_t> final_hists;
 
 	protected:
+	
+		TFile *rootfile; // used if reading from file rather than from cMsg system
 	
 	private:
 		pthread_mutex_t mutex;

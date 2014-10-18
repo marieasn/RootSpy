@@ -26,7 +26,7 @@ class rs_mainframe;
 
 class rs_cmsg:public cMsgCallback{
 	public:
-		rs_cmsg(string &udl, string &name);
+		rs_cmsg(string &udl, string &name, bool connect_to_cmsg=true);
 		virtual ~rs_cmsg();
 
 		// normal requests (async)
@@ -66,7 +66,7 @@ class rs_cmsg:public cMsgCallback{
 		static double start_time;
 
 		
-	protected:
+	public:
 
 		void callback(cMsgMessage *msg, void *userObject);
 		void RegisterHistList(string server, cMsgMessage *msg);

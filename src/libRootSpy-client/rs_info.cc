@@ -17,6 +17,23 @@ using namespace std;
 
 extern rs_info *RS_INFO;
 
+
+//...................................................
+// REGISTER_ROOTSPY_MACRO
+//
+// This is similar to the version DRootSpy.cc, but is here to provide
+// a means for the RootSpy GUI program to directly attach plugins
+// and use their macros. This is primarily intended for use when reading
+// from a ROOT file so that one can test the macros without needing a
+// cMsg server.
+extern "C"{
+void REGISTER_ROOTSPY_MACRO(string name, string path, string macro_data){
+	if(RS_INFO) RS_INFO->LoadMacro(name, path, macro_data);
+}
+};
+//...................................................
+
+
 bool sortPredicate(const hid_t& hid1, const hid_t& hid2){
 	if(hid1.serverName != hid2.serverName){
 		return hid1.serverName < hid2.serverName;
@@ -37,6 +54,8 @@ rs_info::rs_info()
 	
 	sum_dir = new TDirectory("rootspy", "RootSpy local");
 	update = false;
+
+	rootfile = NULL;
 }
 
 //---------------------------------
@@ -45,6 +64,8 @@ rs_info::rs_info()
 rs_info::~rs_info()
 {
 	if(sum_dir != NULL) {delete sum_dir;}
+	
+	if(rootfile != NULL) {rootfile->Close(); delete rootfile;}
 }
 
 //---------------------------------
@@ -121,6 +142,48 @@ int rs_info::RequestHistograms(string hnamepath, bool lock_mutex)
 				else
 					RS_CMSG->RequestHistogram(server_iter->first, hnamepath);
 			//}
+		}
+	}
+	
+	if(lock_mutex) Unlock();
+	
+	return NrequestsSent;
+}
+
+//---------------------------------
+// RequestTrees
+//---------------------------------
+int rs_info::RequestTrees(string tnamepath, int64_t num_entries, bool lock_mutex)
+{
+	/// Request the specified histogram or macro from all servers
+	/// that provide it. If the lock_mutex value is set to false,
+	/// then the RS_INFO lock will not be locked during the operation.
+	/// In that case it is assumed that the calling routine has already
+	/// locked it.
+
+	int NrequestsSent = 0;
+
+	if(lock_mutex) Lock();
+
+	map<string,hdef_t>::iterator it = histdefs.find(tnamepath);
+	if(it != histdefs.end()){
+
+		// split hnamepath into histo name and path
+		string tname = tnamepath;
+		string path = "/";
+		size_t pos = tnamepath.find_last_of("/");
+		if(pos == string::npos){
+			string tname = tnamepath.substr(pos+1, tnamepath.length()-1);
+			string path = tnamepath.substr(0, pos);
+			if(path[path.length()-1]==':')path += "/";
+		}
+		
+		// Loop over servers, requesting this hist from each one (that is active)
+		map<string, bool> &servers = it->second.servers;
+		map<string, bool>::iterator server_iter = servers.begin();
+		for(; server_iter!=servers.end(); server_iter++){
+			NrequestsSent++;
+			RS_CMSG->RequestTree(server_iter->first, tname, path, num_entries);
 		}
 	}
 	
@@ -261,6 +324,218 @@ hid_t rs_info::FindPreviousActive(hid_t &current)
 	return hid_t("none", "none");  // avoid compiler warning
 }
 
+//---------------------------------
+// LoadRootFile
+//---------------------------------
+void rs_info::LoadRootFile(string fname)
+{
+	rootfile = new TFile(fname.c_str());
+	if(!rootfile->IsOpen()){
+		cout << "Unable to open ROOT file \""<<fname<<"\" for reading!" << endl;
+		exit(-1);
+	}
+	
+	// Register all ROOT histogram and tree objects from all directory levels 
+	AddRootObjectsToList(rootfile);
+}
+
+//---------------------------------
+// AddRootObjectsToList
+//
+// (This is used when reading from a local root file)
+// This method recursively traverses through histogram directories making hinfo_t 
+// objects out of individual histograms and then adds the info_t objects to a list.
+//---------------------------------
+void rs_info::AddRootObjectsToList(TDirectory *dir)
+{
+	dir->ReadAll();
+	string path = dir->GetPath();
+	
+	// Chop file part off of path and make it memory-relative for bookkeeping purposes
+	size_t pos = path.find_first_of(":");
+	if(pos != string::npos) path = "/" + path.substr(pos+1);
+
+	TList *list = dir->GetList();
+	TIter next(list);
+	while(TObject *obj = next()) {
+
+		// If object is a histogram, then register it
+		TH1 *hHist = dynamic_cast<TH1*>(obj);
+		if(hHist) {
+		
+			// Register histogram definition
+			vector<string> hist_names;
+			vector<string> hist_types;
+			vector<string> hist_paths;
+			vector<string> hist_titles;
+
+			hist_names.push_back(obj->GetName());
+			hist_types.push_back(obj->ClassName());
+			hist_paths.push_back(path);
+			hist_titles.push_back(hHist->GetTitle());
+
+			cMsgMessage msg;
+			msg.add("hist_names", hist_names);
+			msg.add("hist_types", hist_types);
+			msg.add("hist_paths", hist_paths);
+			msg.add("hist_titles", hist_titles);
+			RS_CMSG->RegisterHistList("localfile", &msg);
+			
+			// Register histogram itself
+			msg.payloadReset();
+
+			string hnamepath = path + '/' + obj->GetName();
+
+			TMessage *tm = new TMessage(kMESS_OBJECT);
+			tm->WriteObject(obj);
+			msg.setByteArray(tm->Buffer(),tm->Length());
+			msg.add("hnamepath", hnamepath);
+			msg.setText("histogram");
+			RS_CMSG->RegisterHistogram("localfile", &msg);
+
+			// Finished with TMessage object. Free it and release lock on ROOT global
+			delete tm;
+		}
+
+		// If object is a tree, then register it
+		TTree *hTree = dynamic_cast<TTree*>(obj);
+		if(hTree) {
+			TObjArray *branch_list = hTree->GetListOfBranches();
+			vector<string> branch_info;
+			TraverseTree(branch_list, branch_info);
+			if(!branch_info.empty()) {
+				cMsgMessage msg;
+				msg.add("tree_name", obj->GetName());
+				msg.add("tree_title", obj->GetTitle());
+				msg.add("tree_path", dir->GetPath());
+				msg.add("branch_info", branch_info);
+				msg.setText("tree info");
+				RS_CMSG->RegisterTreeInfo("localfile", &msg);
+
+				// Register tree itself
+				msg.payloadReset();
+				
+				TMemFile *f = new TMemFile(".rootspy_tmp.root", "RECREATE");
+				TTree *tree_copy = hTree->CloneTree(0);
+				if(!tree_copy){
+					cout << "Unable to make temporary copy of tree for transport!" << endl;
+					if(f) { f->Close(); delete f; f = NULL;}
+					return;
+				}
+
+				// Copy requested number of entries
+				int64_t nentries = hTree->GetEntries();
+				for(int64_t i=0; i<nentries; i++) {
+					hTree->GetEntry(i);
+					tree_copy->Fill();
+				}
+
+				// Serialize object and put it into a response message
+				TMessage *tm = new TMessage(kMESS_ANY);
+				f->Write();
+				tm->WriteTString(f->GetName());
+				tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
+				f->CopyTo(*tm);
+
+				msg.setByteArray(tm->Buffer(),tm->Length());
+				msg.add("tree_name", string(obj->GetName()));
+				msg.add("tree_path", string(dir->GetPath()));
+				msg.setText("tree");
+
+				// clean up temporary copy of tree
+				if( tree_copy != hTree ) {
+					// see source for TTree::MergeTrees
+					hTree->GetListOfClones()->Remove(tree_copy);
+					tree_copy->ResetBranchAddresses();
+					delete tree_copy;
+				}
+				if(f) {
+					f->Close();
+					delete f;
+					f = NULL;
+				}
+
+				// Finished with TMessage object. Free it and release lock on ROOT global
+				delete tm;
+			}
+		}
+
+		// If this happens to be a directory, recall ourself to find objects starting from it.
+		TDirectory *subdir = dynamic_cast<TDirectory*>(obj);
+		if(subdir!=NULL && subdir!=dir) AddRootObjectsToList(subdir);
+	}
+}
+
+//---------------------------------
+// TraverseTree
+//
+// (This is used when reading from a local root file)
+//---------------------------------
+void rs_info::TraverseTree(TObjArray *branch_list, vector<string>  &treeinfo)
+{
+
+	if(!branch_list) return;
+	for(int i = 0; i < branch_list->GetSize(); i++) {
+		TBranch *branch = dynamic_cast<TBranch*>(branch_list->At(i));
+		if(branch) {
+			treeinfo.push_back(string(branch->GetName()));
+		} else break;
+		TraverseTree(branch->GetListOfBranches(), treeinfo);
+	}
+}
+
+//---------------------------------
+// LoadMacro
+//---------------------------------
+void rs_info::LoadMacro(string name, string path, string macro_data)
+{
+	// Declare macro
+	vector<string> macro_names;
+	vector<string> macro_paths;
+	macro_names.push_back(name);
+	macro_paths.push_back(path);
+
+	cMsgMessage msg;
+	msg.add("macro_names", macro_names);
+	msg.add("macro_paths", macro_paths);
+	msg.setText("macros list");
+	RS_CMSG->RegisterMacroList("localcode", &msg);
+
+	// for the details on TMemFile usage, see getTree()
+	TMemFile *f = new TMemFile(".rootspy_tmp.root", "RECREATE");
+	
+	// fill the TMemFile with our payload:
+	//  1) TObjString of the macro "code"
+	TObjString *macro_str = new TObjString(macro_data.c_str());
+	macro_str->Write("macro");
+
+	// Serialize object and put it into a response message
+	TMessage *tm = new TMessage(kMESS_ANY);
+	f->Write();
+	tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
+	f->CopyTo(*tm);
+
+	msg.payloadReset();
+	msg.setByteArray(tm->Buffer(),tm->Length());
+	msg.add("macro_name", name);
+	msg.add("macro_path", path);
+	msg.add("macro_version", (int32_t)1);
+	msg.setText("macro");
+
+	// clean up everything
+	if(f) {
+		f->Close();
+		delete f;
+		f = NULL;
+	}
+
+	// Finished with TMessage object. Free it and release lock on ROOT global
+	delete tm;
+	delete macro_str;
+
+	// Register macro
+	RS_CMSG->RegisterMacro("localfile", &msg);
+}
 
 //---------------------------------
 // Reset

@@ -56,19 +56,19 @@ string join( vector<string>::const_iterator begin, vector<string>::const_iterato
 //---------------------------------
 // rs_cmsg    (Constructor)
 //---------------------------------
-rs_cmsg::rs_cmsg(string &udl, string &name)
+rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 {
 
 	verbose = 2; // higher values=more messages. 0=minimal messages
 	hist_default_active = true;
 
 	// Connect to cMsg system
-        is_online = true;
+	is_online = connect_to_cmsg;
 	string myDescr = "Access ROOT objects in a running program";
 	cMsgSetDebugLevel(CMSG_DEBUG_INFO); // print all messages
 	cMsgSys = new cMsg(udl, name, myDescr);   	// the cMsg system object, where
 	try {                         	           	//  all args are of type string
-		cMsgSys->connect(); 
+		if(connect_to_cmsg) cMsgSys->connect(); 
 	} catch (cMsgException e) {
 		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to cMsg system! __________________"<<endl;
 		cout << e.toString() << endl; 
@@ -80,29 +80,37 @@ rs_cmsg::rs_cmsg(string &udl, string &name)
 		//return;
 	}
 	
-	// Create a unique name for ourself
-	char hostname[256];
-	gethostname(hostname, 256);
-	char str[512];
-	sprintf(str, "%s_%d", hostname, getpid());
-	myname = string(str);
-
-	cout<<"---------------------------------------------------"<<endl;
-	cout<<"   cMsg name: \""<<name<<"\""<<endl;
-	cout<<"rootspy name: \""<<myname<<"\""<<endl;
-	cout<<"---------------------------------------------------"<<endl;
-
-	// Subscribe to generic rootspy info requests
-	subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
-
-	// Subscribe to rootspy requests specific to us
-	subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
+	if(is_online){
 	
-	// Start cMsg system
-	cMsgSys->start();
-	
-	// Broadcast request for available servers
-	PingServers();
+		// Create a unique name for ourself
+		char hostname[256];
+		gethostname(hostname, 256);
+		char str[512];
+		sprintf(str, "%s_%d", hostname, getpid());
+		myname = string(str);
+
+		cout<<"---------------------------------------------------"<<endl;
+		cout<<"   cMsg name: \""<<name<<"\""<<endl;
+		cout<<"rootspy name: \""<<myname<<"\""<<endl;
+		cout<<"---------------------------------------------------"<<endl;
+
+		// Subscribe to generic rootspy info requests
+		subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
+
+		// Subscribe to rootspy requests specific to us
+		subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
+		
+		// Start cMsg system
+		cMsgSys->start();
+		
+		// Broadcast request for available servers
+		PingServers();
+	}else{
+		cout<<"---------------------------------------------------"<<endl;
+		cout<<"  Not connected to cMsg system. Only local histos  "<<endl;
+		cout<<"  and macros will be available.                    "<<endl;
+		cout<<"---------------------------------------------------"<<endl;	
+	}
 }
 
 //---------------------------------
@@ -110,16 +118,16 @@ rs_cmsg::rs_cmsg(string &udl, string &name)
 //---------------------------------
 rs_cmsg::~rs_cmsg()
 {
-    if(is_online) {
-	// Unsubscribe
-	for(unsigned int i=0; i<subscription_handles.size(); i++){
-		cMsgSys->unsubscribe(subscription_handles[i]);
-	}
+	if(is_online) {
+		// Unsubscribe
+		for(unsigned int i=0; i<subscription_handles.size(); i++){
+			cMsgSys->unsubscribe(subscription_handles[i]);
+		}
 
-	// Stop cMsg system
-	cMsgSys->stop();
-	cMsgSys->disconnect();
-    }
+		// Stop cMsg system
+		cMsgSys->stop();
+		cMsgSys->disconnect();
+	}
 }
 
 
@@ -207,7 +215,7 @@ void rs_cmsg::PingServers(void)
 	whosThere.setType(myname);
 	whosThere.setText("who's there?");
 	
-	cMsgSys->send(&whosThere);
+	if(is_online) cMsgSys->send(&whosThere);
 }
 
 //---------------------------------
@@ -217,7 +225,7 @@ void rs_cmsg::RequestHists(string servername)
 {
 	cMsgMessage listHists;
 	BuildRequestHists(listHists, servername);	
-	cMsgSys->send(&listHists);
+	if(is_online) cMsgSys->send(&listHists);
 }
 
 //---------------------------------
@@ -227,7 +235,7 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 {
 	cMsgMessage requestHist;
 	BuildRequestHistogram(requestHist, servername, hnamepath);
-	cMsgSys->send(&requestHist);
+	if(is_online) cMsgSys->send(&requestHist);
 }
 
 //---------------------------------
@@ -237,7 +245,7 @@ void rs_cmsg::RequestTreeInfo(string servername)
 {
 	cMsgMessage treeinfo;
 	BuildRequestTreeInfo(treeinfo, servername);
-	cMsgSys->send(&treeinfo);
+	if(is_online) cMsgSys->send(&treeinfo);
 }
 
 //---------------------------------
@@ -247,7 +255,7 @@ void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path,
 {
 	cMsgMessage requestTree;
 	BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
-	cMsgSys->send(&requestTree);
+	if(is_online) cMsgSys->send(&requestTree);
 }
 
 //---------------------------------
@@ -257,7 +265,7 @@ void rs_cmsg::RequestMacroList(string servername)
 {
 	cMsgMessage listHists;
 	BuildRequestMacroList(listHists, servername);	
-	cMsgSys->send(&listHists);
+	if(is_online) cMsgSys->send(&listHists);
 }
 
 //---------------------------------
@@ -267,7 +275,7 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 {
 	cMsgMessage requestHist;
 	BuildRequestMacro(requestHist, servername, hnamepath);
-	cMsgSys->send(&requestHist);
+	if(is_online) cMsgSys->send(&requestHist);
 }
 
 
@@ -278,6 +286,8 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 //---------------------------------
 void rs_cmsg::RequestHistsSync(string servername, timespec_t &myTimeout)
 {
+	if(!is_online) return;
+
     cMsgMessage requestHist;
     BuildRequestHists(requestHist, servername);
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
@@ -292,6 +302,8 @@ void rs_cmsg::RequestHistsSync(string servername, timespec_t &myTimeout)
 //---------------------------------
 void rs_cmsg::RequestHistogramSync(string servername, string hnamepath, timespec_t &myTimeout)
 {
+	if(!is_online) return;
+
     cMsgMessage requestHist;
     BuildRequestHistogram(requestHist, servername, hnamepath);
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
@@ -306,6 +318,8 @@ void rs_cmsg::RequestHistogramSync(string servername, string hnamepath, timespec
 //---------------------------------
 void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
 {
+	if(!is_online) return;
+
     cMsgMessage treeinfo;
     BuildRequestTreeInfo(treeinfo, servername);
 
@@ -324,6 +338,8 @@ void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
 //---------------------------------
 void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_path, timespec_t &myTimeout, int64_t num_entries = -1)
 {
+	if(!is_online) return;
+
     //_DBG_ << "In rs_cmsg::RequestTreeSync()..." << endl;
 
     cMsgMessage requestTree;
@@ -345,6 +361,8 @@ void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_p
 //---------------------------------
 void rs_cmsg::RequestMacroListSync(string servername, timespec_t &myTimeout)
 {
+	if(!is_online) return;
+
     cMsgMessage requestHist;
     BuildRequestMacroList(requestHist, servername);
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
@@ -359,6 +377,8 @@ void rs_cmsg::RequestMacroListSync(string servername, timespec_t &myTimeout)
 //---------------------------------
 void rs_cmsg::RequestMacroSync(string servername, string hnamepath, timespec_t &myTimeout)
 {
+	if(!is_online) return;
+
     cMsgMessage requestHist;
     BuildRequestMacro(requestHist, servername, hnamepath);
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
@@ -381,7 +401,7 @@ void rs_cmsg::FinalHistogram(string servername, vector<string> hnamepaths)
     finalhist.setText("provide final");
     finalhist.add("hnamepaths", hnamepaths);
     
-    cMsgSys->send(&finalhist);
+    if(is_online) cMsgSys->send(&finalhist);
     cerr<<"final hist request sent"<<endl;
 }
 
