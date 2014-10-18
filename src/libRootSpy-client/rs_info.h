@@ -22,6 +22,7 @@
 #include <TH1.h>
 
 #include <pthread.h>
+#include <stdint.h>
 
 //#include <cMsg.hxx>
 //using namespace cmsg;
