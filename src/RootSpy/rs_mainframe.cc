@@ -1720,6 +1720,17 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 			string h = s.substr(spos, epos-spos+1); // chop off prefix + whitespace
 			RS_INFO->RequestHistograms(h, false);
 		}
+		
+		prefix = "// tree:";
+		if(s.find(prefix) == 0){
+			uint32_t spos = prefix.length();
+			while( spos<s.length() && (s[spos]==' ' || s[spos]=='\t') ) spos++;
+			uint32_t epos = s.length()-1;
+			while(epos>spos && (s[epos]==' ' || s[epos]=='\t') ) epos--;
+
+			string h = s.substr(spos, epos-spos+1); // chop off prefix + whitespace
+			RS_INFO->RequestTrees(h, -1, false);
+		}
 
 		Long_t err = gROOT->ProcessLine(s.c_str());
 		if(err != TInterpreter::kNoError){
