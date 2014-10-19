@@ -12,8 +12,15 @@
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectHists.h"
 
-//#include "TObject.h"
-//#include "TNamed.h"
+#include "TGaxis.h"
+
+
+//---------------------------------
+// DrawOverlay  (global)
+//---------------------------------
+void DrawOverlay(void) {
+	RSMF->current_tab->DoOverlay();  
+}
 
 //---------------------------------
 // RSTab    (Constructor)
@@ -388,6 +395,7 @@ void RSTab::DoUpdate(void)
 					else
 						sum_hist->Draw();
 					DoOverlay();
+					sum_hist->UseCurrentStyle();   // updates in case the style paramteres change
 					canvas->Update();
 					pthread_rwlock_unlock(ROOT_MUTEX);				
 				}
@@ -419,7 +427,8 @@ void RSTab::DoUpdate(void)
 //----------
 void RSTab::DoOverlay(void)
 {
-	cerr << "In DoOverlay()..." << endl;
+	//cerr << "In DoOverlay()..." << endl;
+	gStyle->SetStatX(0.95);  // default
 
 	// check to see if we should be overlaying archived histograms
 	bool overlay_enabled = true;
@@ -432,7 +441,7 @@ void RSTab::DoOverlay(void)
 	if(!gPad)
 		return;
 
-	cerr << "Searching gPad..." << endl;
+	//cerr << "Searching gPad..." << endl;
 
 	// look for the histograms in the current pad
 	TIter nextObj(gPad->GetListOfPrimitives());
@@ -442,7 +451,7 @@ void RSTab::DoOverlay(void)
 		//obj->Draw(next.GetOption());
 		TNamed *namedObj = dynamic_cast<TNamed*>(obj);
 		if(namedObj != NULL) {
-			cerr << namedObj->GetName() << endl;
+			//cerr << namedObj->GetName() << endl;
 			h = static_cast<TH1*>(namedObj);
 			break;
 		}
@@ -457,47 +466,73 @@ void RSTab::DoOverlay(void)
 		cerr << "Could not find histogram info in gPad!" << endl;
 		return;
 	}
+
+	double hist_ymax = 1.1*h->GetMaximum();
+	double hist_ymin = h->GetMinimum();
 	
 	// find the histogram in our list of histogram defintions
 	// so that we can find its full path
 	RS_INFO->Lock();
 	
 	string hnamepath = "";
+	hdef_t::histdimension_t type = hdef_t::noneD;
 	for(map<string,hdef_t>::iterator hdef_itr = RS_INFO->histdefs.begin();
 	    hdef_itr != RS_INFO->histdefs.end(); hdef_itr++) {
 		if( h == hdef_itr->second.sum_hist ) {
 			hnamepath = hdef_itr->first;
+			type = hdef_itr->second.type;
 			break;
 		}
 	}
 
 	RS_INFO->Unlock();
-
+	
 	if(hnamepath == "") {
 		cerr << "Could not find histogram information in hdef list!" << endl;
 		return;
-	} else {
-		cerr << "Found info for histogram = " << hnamepath << endl;
-	}
+	} 
+	//else {
+	//	cerr << "Found info for histogram = " << hnamepath << endl;
+	//}
 	
+	
+	// overlaying only makes sense for 1D histograms
+	if(type != hdef_t::oneD)
+		return;
 	
 	// try to find a corresponding one in the archived file
 	// we assume that the archived file has the same hnamepath structure
 	// as the histograms in memory
 	
-	TH1 *h_over = static_cast<TH1*>(RSMF->archive_file->Get(hnamepath.c_str()));
+	TH1 *h_over_orig = static_cast<TH1*>(RSMF->archive_file->Get(hnamepath.c_str()));
+	TH1 *h_over = static_cast<TH1*>(h_over_orig->Clone());   // memory leak??
         if(h_over == NULL) { 
-	cerr << "Could not find corresponding archived histogram!" << endl;
+		cerr << "Could not find corresponding archived histogram!" << endl;
 		return;
 	}	
 
-// Draw the archived histogram overlayed on the current histogram
-h_over->SetLineWidth(3);
-h_over->SetLineColor(4);
-h_over->Scale( h->Integral() / h_over->Integral() );
-	h_over->Draw("SAME");
+        // format overlay histogram and extract parameters
+	gStyle->SetStatX(0.85); 
+        h_over->SetStats(0);
+        h_over->SetLineWidth(3);
+        h_over->SetLineColor(4);
+        double overlay_ymin = h_over->GetMinimum(); 
+        double overlay_ymax = 1.1*h_over->GetMaximum();
+
+        // Draw the archived histogram overlayed on the current histogram
+        //h_over->Scale( h->Integral() / h_over->Integral() );
+        float scale = hist_ymax/overlay_ymax;
+        h_over->Scale( scale );
+        h_over->Draw("SAME");
 
 	// Add in an axis for the overlaid histogram on the right side of the plot
+        TGaxis *overlay_yaxis = new TGaxis(gPad->GetUxmax(),gPad->GetUymin(),
+				   gPad->GetUxmax(),gPad->GetUymax(),
+				   overlay_ymin,overlay_ymax,510,"+L");                                                                                                                               
+        overlay_yaxis->SetLabelFont( h->GetLabelFont() );                                                                                                                                          
+        overlay_yaxis->SetLabelSize( h->GetLabelSize() );                                                                                                                                          
+        overlay_yaxis->Draw();                                                                                                                                                                        
+
 }
 
 //----------
