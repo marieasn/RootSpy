@@ -17,6 +17,7 @@
 
 //---------------------------------
 // DrawOverlay  (global)
+//   this function is exposed for use in macros
 //---------------------------------
 void DrawOverlay(void) {
 	RSMF->current_tab->DoOverlay();  
@@ -428,10 +429,12 @@ void RSTab::DoUpdate(void)
 void RSTab::DoOverlay(void)
 {
 	//cerr << "In DoOverlay()..." << endl;
-	gStyle->SetStatX(0.95);  // default
+	// reset some display defaults that might get changed
+	gStyle->SetStatX(0.95);
+	gPad->SetTicks();
 
 	// check to see if we should be overlaying archived histograms
-	bool overlay_enabled = true;
+	bool overlay_enabled = (RSMF->bShowOverlays->GetState()==kButtonDown);
 	if(!overlay_enabled)
 		return;
 	if(RSMF->archive_file == NULL)
@@ -513,6 +516,7 @@ void RSTab::DoOverlay(void)
 
         // format overlay histogram and extract parameters
 	gStyle->SetStatX(0.85); 
+	gPad->SetTicky(0);
         h_over->SetStats(0);
         h_over->SetLineWidth(3);
         h_over->SetLineColor(4);
@@ -528,7 +532,7 @@ void RSTab::DoOverlay(void)
 	// Add in an axis for the overlaid histogram on the right side of the plot
         TGaxis *overlay_yaxis = new TGaxis(gPad->GetUxmax(),gPad->GetUymin(),
 				   gPad->GetUxmax(),gPad->GetUymax(),
-				   overlay_ymin,overlay_ymax,510,"+L");                                                                                                                               
+				   overlay_ymin,overlay_ymax,505,"+L");
         overlay_yaxis->SetLabelFont( h->GetLabelFont() );                                                                                                                                          
         overlay_yaxis->SetLabelSize( h->GetLabelSize() );                                                                                                                                          
         overlay_yaxis->Draw();                                                                                                                                                                        

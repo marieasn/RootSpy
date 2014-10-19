@@ -122,6 +122,7 @@ class rs_mainframe:public TGMainFrame {
 		TGCheckButton *bAutoRefresh;
 		TGCheckButton *bAutoAdvance;
 		TGComboBox *fDelay;
+		TGCheckButton *bShowOverlays;
 		
 		TGMainFrame *dialog_savehists;
 		TGMainFrame *dialog_selecttree;

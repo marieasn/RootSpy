@@ -1370,6 +1370,7 @@ void rs_mainframe::CreateGUI(void)
 	fMainTopLeft->AddFrame(fMainTopLeftButtons, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
 	TGTextButton *bSetArchive = AddButton(fMainTopLeftButtons, "Set Archive");
+	bShowOverlays = AddCheckButton(fMainTopLeftButtons, "Show Archived Hists");
 
 	// label for archive file name display
 	lArchiveFile = AddLabel(fMainTopLeft, "No Archive Loaded", kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
