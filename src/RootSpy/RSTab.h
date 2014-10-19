@@ -66,6 +66,7 @@ class RSTab{
 		void DoUpdate(void);
 		void DoUpdateWithFollowUp(void);
 		void DoSelectHists(void);
+		void DoOverlay(void);
 		
 		void RequestUpdatedMacroHists(void);
 	

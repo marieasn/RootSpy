@@ -12,6 +12,9 @@
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectHists.h"
 
+//#include "TObject.h"
+//#include "TNamed.h"
+
 //---------------------------------
 // RSTab    (Constructor)
 //---------------------------------
@@ -19,7 +22,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 {
 	//- - - - - - - - - - - - - - - - - - - - - - - - - 
 	// Build all GUI elements in a single tab
-	
+ 	
 	// Copy point to TGTab object to member variable
 	fTab = rsmf->fMainTab;
 
@@ -384,6 +387,7 @@ void RSTab::DoUpdate(void)
 						sum_hist->Draw("COLZ");
 					else
 						sum_hist->Draw();
+					DoOverlay();
 					canvas->Update();
 					pthread_rwlock_unlock(ROOT_MUTEX);				
 				}
@@ -406,6 +410,94 @@ void RSTab::DoUpdate(void)
 	}
 
 	last_update = now;
+}
+
+
+//----------
+// DoOverlay
+// NOTE: Currently only works for summed histograms
+//----------
+void RSTab::DoOverlay(void)
+{
+	cerr << "In DoOverlay()..." << endl;
+
+	// check to see if we should be overlaying archived histograms
+	bool overlay_enabled = true;
+	if(!overlay_enabled)
+		return;
+	if(RSMF->archive_file == NULL)
+		return;
+	
+	// make sure that there is an active pad
+	if(!gPad)
+		return;
+
+	cerr << "Searching gPad..." << endl;
+
+	// look for the histograms in the current pad
+	TIter nextObj(gPad->GetListOfPrimitives());
+	TObject *obj;
+	TH1 *h = NULL;
+	while ((obj = nextObj())) {
+		//obj->Draw(next.GetOption());
+		TNamed *namedObj = dynamic_cast<TNamed*>(obj);
+		if(namedObj != NULL) {
+			cerr << namedObj->GetName() << endl;
+			h = static_cast<TH1*>(namedObj);
+			break;
+		}
+
+		// check to make sure this is actually a histogram
+		//h = dynamic_cast<TH1*>(h);
+		//if(h!=NULL)
+		//	break;
+	}
+	
+	if(h == NULL) {
+		cerr << "Could not find histogram info in gPad!" << endl;
+		return;
+	}
+	
+	// find the histogram in our list of histogram defintions
+	// so that we can find its full path
+	RS_INFO->Lock();
+	
+	string hnamepath = "";
+	for(map<string,hdef_t>::iterator hdef_itr = RS_INFO->histdefs.begin();
+	    hdef_itr != RS_INFO->histdefs.end(); hdef_itr++) {
+		if( h == hdef_itr->second.sum_hist ) {
+			hnamepath = hdef_itr->first;
+			break;
+		}
+	}
+
+	RS_INFO->Unlock();
+
+	if(hnamepath == "") {
+		cerr << "Could not find histogram information in hdef list!" << endl;
+		return;
+	} else {
+		cerr << "Found info for histogram = " << hnamepath << endl;
+	}
+	
+	
+	// try to find a corresponding one in the archived file
+	// we assume that the archived file has the same hnamepath structure
+	// as the histograms in memory
+	
+	TH1 *h_over = static_cast<TH1*>(RSMF->archive_file->Get(hnamepath.c_str()));
+        if(h_over == NULL) { 
+	cerr << "Could not find corresponding archived histogram!" << endl;
+		return;
+	}	
+
+// Draw the archived histogram overlayed on the current histogram
+h_over->SetLineWidth(3);
+h_over->SetLineColor(4);
+h_over->Scale( h->Integral() / h_over->Integral() );
+	h_over->Draw("SAME");
+
+	// Add in an axis for the overlaid histogram on the right side of the plot
 }
 
 //----------

@@ -149,6 +149,10 @@ class rs_mainframe:public TGMainFrame {
 			void DrawMacro(TCanvas*the_canvas, hinfo_t &the_hinfo);
 			void DrawMacro(TCanvas*the_canvas, hdef_t &the_hdef);
 
+		// info for comparing with archived histograms
+		//bool overlay_mode; // maybe don't need this?
+		TFile *archive_file;
+
 	private:
 	
 		TTimer *timer;
@@ -168,10 +172,6 @@ class rs_mainframe:public TGMainFrame {
 		
 	
 		void CreateGUI(void);
-
-		// info for comparing with archived histograms
-		//bool overlay_mode; // maybe don't need this?
-		TFile *archive_file;
 
 		TExec *exec_shell;
 
