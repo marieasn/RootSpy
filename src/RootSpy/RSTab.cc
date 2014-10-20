@@ -15,13 +15,6 @@
 #include "TGaxis.h"
 
 
-//---------------------------------
-// DrawOverlay  (global)
-//   this function is exposed for use in macros
-//---------------------------------
-void DrawOverlay(void) {
-	RSMF->current_tab->DoOverlay();  
-}
 
 //---------------------------------
 // RSTab    (Constructor)
@@ -391,6 +384,7 @@ void RSTab::DoUpdate(void)
 					// Draw histogram
 					pthread_rwlock_wrlock(ROOT_MUTEX);
 					canvas->cd();
+					canvas->Clear();
 					if(type == hdef_t::twoD)
 						sum_hist->Draw("COLZ");
 					else
@@ -449,13 +443,13 @@ void RSTab::DoOverlay(void)
 	// look for the histograms in the current pad
 	TIter nextObj(gPad->GetListOfPrimitives());
 	TObject *obj;
-	TH1 *h = NULL;
+	TH1 *horig = NULL;
 	while ((obj = nextObj())) {
 		//obj->Draw(next.GetOption());
 		TNamed *namedObj = dynamic_cast<TNamed*>(obj);
 		if(namedObj != NULL) {
 			//cerr << namedObj->GetName() << endl;
-			h = static_cast<TH1*>(namedObj);
+			horig = static_cast<TH1*>(namedObj);
 			break;
 		}
 
@@ -465,13 +459,10 @@ void RSTab::DoOverlay(void)
 		//	break;
 	}
 	
-	if(h == NULL) {
+	if(horig == NULL) {
 		cerr << "Could not find histogram info in gPad!" << endl;
 		return;
-	}
-
-	double hist_ymax = 1.1*h->GetMaximum();
-	double hist_ymin = h->GetMinimum();
+	}	
 	
 	// find the histogram in our list of histogram defintions
 	// so that we can find its full path
@@ -479,11 +470,13 @@ void RSTab::DoOverlay(void)
 	
 	string hnamepath = "";
 	hdef_t::histdimension_t type = hdef_t::noneD;
+	hdisplay_info_t display_info;
 	for(map<string,hdef_t>::iterator hdef_itr = RS_INFO->histdefs.begin();
 	    hdef_itr != RS_INFO->histdefs.end(); hdef_itr++) {
-		if( h == hdef_itr->second.sum_hist ) {
+		if( horig == hdef_itr->second.sum_hist ) {
 			hnamepath = hdef_itr->first;
 			type = hdef_itr->second.type;
+			display_info = hdef_itr->second.display_info;
 			break;
 		}
 	}
@@ -502,32 +495,60 @@ void RSTab::DoOverlay(void)
 	// overlaying only makes sense for 1D histograms
 	if(type != hdef_t::oneD)
 		return;
+
+	TH1 *h = static_cast<TH1*>(horig->Clone());  // memory leak??
 	
 	// try to find a corresponding one in the archived file
 	// we assume that the archived file has the same hnamepath structure
 	// as the histograms in memory
-	
 	TH1 *h_over_orig = static_cast<TH1*>(RSMF->archive_file->Get(hnamepath.c_str()));
 	TH1 *h_over = static_cast<TH1*>(h_over_orig->Clone());   // memory leak??
         if(h_over == NULL) { 
 		cerr << "Could not find corresponding archived histogram!" << endl;
 		return;
-	}	
+	}
 
+	// set axis ranges so that we can sensibly overlay the histograms
+	double hist_ymax = 1.1*h->GetMaximum();
+	double hist_ymin = h->GetMinimum();
+	// make sure we at least go down to zero, so that we are displaying the whole
+	// distribution - assumes we are just looking at frequency histograms
+	if(hist_ymin > 0)
+		hist_ymin = 0;
+	// add in a fix for logarithmic y axes
+	if(display_info.use_logy && hist_ymin == 0)
+		hist_ymin = 0.1;
+	
+	h->GetYaxis()->SetRangeUser(hist_ymin, hist_ymax); 
+	h->SetLineWidth(2);
+	
         // format overlay histogram and extract parameters
 	gStyle->SetStatX(0.85); 
 	gPad->SetTicky(0);
         h_over->SetStats(0);
-        h_over->SetLineWidth(3);
-        h_over->SetLineColor(4);
+        h_over->SetFillColor(5);
+        h_over->SetLineWidth(0);
+
+	// set overlay axis ranges too
         double overlay_ymin = h_over->GetMinimum(); 
         double overlay_ymax = 1.1*h_over->GetMaximum();
+	if(overlay_ymin > 0)
+		overlay_ymin = 0;
+	// add in a fix for logarithmic y axes
+	if(display_info.use_logy && overlay_ymin == 0)
+		overlay_ymin = 0.1;
+	
 
-        // Draw the archived histogram overlayed on the current histogram
+        // Draw the archived histogram underneath the main histogram
+	// This is needed since we are drawing the archived histogram as shaded
         //h_over->Scale( h->Integral() / h_over->Integral() );
         float scale = hist_ymax/overlay_ymax;
         h_over->Scale( scale );
-        h_over->Draw("SAME");
+	h_over->GetYaxis()->SetRangeUser(hist_ymin, hist_ymax); 
+        h_over->Draw();
+
+	// Draw main histogram over the top
+	h->Draw("SAME");
 
 	// Add in an axis for the overlaid histogram on the right side of the plot
         TGaxis *overlay_yaxis = new TGaxis(gPad->GetUxmax(),gPad->GetUymin(),
