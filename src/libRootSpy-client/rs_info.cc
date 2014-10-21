@@ -53,6 +53,7 @@ rs_info::rs_info()
 	current.hnamepath = "-------------------------------------------------------";
 	
 	sum_dir = new TDirectory("rootspy", "RootSpy local");
+	reset_dir = new TDirectory("rootspy_snapshots", "RootSpy local snapshots");
 	update = false;
 
 	rootfile = NULL;
@@ -535,6 +536,98 @@ void rs_info::LoadMacro(string name, string path, string macro_data)
 
 	// Register macro
 	RS_CMSG->RegisterMacro("localfile", &msg);
+}
+
+//---------------------------------
+// ResetHisto
+//---------------------------------
+void  rs_info::ResetHisto(const string &hnamepath)
+{
+	cout << "Resetting histo: " << hnamepath << endl;
+
+	RS_INFO->Lock();
+
+	// Get pointer to hdef_t
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+	if(hdef_iter==RS_INFO->histdefs.end()){
+		RS_INFO->Unlock();
+		return;
+	}
+	hdef_t *hdef = &(hdef_iter->second);
+	if(!hdef->sum_hist){
+		RS_INFO->Unlock();
+		return;
+	}
+	
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+	
+	// If reset hist already exists, add curren sum hist to it
+	if(hdef->reset_hist){
+		hdef->reset_hist->Add(hdef->sum_hist);
+	}else{
+
+		// Make sure the full directory path exists
+		string reset_path = "";
+		TDirectory *hist_reset_dir = reset_dir;
+		for(uint32_t i=0; i<hdef->dirs.size(); i++){
+			reset_path += "/" + hdef->dirs[i];
+			TDirectory *dir = (TDirectory*)(hist_reset_dir->Get(hdef->dirs[i].c_str()));
+			if(!dir) dir = hist_reset_dir->mkdir(hdef->dirs[i].c_str());
+			hist_reset_dir = dir;
+		}
+		
+		// Clone current sum hist and store in reset_dir
+		string reset_hist_name = string(hdef->sum_hist->GetName())+"__reset";
+		TH1 *reset_hist = (TH1*)hdef->sum_hist->Clone(reset_hist_name.c_str());
+		reset_hist->SetDirectory(hist_reset_dir);
+		reset_hist->SetName(hdef->sum_hist->GetName());
+		
+		hdef->reset_hist = reset_hist;
+	}
+
+	// Reset the sum histo
+	hdef->sum_hist->Reset();
+	
+	pthread_rwlock_unlock(ROOT_MUTEX);
+
+	RS_INFO->Unlock();
+}
+
+//---------------------------------
+// UnresetHisto
+//---------------------------------
+void  rs_info::UnresetHisto(const string &hnamepath)
+{
+	cout << "Unresetting histo: " << hnamepath << endl;
+
+	RS_INFO->Lock();
+
+	// Get pointer to hdef_t
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+	if(hdef_iter==RS_INFO->histdefs.end()){
+		RS_INFO->Unlock();
+		return;
+	}
+	hdef_t *hdef = &(hdef_iter->second);
+	
+	// Can't do anything without sum and reset histograms
+	if(hdef->sum_hist==NULL || hdef->reset_hist==NULL){
+		RS_INFO->Unlock();
+		return;
+	}
+	
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+	
+	// Add reset histo back into sum histo
+	hdef->sum_hist->Add(hdef->reset_hist);
+	
+	// Delete reset hist
+	delete hdef->reset_hist;
+	hdef->reset_hist = NULL;
+
+	pthread_rwlock_unlock(ROOT_MUTEX);
+
+	RS_INFO->Unlock();
 }
 
 //---------------------------------

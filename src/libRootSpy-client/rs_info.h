@@ -57,6 +57,7 @@ class rs_info{
 		map<string,tree_id_t> treedefs;    // key=tnamepath val=tree definition
 		
 		TDirectory *sum_dir;	// holds sum histograms
+		TDirectory *reset_dir;  // holds snapshots of histograms made when "Reset" button was pressed
 		
 		hid_t current;
 		//vector<hid_t> current_hists;            // for multi-histogram display
@@ -73,6 +74,8 @@ class rs_info{
 		void  AddRootObjectsToList(TDirectory *dir);
 		void  TraverseTree(TObjArray *branch_list, vector<string>  &treeinfo);
 		void  LoadMacro(string name, string path, string macro_data);
+		void  ResetHisto(const string &hnamepath);
+		void  UnresetHisto(const string &hnamepath);
 
 		void Reset();
 

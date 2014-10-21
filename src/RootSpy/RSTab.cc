@@ -68,6 +68,9 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	TGGroupFrame *fDisplayOptions = new TGGroupFrame(fTabMainLeft, "Display Options", kVerticalFrame);
 	fTabMainLeft->AddFrame(fDisplayOptions, new TGLayoutHints(kLHintsExpandX | kLHintsCenterY, 2,2,2,2));
 	TGTextButton *bSelect = AddButton(fDisplayOptions, "Select", kLHintsExpandX);
+	AddSpacer(fDisplayOptions, 1, 5);
+	TGTextButton *bReset = AddButton(fDisplayOptions, "Reset", kLHintsExpandX);
+	TGTextButton *bUnreset = AddButton(fDisplayOptions, "Un-Reset", kLHintsExpandX);
 	
 	// Buttons at bottom left
 	TGVerticalFrame *fTabMainLeftBottom = new TGVerticalFrame(fTabMainLeft);
@@ -98,6 +101,8 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	bSaveCanvas->Connect("Clicked()","RSTab", this, "DoSaveCanvas()");
 	bUpdate->Connect("Clicked()","RSTab", this, "DoUpdateWithFollowUp()");
 	bSelect->Connect("Clicked()","RSTab", this, "DoSelectHists()");
+	bReset->Connect("Clicked()","RSTab", this, "DoReset()");
+	bUnreset->Connect("Clicked()","RSTab", this, "DoUnreset()");
 	
 	// Set some defaults
 	config = title;
@@ -408,7 +413,8 @@ void RSTab::DoUpdate(void)
 			RequestUpdatedMacroHists();
 			break;
 		default:
-			cout << "histogram/macro not available (is producer program running?)" << endl;
+			//cout << "histogram/macro not available (is producer program running?)" << endl;
+			;
 		
 	}
 
@@ -590,16 +596,38 @@ void RSTab::DoSelectHists(void)
 }
 
 //----------
-// RequestUpdatedMacroHists
+// DoReset
 //----------
-void RSTab::RequestUpdatedMacroHists(void)
+void RSTab::DoReset(void)
 {
-	/// Request updated histograms based on what is currently displayed in
-	/// the canvas. This used when a macro has been used to draw on the canvas
-	/// and we need to get updated histograms from the servers. It looks through 
-	/// all of the pads and finds all TH1 objects associated with them. If the
-	/// TH1 is located in the sum hist directory ("RootSpy:/rootspy/") then a request
-	/// is sent out to all servers with the appropriate namepath.
+	vector<string> hnamepaths;
+	GetMacroHists(hnamepaths);
+	for(uint32_t i=0; i<hnamepaths.size(); i++){
+		RS_INFO->ResetHisto(hnamepaths[i]);
+	}
+}
+
+//----------
+// DoUnreset
+//----------
+void RSTab::DoUnreset(void)
+{
+	vector<string> hnamepaths;
+	GetMacroHists(hnamepaths);
+	for(uint32_t i=0; i<hnamepaths.size(); i++){
+		RS_INFO->UnresetHisto(hnamepaths[i]);
+	}
+}
+
+//----------
+// GetMacroHists
+//----------
+void RSTab::GetMacroHists(vector<string> &hnamepaths)
+{
+	/// Look through all of the pads and find the hnamepath for all TH1
+	/// objects associated with them. This allows us to figure out which 
+	/// histograms were used in a macro. This only looks for hists existing
+	/// in the sum hist directory ("RootSpy:/rootspy/").
 
 	for(int ipad=0; ipad<100; ipad++){
 		TVirtualPad *pad = canvas->GetPad(ipad);
@@ -616,10 +644,29 @@ void RSTab::RequestUpdatedMacroHists(void)
 				string prefix = "RootSpy:/rootspy/";
 				if(path.find(prefix) == 0){
 					string hnamepath = path.substr(prefix.length()-1) + "/" + h->GetName();
-					RS_INFO->RequestHistograms(hnamepath);
+					hnamepaths.push_back(hnamepath);
 				}
 			}			
 		}
+	}
+}
+
+//----------
+// RequestUpdatedMacroHists
+//----------
+void RSTab::RequestUpdatedMacroHists(void)
+{
+	/// Request updated histograms based on what is currently displayed in
+	/// the canvas. This used when a macro has been used to draw on the canvas
+	/// and we need to get updated histograms from the servers. It looks through 
+	/// all of the pads and finds all TH1 objects associated with them. If the
+	/// TH1 is located in the sum hist directory ("RootSpy:/rootspy/") then a request
+	/// is sent out to all servers with the appropriate namepath.
+
+	vector<string> hnamepaths;
+	GetMacroHists(hnamepaths);
+	for(uint32_t i=0; i<hnamepaths.size(); i++){
+		RS_INFO->RequestHistograms(hnamepaths[i]);
 	}
 }
 

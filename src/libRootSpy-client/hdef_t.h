@@ -68,6 +68,7 @@ class hdef_t{
 			this->path = path;
 			this->hnamepath = path + "/" + name;
 			this->sum_hist=NULL;
+			this->reset_hist=NULL;
 			sum_hist_present = false;
 
 			// Split path at "/" to get directory structures
@@ -104,6 +105,7 @@ class hdef_t{
 		vector<string> dirs;		// directory elements of path
 		histdimension_t type; 	// 2D, 3D, etc
 		TH1* sum_hist;				// Pointer to sum histogram
+		TH1* reset_hist;			// Pointer to reset histogram (for storing snapshot)
 		map<string, hinfo_t> hists;	// key is server name Pointer map to all summed hists in sum_hist
 		double sum_hist_modified;	// last time sum_hist was modified in seconds as returned by rs_cmsg::GetTime()
 /*JustinB*/     bool sum_hist_present; //for SaveHists() method in rs_mainframe class to know when sum_hists are ready.
