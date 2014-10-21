@@ -102,7 +102,7 @@ class rs_archiver : public cMsgCallback {
     }
     
  private:
-    cMsg *cMsgSys;
+    //cMsg *cMsgSys;
     int runNumber;
 };
 
