@@ -379,12 +379,13 @@ void rs_mainframe::ReadConfig(string fname)
 		file_info.fOverwrite = true;
 		file_info.fFilename = (char*)malloc(512);
 		file_info.fIniDir = (char*)malloc(512);
+		file_info.fFilename[0] = file_info.fIniDir[0] = 0;
 		new TGFileDialog(gClient->GetRoot(), this, kFDOpen, &file_info);
 		if(!file_info.fFilename) return; // user hit "cancel"
 
 		string filename = file_info.fFilename;
 		string dirname  = file_info.fIniDir;
-		fname = dirname + filename;
+		fname = filename;
 	}
 	
 	cout << "Reading configuration from \""<<fname<<"\""<<endl;
@@ -392,7 +393,7 @@ void rs_mainframe::ReadConfig(string fname)
 
 	// Read in file, spliting it into section and tokenizing it
 	map<string, vector<config_item_t> > config_items;
-	TokenizeFile(fname, config_items);
+	if(TokenizeFile(fname, config_items)) return;
 
 	// Remove all existing tabs
 	int Ntabs = fMainTab->GetNumberOfTabs();
