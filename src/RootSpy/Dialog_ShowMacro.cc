@@ -4,6 +4,8 @@
 //    File: Dialog_ShowMacro.cc
 // Creator: davidl
 
+#include <stdint.h>
+
 #include <algorithm>
 #include <iostream>
 #include <sstream>
