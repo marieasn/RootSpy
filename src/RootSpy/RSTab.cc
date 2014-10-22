@@ -33,7 +33,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	
 	// Hoizontal frame (controls to left, canvas to the right)
 	fTabMain = new TGHorizontalFrame(f);
-	f->AddFrame(fTabMain, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY ,2,2,2,2));
+	f->AddFrame(fTabMain, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
 	
 	//...... Controls ......
 	fTabMainLeft = new TGVerticalFrame(fTabMain);
@@ -41,11 +41,15 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	
 	// Info. on what's currently displayed
 	TGVerticalFrame *fTabMainLeftInfo = new TGVerticalFrame(fTabMainLeft);	
-	fTabMainLeft->AddFrame(fTabMainLeftInfo, new TGLayoutHints(kLHintsCenterX | kLHintsTop | kLHintsExpandX,2,2,2,2));
+	fTabMainLeft->AddFrame(fTabMainLeftInfo, new TGLayoutHints(kLHintsCenterX | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
 	AddLabel(fTabMainLeftInfo, "Server:"    ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
 	lServer    = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
 	AddSpacer(fTabMainLeftInfo, 1, 5);
-	AddLabel(fTabMainLeftInfo, "Histogram:" ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
+	
+	TGHorizontalFrame *fTabMainLeftInfoHistLabel = new TGHorizontalFrame(fTabMainLeftInfo);
+	fTabMainLeftInfo->AddFrame(fTabMainLeftInfoHistLabel, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX  ,2,2,2,2));
+	lType      = AddLabel(fTabMainLeftInfoHistLabel, "Histogram:" ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX );
+	bViewMacro = AddButton(fTabMainLeftInfoHistLabel, "view", kLHintsTop| kLHintsExpandX);
 	lHistogram = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
 	AddSpacer(fTabMainLeftInfo, 1, 5);
 	AddLabel(fTabMainLeftInfo, "Received:"  ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
@@ -103,6 +107,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	bSelect->Connect("Clicked()","RSTab", this, "DoSelectHists()");
 	bReset->Connect("Clicked()","RSTab", this, "DoReset()");
 	bRestore->Connect("Clicked()","RSTab", this, "DoRestore()");
+	bViewMacro->Connect("Clicked()","RSTab", this, "DoViewMacro()");
 	
 	// Set some defaults
 	config = title;
@@ -110,7 +115,6 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	currently_displayed_modified = 0.0;
 	last_update = 0.0;
 	last_request_sent = -10.0;
-	last_servers_str_Nlines = 1;
 	hnamepaths_seeded = false;
 }
 
@@ -366,15 +370,10 @@ void RSTab::DoUpdate(void)
 	lServer->SetText(TString(servers_str));
 	lReceived->SetText(TString(tstr));
 	lHistogram->SetText(TString(hnamepath));
-	
-	// Trigger resize of controls widgets if number of
-	// lines changed.
-	int Nlines = 1;
-	for(uint32_t i=0; i<servers_str.length(); i++) if(servers_str[i]=='\n') Nlines++;
-	if(Nlines != last_servers_str_Nlines){
-		fTabMainLeft->Resize();
-		last_servers_str_Nlines = Nlines;
-	}
+	lType->SetText(type==hdef_t::macro ? "Macro:":"Histogram:");
+	bViewMacro->SetEnabled(type==hdef_t::macro);
+	lReceived->Resize();
+	fTabMainLeft->Resize();
 
 	// Draw the histogram/macro
 	map<string,hdef_t>::iterator hdef_it;
@@ -617,6 +616,36 @@ void RSTab::DoRestore(void)
 	for(uint32_t i=0; i<hnamepaths.size(); i++){
 		RS_INFO->RestoreHisto(hnamepaths[i]);
 	}
+}
+
+//----------
+// DoViewMacro
+//----------
+void RSTab::DoViewMacro(void)
+{
+	// If the currently displayed histogram index is out of range, do nothing
+	if((uint32_t)currently_displayed >= hnamepaths.size()) return;
+
+	// Get hnamepath of currently displayed histo/macro
+	list<string>::iterator h_it = hnamepaths.begin();
+	advance(h_it, currently_displayed);
+	string hnamepath = *h_it;
+	
+//	RS_INFO->Lock();
+//	RS_INFO->Unlock();
+	
+	// Get hdef_t of currently displayed macro. Ignore if zero servers
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+    if(hdef_iter==RS_INFO->histdefs.end()) return;
+	if(hdef_iter->second.hists.empty()) return;
+	
+	// Get pointer to macro data
+	hinfo_t &hinfo = hdef_iter->second.hists.begin()->second;
+	string &macro_str = hinfo.macroString;
+
+	string title = "Macro : " + hnamepath;
+	new TGMsgBox(gClient->GetRoot(), RSMF, title.c_str(), macro_str.c_str(), kMBIconAsterisk);
+
 }
 
 //----------

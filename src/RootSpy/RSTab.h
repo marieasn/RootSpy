@@ -22,6 +22,7 @@ using namespace std;
 #include <TGButton.h>
 #include <TGButtonGroup.h>
 #include <TGTextEntry.h>
+#include <TGMsgBox.h>
 #include <TBrowser.h>
 #include <TArrow.h>
 #include <TLatex.h>
@@ -41,8 +42,10 @@ class RSTab{
 		
 		TGVerticalFrame *fTabMainLeft;
 		TGLabel *lServer;
+		TGLabel *lType;
 		TGLabel *lHistogram;
 		TGLabel *lReceived;
+		TGTextButton *bViewMacro;
 		TCanvas *canvas;
 		
 		string title;
@@ -53,7 +56,6 @@ class RSTab{
 		double last_update; // last time when DoUpdate() was called
 		double last_request_sent;
 		string last_request_hnamepath;
-		int last_servers_str_Nlines;
 		bool hnamepaths_seeded; // set to true the first time we see hnamepaths is not empty
 		
 		void SeedHistos(void);
@@ -69,6 +71,7 @@ class RSTab{
 		void DoOverlay(void);
 		void DoReset(void);
 		void DoRestore(void);
+		void DoViewMacro(void);
 		
 		void GetMacroHists(vector<string> &hnamepaths);
 		void RequestUpdatedMacroHists(void);
