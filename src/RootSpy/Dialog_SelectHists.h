@@ -57,7 +57,7 @@ class Dialog_SelectHists:public TGMainFrame{
 	
 #ifndef __CINT__
 		RSTab *rstab;
-		list<string> *hnamepaths; // Where to store results
+		list<string> *hnamepaths; // Where to store results (list things to display only)
 		rs_info::viewStyle_t viewStyle;
 #endif //__CINT__
 		
@@ -74,6 +74,7 @@ class Dialog_SelectHists:public TGMainFrame{
 		vector<hid_t> last_hids;
 		map<hid_t, TGListTreeItem*> server_items;
 		map<hid_t, TGListTreeItem*> hist_items;
+		map<string, bool> item_checked; // key=hnamepath, val=is checked
 		int last_type_filters;
 
 		void CreateGUI(void);
@@ -106,6 +107,7 @@ class Dialog_SelectHists:public TGMainFrame{
 		const TGPicture *unchecked_t;
 
 		string filter_str;
+		string last_filter_str;
 
 		ClassDef(Dialog_SelectHists,1)
 };

@@ -72,6 +72,7 @@ void Dialog_SelectHists::Init(list<string> *hnamepaths)
 	last_type_filters = 0;
 
 	filter_str = "";
+	last_filter_str = "";
 	
 	//viewStyle = rs_info::kViewByServer;
 	viewStyle = rs_info::kViewByObject;
@@ -157,20 +158,6 @@ void Dialog_SelectHists::DoTimer(void)
 	vector<hid_t> hids;
 	GetAllHistos(hids);
 
-	// optionally filter histograms
-	if(filter_str != "") {
-	    vector<hid_t> good_hids;
-
-	    // only keep the histograms that match the filter text
-	    for(vector<hid_t>::iterator hid_itr = hids.begin();
-		hid_itr != hids.end(); hid_itr++) {
-		if( hid_itr->hnamepath.find(filter_str) != string::npos )
-		    good_hids.push_back( *hid_itr );
-	    }
-
-	    hids = good_hids;
-	}
-
 	// Check if list of histos has changed
 	bool hists_changed = false;
 	if(last_hids.size() == hids.size()){
@@ -189,8 +176,9 @@ void Dialog_SelectHists::DoTimer(void)
 	bool filterTProfile = bFilterTProfile->GetState() == kButtonUp;
 	bool filterMacro = bFilterMacro->GetState() == kButtonUp;
 	int type_filters = (filterTH1<<0) + (filterTH2<<1) + (filterTProfile<<2) + (filterMacro<<3);
-	bool filters_changed = type_filters!=last_type_filters;
+	bool filters_changed = (type_filters!=last_type_filters) || (filter_str != last_filter_str);
 	last_type_filters = type_filters;
+	last_filter_str = filter_str;
 
 	// Refill TGListTree if needed
 	if(hists_changed || filters_changed)UpdateListTree(hids);
@@ -276,10 +264,10 @@ void Dialog_SelectHists::DoCancel(void)
 //---------------------------------
 void Dialog_SelectHists::DoClickedEntry(TGListTreeItem* entry, Int_t btn)
 {
-	// Called whenever an item is selected in listTree
-
-	char path[512];
-	listTree->GetPathnameFromItem(entry, path);
+	// This seems to be called when the text or icon but not the actual
+	// checkbox is clicked. Go ahead and toggle the checked status
+	// anyway.
+	entry->Toggle();
 }
 
 //---------------------------------
@@ -287,38 +275,16 @@ void Dialog_SelectHists::DoClickedEntry(TGListTreeItem* entry, Int_t btn)
 //---------------------------------
 void Dialog_SelectHists::DoCheckedEntry(TObject* obj, Int_t check)
 {
-	// Called whenever a checkbox is toggled in listTree
-	TGListTreeItem *item = (TGListTreeItem *)(obj);
+	// Called whenever a checkbox is toggled in listTree.
+	// Unbelievably enough, the value of "obj" is the parent
+	// and NOT the actual item next to the checkbox being clicked.
+	// In order to get the correct item, we have to ask for it
+	// via the mouse location. (What an incredible waste of time
+	// to figure this out!)
+	TGListTreeItem *item = listTree->GetBelowMouse();
 	if(!item) return;
 
-	// Loop over children of this item and set them to inactive
-	TGListTreeItem *child = item->GetFirstChild();
-	while(child){
-		//child->SetActive(check); // seems this was implemented somewhere between ROOT 5.18 and 5.22
-		child = child->GetNextSibling();
-	}
-
-#if 0
-	if(check)
-	{
-		
-/*		for(int c = 0; c < a.GetSize(); c++){
-			CheckItem( dynamic_cast<TGListTreeItem *>(a-> Object) , Bool_t check = kTRUE);
-			a-> Object = a-> Next;
-			
-		}
-*/
-		listTree->CheckAllChildren(item, check);
-		_DBG_<<"Item should have checked all children true"<<check<<" for child of obj 0x"<<hex<< "-" <<(unsigned long)item<<dec<<endl;
-		
-	}
-	else
-	{
-
-		listTree->CheckAllChildren(item, check);
-		_DBG_<<"Item should have checked all children false "<<check<<" for child of obj 0x"<<hex<< "-" <<(unsigned long)item<<dec<<endl;
-	}
-#endif	
+	listTree->CheckAllChildren(item, check);
 }
 
 
@@ -468,6 +434,8 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		if(filterTH2 && hdef->type==hdef_t::twoD) continue;
 		if(filterTProfile && hdef->type==hdef_t::profile) continue;
 		if(filterMacro && hdef->type==hdef_t::macro) continue;
+		if(filter_str!="")
+			if(hnamepath.find(filter_str) == string::npos) continue; 
 
 		// Here we want to create a vector with each of the path
 		// elements (folders) to be displayed and then the final
@@ -475,7 +443,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		vector<string> path;
 		string final;
 		if(viewStyle==rs_info::kViewByObject){
-			path = hdef->dirs;
+			path.insert(path.end(), hdef->dirs.begin(), hdef->dirs.end());
 			path.push_back(hdef->name);
 			final = server;
 		}else{
@@ -487,7 +455,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 
 		// Loop over path elements, adding them as needed
 		vector<TGListTreeItem *> items;
-		string mypath;
+		string mypath = "";
 		for(unsigned int j=0; j<path.size(); j++){
 			mypath += "/" + path[j];
 			TGListTreeItem *item = listTree->FindItemByPathname(mypath.c_str());
@@ -496,6 +464,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 				item = listTree->AddItem(last_item, path[j].c_str());
 			 	item->SetUserData(last_item);
 				listTree->SetCheckBox(item, kTRUE);
+				listTree->SetCheckBox(item, TGListTree::kSimple);
 				item->SetCheckBoxPictures(checked_t, unchecked_t);
 
 				bool show_open = false;
