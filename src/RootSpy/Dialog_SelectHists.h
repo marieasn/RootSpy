@@ -51,6 +51,7 @@ class Dialog_SelectHists:public TGMainFrame{
 		void DoSelectAll(void);
 		void DoSelectNone(void);
 
+		void Redraw(TGFrame *f);
 
 	protected:
 	
@@ -79,6 +80,7 @@ class Dialog_SelectHists:public TGMainFrame{
 
 		TGCheckButton *bFilterTH1;
 		TGCheckButton *bFilterTH2;
+		TGCheckButton *bFilterTProfile;
 		TGCheckButton *bFilterMacro;
 
 		TGCanvas *canvas;
@@ -102,11 +104,6 @@ class Dialog_SelectHists:public TGMainFrame{
 		const TGPicture *hdisk_t;
 		const TGPicture *checked_t;
 		const TGPicture *unchecked_t;
-//		//JustinB Boolean that is read within DoTimer 
-//		//of Dialog_SelectHists to know when to save.
-//		bool tosave; 
-//		//Justin B. For DoSave().
-//		TGFileInfo* fileinfo;
 
 		string filter_str;
 

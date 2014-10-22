@@ -186,8 +186,9 @@ void Dialog_SelectHists::DoTimer(void)
 	// if the filter settings have changed.
 	bool filterTH1 = bFilterTH1->GetState() == kButtonUp;
 	bool filterTH2 = bFilterTH2->GetState() == kButtonUp;
+	bool filterTProfile = bFilterTProfile->GetState() == kButtonUp;
 	bool filterMacro = bFilterMacro->GetState() == kButtonUp;
-	int type_filters = (filterTH1<<0) + (filterTH2<<1) + (filterMacro<<2);
+	int type_filters = (filterTH1<<0) + (filterTH2<<1) + (filterTProfile<<2) + (filterMacro<<3);
 	bool filters_changed = type_filters!=last_type_filters;
 	last_type_filters = type_filters;
 
@@ -376,7 +377,8 @@ void Dialog_SelectHists::DoSelectAll(void)
 		my_item->CheckAllChildren(kTRUE);
 		my_item = my_item->GetNextSibling();
 	}
-	Resize();
+	
+	Redraw(this);
 }
 
 //---------------------------------
@@ -389,7 +391,21 @@ void Dialog_SelectHists::DoSelectNone(void)
 		my_item->CheckAllChildren(kFALSE);
 		my_item = my_item->GetNextSibling();
 	}
-	Resize();
+
+	Redraw(this);
+}
+
+//---------------------------------
+// Redraw
+//---------------------------------
+void Dialog_SelectHists::Redraw(TGFrame *f)
+{
+	// This unfortunate business seems to be needed to get the listbox to redraw itself
+	TGDimension dim = f->GetSize();
+	dim.fWidth+=1;
+	f->Resize(dim);
+	dim.fWidth-=1;
+	f->Resize(dim);
 }
 
 //---------------------------------
@@ -431,6 +447,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 	// Filter by type
 	bool filterTH1 = bFilterTH1->GetState() == kButtonUp;
 	bool filterTH2 = bFilterTH2->GetState() == kButtonUp;
+	bool filterTProfile = bFilterTProfile->GetState() == kButtonUp;
 	bool filterMacro = bFilterMacro->GetState() == kButtonUp;
 
 	// Loop over histograms
@@ -449,6 +466,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		// Apply type filters
 		if(filterTH1 && hdef->type==hdef_t::oneD) continue;
 		if(filterTH2 && hdef->type==hdef_t::twoD) continue;
+		if(filterTProfile && hdef->type==hdef_t::profile) continue;
 		if(filterMacro && hdef->type==hdef_t::macro) continue;
 
 		// Here we want to create a vector with each of the path
@@ -620,12 +638,15 @@ void Dialog_SelectHists::CreateGUI(void)
 	TGVerticalFrame *fTypeFilters = new TGVerticalFrame(fHorizontalFrame802);
 	bFilterTH1 = new TGCheckButton(fTypeFilters, "TH1");
 	bFilterTH2 = new TGCheckButton(fTypeFilters, "TH2");
+	bFilterTProfile = new TGCheckButton(fTypeFilters, "TProfile");
 	bFilterMacro = new TGCheckButton(fTypeFilters, "Macros");
 	bFilterTH1->SetOn();
 	bFilterTH2->SetOn();
+	bFilterTProfile->SetOn();
 	bFilterMacro->SetOn();
 	fTypeFilters->AddFrame(bFilterTH1, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 	fTypeFilters->AddFrame(bFilterTH2, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
+	fTypeFilters->AddFrame(bFilterTProfile, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 	fTypeFilters->AddFrame(bFilterMacro, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 	fHorizontalFrame802->AddFrame(fTypeFilters, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
