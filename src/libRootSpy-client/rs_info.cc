@@ -594,11 +594,11 @@ void  rs_info::ResetHisto(const string &hnamepath)
 }
 
 //---------------------------------
-// UnresetHisto
+// RestoreHisto
 //---------------------------------
-void  rs_info::UnresetHisto(const string &hnamepath)
+void  rs_info::RestoreHisto(const string &hnamepath)
 {
-	cout << "Unresetting histo: " << hnamepath << endl;
+	cout << "Restoreting histo: " << hnamepath << endl;
 
 	RS_INFO->Lock();
 

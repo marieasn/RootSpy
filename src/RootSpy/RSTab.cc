@@ -70,7 +70,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	TGTextButton *bSelect = AddButton(fDisplayOptions, "Select", kLHintsExpandX);
 	AddSpacer(fDisplayOptions, 1, 5);
 	TGTextButton *bReset = AddButton(fDisplayOptions, "Reset", kLHintsExpandX);
-	TGTextButton *bUnreset = AddButton(fDisplayOptions, "Un-Reset", kLHintsExpandX);
+	TGTextButton *bRestore = AddButton(fDisplayOptions, "Restore", kLHintsExpandX);
 	
 	// Buttons at bottom left
 	TGVerticalFrame *fTabMainLeftBottom = new TGVerticalFrame(fTabMainLeft);
@@ -102,7 +102,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	bUpdate->Connect("Clicked()","RSTab", this, "DoUpdateWithFollowUp()");
 	bSelect->Connect("Clicked()","RSTab", this, "DoSelectHists()");
 	bReset->Connect("Clicked()","RSTab", this, "DoReset()");
-	bUnreset->Connect("Clicked()","RSTab", this, "DoUnreset()");
+	bRestore->Connect("Clicked()","RSTab", this, "DoRestore()");
 	
 	// Set some defaults
 	config = title;
@@ -608,14 +608,14 @@ void RSTab::DoReset(void)
 }
 
 //----------
-// DoUnreset
+// DoRestore
 //----------
-void RSTab::DoUnreset(void)
+void RSTab::DoRestore(void)
 {
 	vector<string> hnamepaths;
 	GetMacroHists(hnamepaths);
 	for(uint32_t i=0; i<hnamepaths.size(); i++){
-		RS_INFO->UnresetHisto(hnamepaths[i]);
+		RS_INFO->RestoreHisto(hnamepaths[i]);
 	}
 }
 

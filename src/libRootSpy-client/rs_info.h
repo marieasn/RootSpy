@@ -75,7 +75,7 @@ class rs_info{
 		void  TraverseTree(TObjArray *branch_list, vector<string>  &treeinfo);
 		void  LoadMacro(string name, string path, string macro_data);
 		void  ResetHisto(const string &hnamepath);
-		void  UnresetHisto(const string &hnamepath);
+		void  RestoreHisto(const string &hnamepath);
 
 		void Reset();
 

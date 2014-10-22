@@ -68,7 +68,7 @@ class RSTab{
 		void DoSelectHists(void);
 		void DoOverlay(void);
 		void DoReset(void);
-		void DoUnreset(void);
+		void DoRestore(void);
 		
 		void GetMacroHists(vector<string> &hnamepaths);
 		void RequestUpdatedMacroHists(void);
