@@ -11,6 +11,7 @@
 #include "rs_cmsg.h"
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectHists.h"
+#include "Dialog_ShowMacro.h"
 
 #include "TGaxis.h"
 
@@ -644,7 +645,8 @@ void RSTab::DoViewMacro(void)
 	string &macro_str = hinfo.macroString;
 
 	string title = "Macro : " + hnamepath;
-	new TGMsgBox(gClient->GetRoot(), RSMF, title.c_str(), macro_str.c_str(), kMBIconAsterisk);
+	
+	new Dialog_ShowMacro(title, macro_str);
 
 }
 
