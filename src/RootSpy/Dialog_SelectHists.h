@@ -40,9 +40,10 @@ class Dialog_SelectHists:public TGMainFrame{
 		void DoTimer(void);
 		void DoOK(void);
 		void DoCancel(void);
-		void DoClickedEntry(TGListTreeItem* entry, Int_t btn);
 		void DoSelectSingleHist(TGListTreeItem* entry, Int_t btn);
+		void DoClickedEntry(TGListTreeItem* entry, Int_t btn);
 		void DoCheckedEntry(TObject* obj, Int_t check);
+		void GetChecked(TGListTreeItem *item, bool check_siblings=true);
 		void DoSetViewByObject(void);
 		void DoSetViewByServer(void);
 		void GetAllHistos(vector<hid_t> &hids);

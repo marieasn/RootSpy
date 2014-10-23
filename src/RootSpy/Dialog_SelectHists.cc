@@ -57,6 +57,13 @@ void Dialog_SelectHists::Init(list<string> *hnamepaths)
 
 	// Define all of the of the graphics objects. 
 	CreateGUI();
+	
+	// The item_checked map keeps track of the checked status
+	// of all items, even ones not currently displayed in the
+	// listbox due to filters. Initialize it with the input
+	// hnamepaths list since those should all be checked initially
+	list<string>::iterator it = hnamepaths->begin();
+	for(; it!=hnamepaths->end(); it++) item_checked[*it] = true;
 
 	// Set up timer to call the DoTimer() method repeatedly
 	// so events can be automatically advanced.
@@ -193,7 +200,13 @@ void Dialog_SelectHists::DoOK(void)
 {	
 	// Replace existing list of hnamepaths
 	hnamepaths->clear();
-
+	
+	map<string,bool>::iterator iter = item_checked.begin();
+	for(; iter!=item_checked.end(); iter++){
+		if(iter->second) hnamepaths->push_back(iter->first);
+	}
+	
+#if 0
 	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
 	for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
 	
@@ -210,6 +223,7 @@ void Dialog_SelectHists::DoOK(void)
 //			if(!item->IsChecked() ) hnamepaths->erase(it);
 //		}
 	}
+#endif
 	
 	// If we were given an RSTab pointer, use it to update the current tab
 	if(rstab) rstab->DoUpdateWithFollowUp();
@@ -224,29 +238,32 @@ void Dialog_SelectHists::DoSelectSingleHist(TGListTreeItem* entry, Int_t btn)
 {
     char path[512];
     listTree->GetPathnameFromItem(entry, path);
+	 string hnamepath(path);
+	 
+	 // Find if this is a histogram/macro by checking if there is an
+	 // entry in the item_checked map. If not, then ignore the double-click
+	 if(item_checked.find(hnamepath) == item_checked.end()) return;
+	 
+	 RS_INFO->Lock();
+	 
+	 // Now, check if this histogram is already in the list passed to us by
+	 // the RSTab. If not, then add it.
+	 list<string>::iterator it = hnamepaths->begin();
+	 bool found = false;
+	 for(; it!=hnamepaths->end(); it++){
+	 	if(*it == hnamepath){
+			found = true;
+			break;
+		}
+	 }
+	 if(!found) hnamepaths->push_back(hnamepath);
+	 
+	 // Tell RSTab to make this the currently displayed histo/macro
+	 if(rstab) rstab->SetTo(hnamepath);
+	 
+	 RS_INFO->Unlock();
 
-    // allow double clicks to select a particular histogram to display
-    _DBG_ << " selected entry " << entry->GetText() << " with path = " << path << endl;
-    entry->CheckItem();
-    bool found = false;
-    
-    RS_INFO->Lock();
-    
-    // to start with, only display histograms that correspond to the one that is clicked
-    map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
-    for(; hist_items_iter!=hist_items.end(); hist_items_iter++){
-	    if(hist_items_iter->second == entry) {
-		    found = true;
-		    if(rstab) rstab->SetTo(hist_items_iter->first.hnamepath);
-		    break;
-	    }
-    }
-    
-    RS_INFO->Unlock();
-    
-    // Finish off like we normally would
-    if(found)
-	    DoOK();
+    CloseWindow();
 }
 
 
@@ -265,9 +282,14 @@ void Dialog_SelectHists::DoCancel(void)
 void Dialog_SelectHists::DoClickedEntry(TGListTreeItem* entry, Int_t btn)
 {
 	// This seems to be called when the text or icon but not the actual
-	// checkbox is clicked. Go ahead and toggle the checked status
-	// anyway.
-	entry->Toggle();
+	// checkbox is clicked.
+
+	Bool_t check = !entry->IsChecked();
+	
+	listTree->CheckAllChildren(entry, check);
+	
+	// Loop over all children, setting the item_checked 
+	GetChecked(entry, false);
 }
 
 //---------------------------------
@@ -285,8 +307,31 @@ void Dialog_SelectHists::DoCheckedEntry(TObject* obj, Int_t check)
 	if(!item) return;
 
 	listTree->CheckAllChildren(item, check);
+	
+	// Loop over all children, setting the item_checked 
+	GetChecked(item, false);
 }
 
+//---------------------------------
+// GetChecked
+//---------------------------------
+void Dialog_SelectHists::GetChecked(TGListTreeItem *item, bool check_siblings)
+{
+	while(item){
+		// Set checked state, but only if this is currently listed in item_checked
+		// Otherwise, it is probably not a valid hnamepath (just a partial)
+		char str[512] = "";
+		listTree->GetPathnameFromItem(item, str);
+		string hnamepath(str);
+		if(item_checked.find(hnamepath) != item_checked.end()) {
+			item_checked[hnamepath] = item->IsChecked();
+			_DBG_<<hnamepath<<endl;
+		}
+		if(item->GetFirstChild()) GetChecked(item->GetFirstChild());
+		
+		item = check_siblings ? item->GetNextSibling():NULL;
+	}
+}
 
 //---------------------------------
 // DoSetViewByObject
@@ -435,7 +480,11 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		if(filterTProfile && hdef->type==hdef_t::profile) continue;
 		if(filterMacro && hdef->type==hdef_t::macro) continue;
 		if(filter_str!="")
-			if(hnamepath.find(filter_str) == string::npos) continue; 
+			if(hnamepath.find(filter_str) == string::npos) continue;
+		
+		// Check if this hnamepath is already in the item_checked map
+		// and add it (unchecked) if it is not
+		//if(item_checked.find[hnamepath] == item_checked.end()) item_checked[hnamepath] = false;
 
 		// Here we want to create a vector with each of the path
 		// elements (folders) to be displayed and then the final
@@ -464,7 +513,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 				item = listTree->AddItem(last_item, path[j].c_str());
 			 	item->SetUserData(last_item);
 				listTree->SetCheckBox(item, kTRUE);
-				listTree->SetCheckBox(item, TGListTree::kSimple);
+				//listTree->SetCheckBoxMode(item, TGListTree::kSimple);
 				item->SetCheckBoxPictures(checked_t, unchecked_t);
 
 				bool show_open = false;
@@ -531,7 +580,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 			case hdef_t::macro:   hist_item->SetPictures(package_t, package_t); break;
 		}
 		if(!server_checkbox)server_item->Toggle();
-		if(!hist_checkbox)hist_item->Toggle();
+		if(!item_checked[hnamepath])hist_item->Toggle();
 
 		server_items[hid_t(server,hnamepath)] = server_item;
 		hist_items[hid_t(server,hnamepath)] = hist_item;
