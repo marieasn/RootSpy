@@ -80,6 +80,7 @@ using namespace config;
 
 
 void MainLoop(rs_archiver &c);
+void GetAllHists(void);
 void EndRunProcessing(rs_archiver &c);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
@@ -263,8 +264,8 @@ void EndRunProcessing(rs_archiver &c)
 //-----------
 void MainLoop(rs_archiver &c)
 {
-    //time_t time_last_run = time(NULL);	
-	
+
+    // Loop until we are told to stop for some reason	
     while(!DONE) {
 		
 	if(VERBOSE>0) {
@@ -274,154 +275,74 @@ void MainLoop(rs_archiver &c)
 
 	// keeps the connections alive, and keeps the list of servers up-to-date
 	RS_CMSG->PingServers();
-	
-#if 0
-	// end-of-run processing
-	if(FINALIZE) {
-	  if(VERBOSE>0) 
-	    _DBG_ << "in finalize logic..." << endl;
 
-	  RS_INFO->Lock();
-	  //pthread_t the_thread; 
-	  
-	  // ask each server for their "final" histograms
-	  for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
-	      server_it != RS_INFO->servers.end(); server_it++) {
-	    // don't ask for zero histograms, it will crash cMsg
-	    if( server_it->second.hnamepaths.size() == 0 ) continue;
-	    
-	    if(VERBOSE>0) 
-	      _DBG_ << "sending request to" << server_it->first 
-		  << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
-	    
-	    RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
-	  }		
-	  
-	  map<string,server_info_t> *current_servers = new map<string,server_info_t>(RS_INFO->servers);
-
-	  RS_INFO->Unlock();
-		
-	  
-	  // make a thread to handle collecting the final histograms
-	  //pthread_create(&the_thread, NULL, ArchiveFile, 
-	  //new map<string,server_info_t>(RS_INFO->servers) ); 
-	  //thread_ids.push_back(the_thread);
-	  
-	  ArchiveFile( c.getRunNumber(), current_servers );
-		
-	  FINALIZE=false;   // done getting final histograms
-	}
-#endif
-
-	if(!RUN_IN_PROGRESS) {
-	    if(VERBOSE>0) 
-	    _DBG_ << "no current run, sleeping..." << endl;
-	    sleep(1);
-	    continue;
-	}
-
-	
-	// Okay, we are running, let's do some processing
-	RS_INFO->Lock();
-	// update list of histograms
-	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
-	    server_it != RS_INFO->servers.end(); server_it++) {
-	    RS_CMSG->RequestHists(server_it->first);
-	    //RS_CMSG->RequestTreeInfo(server_it->first);
-	}
-
-
-	// get/save information
-	for(map<string,server_info_t>::const_iterator server_it = RS_INFO->servers.begin();
-	    server_it != RS_INFO->servers.end(); server_it++) {
-
-	    // get/save current histogram versions
-	    for(vector<string>::const_iterator hist_it = server_it->second.hnamepaths.begin();
-		hist_it != server_it->second.hnamepaths.end(); hist_it++) {
-		RS_CMSG->RequestHistogram(server_it->first, *hist_it);
-	    }
-	    /*
-	    // get/save current status of trees
-	    for(vector<tree_info_t>::const_iterator tree_it = server_it->second.trees.begin();
-		tree_it != server_it->second.trees.end(); tree_it++) {
-		RS_CMSG->RequestTree(server_it->first, tree_it->name, tree_it->path);
-	    }
-	    */
-	}
-	
-
-
-	// save current state of summed histograms
-	pthread_rwlock_wrlock(ROOT_MUTEX);
-	RS_INFO->sum_dir->ls();
-
-	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
-	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
-	
-	if(HTML_OUTPUT)
-	  html_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "html");
-	if(PDF_OUTPUT)
-	  pdf_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR + "/html");
-	
-	
-	pthread_rwlock_unlock(ROOT_MUTEX);
-	RS_INFO->Unlock();
-
+	GetAllHists();
 
 	// sleep for awhile
 	sleep(POLL_DELAY);
-
-
-	/**
-	// make sure we sleep for the full amount even if we get hit with a signal
-	// so that we can use signals to test begin/end run behavior
-	// NOTE that we should really do this with cMsg, or something like that, 
-	// whenever some canonical behavior is defined
-	time_t now = time(NULL);
-	time_t start_time = now;
-
-	while(now < start_time+POLL_DELAY) {  
-
-	  //if( FINALIZE || !RUN_IN_PROGRESS ) break;
-	  if( !RUN_IN_PROGRESS ) {
-	    _DBG_ << "dropping out of sleep loop!" << endl;
-	    break;
-	  }
-
-	    // handle signals
-
-	    // time to end the run, save the current file, and start a new one
-	    // This should also be moved to a cMsg handler at some point
-	    // more for testing, probably don't need this anymore	    
-
-	    sleep(POLL_DELAY - (now-start_time));
-	    now = time(NULL);
-	    
-	    
-	    }
-	**/
     }
 }
 
 
+//-----------
+// GetAllHists
+//-----------
+void GetAllHists(void)
+{
+	// update list of histograms from all servers and give them 2 seconds to respond
+	RS_CMSG->RequestHists("rootspy");
+	sleep(2);
+
+
+	// Request all histograms from all servers and give them 2 seconds to respond
+	RS_INFO->Lock();
+	map<string,hdef_t>::iterator iter = RS_INFO->histdefs.begin();
+	for(; iter!=RS_INFO->histdefs.end(); iter++){
+	       RS_INFO->RequestHistograms(iter->first, false);
+	}	
+	RS_INFO->Unlock();
+	sleep(2);
+
+	// Lock mutexes
+	RS_INFO->Lock();
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+
+	// save current state of summed histograms
+	if(VERBOSE>1) RS_INFO->sum_dir->ls();
+
+	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
+	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
+
+	if(HTML_OUTPUT)
+	 html_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "html");
+	if(PDF_OUTPUT)
+	 pdf_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR + "/html");
+
+	// Unlock mutexes
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	RS_INFO->Unlock();
+}
+
+//-----------
+// signal_stop_handler
+//-----------
 void signal_stop_handler(int signum)
 {
-	
     cerr << "received signal " << signum << "..." << endl;
     cerr << "cleaning up and exiting..." << endl;
 
     // let main loop know that it's time to stop
-    //KEEP_RUNNING = false;
     DONE = true;
     FINALIZE = true;    // only run program once per run, so get final histograms when we are done
 }
 
+//-----------
+// signal_finalize_handler
+//-----------
 void signal_finalize_handler(int signum)
 {
-    FINALIZE = true;
-    
+    FINALIZE = true;   
 }
-
 
 //-----------
 // ParseCommandLineArguments
@@ -497,7 +418,8 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         {"pdf-output",     no_argument,       0,  'P' },
         {"html-output",    no_argument,       0,  'H' },
         {"session-name",   no_argument,       0,  'S' },
-	{"summary-dir",    required_argument, 0,  'Y' },
+        {"summary-dir",    required_argument, 0,  'Y' },
+        {"verbose",        no_argument,       0,  'V' },
         //{"", required_argument, 0,  '' },
 
         {0, 0, 0, 0  }
@@ -506,7 +428,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
   int opt = 0;
   int long_index = 0;
   //while ((opt = getopt_long(narg, argv,"hR:p:u:q:s:A:F:PHSY:", 
-  while ((opt = getopt_long(narg, argv,"hR:p:u:s:A:F:PHY:", 
+  while ((opt = getopt_long(narg, argv,"hR:p:u:s:A:F:PHY:v", 
 			    long_options, &long_index )) != -1) {
     switch (opt) {
     case 'R':
@@ -561,6 +483,9 @@ void ParseCommandLineArguments(int &narg, char *argv[])
       break;
     case 'S' :
       SESSION = optarg;
+      break;
+    case 'v' :
+      VERBOSE++;
       break;
 
     case 'h':
@@ -626,6 +551,7 @@ void Usage(void)
     cout<<"   -P,--pdf-output           Enable output of summary PDF"<<endl;
     cout<<"   -H,--html-output          Enable output of summary web pages"<<endl;
     cout<<"   -Y,--summary-dir path     Directory used to store summary files"<<endl;
+    cout<<"   -v,--verbose              Increase verbosity (can use multiple times)"<<endl;
     cout<<endl;
     cout<<endl;
     
@@ -761,6 +687,7 @@ void ArchiveFile(int run_number, map<string,server_info_t> *the_servers)
     //TFile *archive_file = new TFile(ss.str().c_str(), "create");
     TFile *archive_file = new TFile(ARCHIVE_FILENAME.c_str(), "create");
     if(!IsGoodTFile(archive_file)) {
+   if(VERBOSE>1) _DBG_<<"  Unable to create good archive file \""<<ARCHIVE_FILENAME<<"\". Bailing."<<endl;
 	delete the_servers;
 	return;
 	//return NULL;
