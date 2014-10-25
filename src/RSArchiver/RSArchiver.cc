@@ -80,7 +80,7 @@ using namespace config;
 
 
 void MainLoop(rs_archiver &c);
-void GetAllHists(void);
+void GetAllHists(uint32_t Twait=2); // Twait is in seconds
 void EndRunProcessing(rs_archiver &c);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
@@ -132,7 +132,7 @@ int main(int narg, char *argv[])
     // make file to store "current" status of summed histograms
     CURRENT_OUTFILE = new TFile(OUTPUT_FILENAME.c_str(), "recreate"); 
     if(!IsGoodTFile(CURRENT_OUTFILE)) {
-	cout << "Couldn't make outpit file, exiting" << endl;
+	cout << "Couldn't make output file, exiting" << endl;
 	return 0;
     }
 
@@ -166,8 +166,8 @@ int main(int narg, char *argv[])
     char hostname[256];
     gethostname(hostname, 256);
     char str[512];
-    //sprintf(str, "RSArchiver_%d", getpid());
-    sprintf(str, "RSArchiver");
+    sprintf(str, "RSArchiver_%d", getpid());
+    //sprintf(str, "RSArchiver");
     CMSG_NAME = string(str);
     cout << "Full UDL is " << ROOTSPY_UDL << endl;
     RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
@@ -189,7 +189,6 @@ int main(int narg, char *argv[])
 
     // Get the "final" histograms and archive them to disk
     EndRunProcessing(c);
-
 
     // clean up and write out the current state of the summed histograms to a file
     // before quitting
@@ -287,32 +286,44 @@ void MainLoop(rs_archiver &c)
 //-----------
 // GetAllHists
 //-----------
-void GetAllHists(void)
+void GetAllHists(uint32_t Twait)
 {
+	/// This will send a request out to all servers for their list of defined
+	/// histograms. It will wait for 2 seconds for them to respond and then
+	/// it will send another request to every server for every histogram giving
+	/// them another "Twait" seconds to respond. If Twait is not "zero" then
+	/// the any output documents (html or PDF) that have been flagged for generation
+	/// will be generated.
+	///
+	/// n.b. This routine will take a minimum of Twait+2 seconds to complete!
+
 	// update list of histograms from all servers and give them 2 seconds to respond
 	RS_CMSG->RequestHists("rootspy");
 	sleep(2);
 
-
-	// Request all histograms from all servers and give them 2 seconds to respond
+	// Request all histograms from all servers
 	RS_INFO->Lock();
 	map<string,hdef_t>::iterator iter = RS_INFO->histdefs.begin();
 	for(; iter!=RS_INFO->histdefs.end(); iter++){
 	       RS_INFO->RequestHistograms(iter->first, false);
 	}	
 	RS_INFO->Unlock();
-	sleep(2);
+	
+	// If Twait is "0", then return now.
+	if(Twait == 0) return;
+	
+	// Give servers Twait seconds to respond with histograms
+	if(VERBOSE>1) cout << "Waiting "<<Twait<<" seconds for servers to send histograms" << endl;
+	sleep(Twait);
 
 	// Lock mutexes
 	RS_INFO->Lock();
 	pthread_rwlock_wrlock(ROOT_MUTEX);
 
-	// save current state of summed histograms
-	if(VERBOSE>1) RS_INFO->sum_dir->ls();
-
-	//SaveTrees( CURRENT_OUTFILE );   // need to change how we handle current file
+	// Save current state of summed histograms to output file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
 
+	// Optionally generate documents
 	if(HTML_OUTPUT)
 	 html_generator->GenerateOutput(RS_INFO->sum_dir, HTML_BASE_DIR, "html");
 	if(PDF_OUTPUT)
