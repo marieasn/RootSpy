@@ -512,7 +512,7 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		hist_paths = msg->getStringVector("hist_paths");
 		hist_titles = msg->getStringVector("hist_titles");
 	} catch (cMsgException e) {
-		if(verbose>0) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+		if(verbose>2) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
 		return;
 	}
 
@@ -535,7 +535,7 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		return;
 	}
 
-	if(verbose>=2) _DBG_ << "got histogram list from " << server << endl;
+	if(verbose>2) _DBG_ << "got histogram list from " << server << endl;
 
 	// Looks like we got a good response. Loop over histograms and add them to
 	// list of hdef_t objects kept in RS_INFO. If there is already an entry
@@ -1004,7 +1004,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
     
     // Add new histogram to sum and flag it as modified
-    if(verbose>=2) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
+    if(verbose>=3) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
     if(hdef->sum_hist){
 		// Reset sum histo first if showing only one histo at a time
 		if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
@@ -1022,7 +1022,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 		hist_sum_dir = dir;
 	  }
 	  
-      if(verbose>=2) cout << "saving in directory " << sum_path << endl;
+      if(verbose>2) cout << "saving in directory " << sum_path << endl;
 
       string sum_hist_name = string(h->GetName())+"__sum";
       hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
