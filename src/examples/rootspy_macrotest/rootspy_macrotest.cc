@@ -28,7 +28,7 @@ int main(int narg, char *argv[])
 	TCanvas *c1 = new TCanvas("c1", "", 600, 600);
 
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 	// Random number generator
 	TRandom ran;
@@ -100,7 +100,7 @@ int main(int narg, char *argv[])
 	////////////////////////////////////
 
 	// Release lock on ROOT global
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// list current histograms
 	gDirectory->ls();

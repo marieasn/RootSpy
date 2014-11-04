@@ -29,7 +29,7 @@ int main(int narg, char *argv[])
 	signal(SIGINT, sigHandler);
 	
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 	// Define some histograms to file
 
@@ -76,7 +76,7 @@ int main(int narg, char *argv[])
 	TRandom ran;
 			
 	// Release lock on ROOT global
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 	
 	// Loop forever while filling the hists
 	cout<<endl<<"Filling histograms ..."<<endl;
@@ -100,7 +100,7 @@ int main(int narg, char *argv[])
 		Mass = sqrt(Etot*Etot - p*p);
 
 		// Lock access to ROOT global while we access it
-		pthread_mutex_lock(gROOTSPY_MUTEX);
+		pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 		h_px->Fill(px);
 		h_py->Fill(py);
@@ -119,7 +119,7 @@ int main(int narg, char *argv[])
 		}
 
 		// Release lock on ROOT global
-		pthread_mutex_unlock(gROOTSPY_MUTEX);
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 		
 		if(((++Nevents) % 100)==0){
 		  //gDirectory->ls();

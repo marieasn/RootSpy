@@ -47,7 +47,7 @@ typedef struct{
 // --------- GLOBALS ----------------
 DRootSpy *gROOTSPY = NULL;
 sem_t RootSpy_final_sem;
-pthread_mutex_t *gROOTSPY_MUTEX = NULL;
+pthread_rwlock_t *gROOTSPY_RW_LOCK = NULL;
 vector<RS_QUEUED_MACRO_t> QUEUED_MACROS;
 
 //...................................................
@@ -88,9 +88,9 @@ DRootSpy::DRootSpy(string udl)
 // DRootSpy    (Constructor)
 //---------------------------------
 //TODO: documentation comment.
-DRootSpy::DRootSpy(pthread_mutex_t *mutex, string udl)
+DRootSpy::DRootSpy(pthread_rwlock_t *rw_lock, string udl)
 {
-	Initialize(mutex, udl);
+	Initialize(rw_lock, udl);
 }
 
 //---------------------------------
@@ -99,29 +99,29 @@ DRootSpy::DRootSpy(pthread_mutex_t *mutex, string udl)
 /// This is called from the constructors and should not be
 /// called from anywhere else.
 //---------------------------------
-void DRootSpy::Initialize(pthread_mutex_t *mutex, string myUDL)
+void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 {
 
-	// Initialize the gROOTSPY_MUTEX global either with the user
-	// supplied mutex or by allocating our own.
-	if(mutex){
-		// User provided mutex for locking ROOT global
-		gROOTSPY_MUTEX = mutex;
-		own_gROOTSPY_MUTEX = false;
+	// Initialize the gROOTSPY_RW_LOCK global either with the user
+	// supplied rw_lock or by allocating our own.
+	if(rw_lock){
+		// User provided rw_lock for locking ROOT global
+		gROOTSPY_RW_LOCK = rw_lock;
+		own_gROOTSPY_RW_LOCK = false;
 	}else{
-		// Create our own mutex. Make it error checking.
-		pthread_mutexattr_t attr;
-		pthread_mutexattr_init(&attr);
-		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
-		gROOTSPY_MUTEX = new pthread_mutex_t;
-		pthread_mutex_init(gROOTSPY_MUTEX, &attr);
-		own_gROOTSPY_MUTEX = true;
+		// Create our own rw_lock. Make it shared.
+		pthread_rwlockattr_t attr;
+		pthread_rwlockattr_init(&attr);
+		pthread_rwlockattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+		gROOTSPY_RW_LOCK = new pthread_rwlock_t;
+		pthread_rwlock_init(gROOTSPY_RW_LOCK, &attr);
+		own_gROOTSPY_RW_LOCK = true;
 	}
 
 	// Initialize member data
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 	hist_dir = gDirectory;
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 	
 	// Create a unique name for ourself
 	char hostname[256];
@@ -226,9 +226,9 @@ DRootSpy::~DRootSpy()
 
 	sem_destroy(&RootSpy_final_sem);
 	
-	if(own_gROOTSPY_MUTEX && gROOTSPY_MUTEX!=NULL){
-		delete gROOTSPY_MUTEX;
-		gROOTSPY_MUTEX = NULL;
+	if(own_gROOTSPY_RW_LOCK && gROOTSPY_RW_LOCK!=NULL){
+		delete gROOTSPY_RW_LOCK;
+		gROOTSPY_RW_LOCK = NULL;
 	}
 }
 
@@ -343,7 +343,7 @@ void DRootSpy::listHists(cMsgMessage &response)
 {
 
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
 	hist_dir = gDirectory;
 	
@@ -352,7 +352,7 @@ void DRootSpy::listHists(cMsgMessage &response)
 	addRootObjectsToList(hist_dir, hinfos);
 	
 	// Release lock on ROOT global
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 	
 	// If any histograms were found, copy their info into the message
 	if(hinfos.size()>0) {
@@ -400,7 +400,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
 	if(path[path.length()-1]==':')path += "/";
 
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
 	// Get pointer to ROOT object
 	TDirectory *savedir = gDirectory;
@@ -410,7 +410,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
 	
 	// If object not found, release lock on ROOT global and return
 	if(!obj){
-		pthread_mutex_unlock(gROOTSPY_MUTEX);
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 		return;
 	}
 
@@ -423,7 +423,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
 
 	// Finished with TMessage object. Free it and release lock on ROOT global
 	delete tm;
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// Send message containing histogram (asynchronously)
 	cMsgSys->send(&response);	
@@ -465,7 +465,7 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath) {
 	macro_info_t &the_macro = the_macro_itr->second;
 
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
 	TDirectory *savedir = gDirectory;
 	
@@ -518,7 +518,7 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath) {
 
 	// Finished with TMessage object. Free it and release lock on ROOT global
 	delete tm;
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// Send message containing histogram (asynchronously)
 	cMsgSys->send(&response);	
@@ -534,7 +534,7 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath) {
 void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_t nentries_to_save) {
 
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
 	// Get pointer to tree
 	TDirectory *savedir = gDirectory;
@@ -544,14 +544,14 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 
 	// If object not found, release lock on ROOT global and return
 	if(!obj){
-		pthread_mutex_unlock(gROOTSPY_MUTEX);
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 		return;
 	}
 
 	// Make sure this is a TTree
 	if(strcmp(obj->ClassName(), "TTree")){
 		cout << "Request for tree \""<<name<<"\" but that's not a TTree (it's a "<<obj->ClassName()<<")" << endl;
-		pthread_mutex_unlock(gROOTSPY_MUTEX);
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 		return;
 	}
 
@@ -582,7 +582,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	if(!tree_copy){
 		cout << "Unable to make temporary copy of tree for transport!" << endl;
 		if(f) { f->Close(); delete f; f = NULL;}
-		pthread_mutex_unlock(gROOTSPY_MUTEX);
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 		return;
 	}
 
@@ -619,7 +619,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 
 	// Finished with TMessage object. Free it and release lock on ROOT global
 	delete tm;
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	cMsgSys->send(&response);
 
@@ -632,13 +632,13 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 void DRootSpy::treeInfo(string sender) {
 
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
 	hist_dir = gDirectory;
 	findTreeObjForMsg(hist_dir, sender);
 
 	// Release ROOT global
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 }
 
 //---------------------------------
@@ -648,7 +648,7 @@ void DRootSpy::treeInfo(string sender) {
 void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
 
 	// Lock access to ROOT global while we access it
-	pthread_mutex_lock(gROOTSPY_MUTEX);
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
     hist_dir = gDirectory;
     vector<string> tree_names, tree_titles, tree_paths;
@@ -665,7 +665,7 @@ void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
 	}
 	
 	// Release ROOT global
-	pthread_mutex_unlock(gROOTSPY_MUTEX);
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
     
     // build message
 	if(!tree_names.empty()){
@@ -682,7 +682,7 @@ void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
 //---------------------------------
 //This method recursively traverses through histogram directories making hinfo_t 
 //objects out of individual histograms and then adds the info_t objects to a list.
-// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// The gROOTSPY_RW_LOCK should already be locked before calling this so we should not
 // lock it here.
 void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 	string path = dir->GetPath();
@@ -715,7 +715,7 @@ void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 // findTreeNamesForMsg
 //---------------------------------
 //TODO: documentation comment.
-// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// The gROOTSPY_RW_LOCK should already be locked before calling this so we should not
 // lock it here.
 void DRootSpy::findTreeNamesForMsg(TDirectory *dir, vector<string> &tree_names, 
 				   vector<string> &tree_titles, vector<string> &tree_paths) 
@@ -748,7 +748,7 @@ void DRootSpy::findTreeNamesForMsg(TDirectory *dir, vector<string> &tree_names,
 // findTreeObjForMsg
 //---------------------------------
 //TODO: documentation comment.
-// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// The gROOTSPY_RW_LOCK should already be locked before calling this so we should not
 // lock it here.
 void DRootSpy::findTreeObjForMsg(TDirectory *dir, string sender) {
 	TList *list = dir->GetList();
@@ -787,7 +787,7 @@ void DRootSpy::findTreeObjForMsg(TDirectory *dir, string sender) {
 // traverseTree
 //---------------------------------
 //TODO: documentation comment.
-// The gROOTSPY_MUTEX should already be locked before calling this so we should not
+// The gROOTSPY_RW_LOCK should already be locked before calling this so we should not
 // lock it here.
 void DRootSpy::traverseTree(TObjArray *branch_list, vector<string>  &treeinfo){
 
