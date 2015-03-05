@@ -54,6 +54,7 @@ void Dialog_SelectHists::Init(list<string> *hnamepaths)
 	// Store pointer to the container where we should store
 	// the results after the user hits "OK"
 	this->hnamepaths = hnamepaths;
+_DBG_<<"Creating select hists dialog with: " << hnamepaths->size() << " entries" <<endl;
 
 	// Define all of the of the graphics objects. 
 	CreateGUI();
@@ -198,13 +199,18 @@ void Dialog_SelectHists::DoTimer(void)
 //---------------------------------
 void Dialog_SelectHists::DoOK(void)
 {	
+_DBG_<<"Replacing select hists dialog that has: " << hnamepaths->size() << " entries" <<endl;
+
 	// Replace existing list of hnamepaths
 	hnamepaths->clear();
-	
+
 	map<string,bool>::iterator iter = item_checked.begin();
 	for(; iter!=item_checked.end(); iter++){
 		if(iter->second) hnamepaths->push_back(iter->first);
 	}
+
+_DBG_<<"item_checked.size(): " << 	item_checked.size() << endl;
+_DBG_<<" hnamepaths->size(): " << 	hnamepaths->size() << endl;
 	
 #if 0
 	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
@@ -317,15 +323,25 @@ void Dialog_SelectHists::DoCheckedEntry(TObject* obj, Int_t check)
 //---------------------------------
 void Dialog_SelectHists::GetChecked(TGListTreeItem *item, bool check_siblings)
 {
+
 	while(item){
 		// Set checked state, but only if this is currently listed in item_checked
 		// Otherwise, it is probably not a valid hnamepath (just a partial)
 		char str[512] = "";
 		listTree->GetPathnameFromItem(item, str);
 		string hnamepath(str);
-		if(item_checked.find(hnamepath) != item_checked.end()) {
+
+		// Look if the specified item is in the item_checked map
+		bool item_exists = item_checked.find(hnamepath) != item_checked.end();
+		if(!item_exists){
+			// macros start with 2 slashes (e.g. "//CDC_occupancy")
+			hnamepath = string("/") + hnamepath;
+			item_exists = item_checked.find(hnamepath) != item_checked.end();
+		}
+		
+		// Update item_checked with current checked status
+		if(item_exists) {
 			item_checked[hnamepath] = item->IsChecked();
-			_DBG_<<hnamepath<<endl;
 		}
 		if(item->GetFirstChild()) GetChecked(item->GetFirstChild());
 		
@@ -484,7 +500,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 		
 		// Check if this hnamepath is already in the item_checked map
 		// and add it (unchecked) if it is not
-		//if(item_checked.find[hnamepath] == item_checked.end()) item_checked[hnamepath] = false;
+		if(item_checked.find(hnamepath) == item_checked.end()) item_checked[hnamepath] = false;
 
 		// Here we want to create a vector with each of the path
 		// elements (folders) to be displayed and then the final
@@ -580,7 +596,7 @@ void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 			case hdef_t::macro:   hist_item->SetPictures(package_t, package_t); break;
 		}
 		if(!server_checkbox)server_item->Toggle();
-		if(!item_checked[hnamepath])hist_item->Toggle();
+		if(item_checked[hnamepath] != hist_item->IsChecked())hist_item->Toggle();
 
 		server_items[hid_t(server,hnamepath)] = server_item;
 		hist_items[hid_t(server,hnamepath)] = hist_item;

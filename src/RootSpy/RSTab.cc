@@ -272,6 +272,11 @@ void RSTab::DoNext(void)
 	currently_displayed++;
 	if((uint32_t)currently_displayed >= hnamepaths.size()) currently_displayed = 0;
 	DoUpdateWithFollowUp();
+
+list<string>::iterator it = hnamepaths.begin();
+for(; it!=hnamepaths.end(); it++){
+	_DBG_<<*it<<endl;
+}
 }
 
 //-------------------

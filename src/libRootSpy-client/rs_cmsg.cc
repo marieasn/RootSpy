@@ -86,7 +86,7 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		char hostname[256];
 		gethostname(hostname, 256);
 		char str[512];
-		sprintf(str, "%s_%d", hostname, getpid());
+		sprintf(str, "rs_%s_%d", hostname, getpid());
 		myname = string(str);
 
 		cout<<"---------------------------------------------------"<<endl;
@@ -485,6 +485,12 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	    RegisterFinalHistogram(sender, msg);
 	    handled_message = true;
 	}
+	//===========================================================
+	// ignore messages sent by other RootSpy gui programs
+	if(cmd=="who's there?" ) handled_message = true;
+	if(cmd=="list hists"   ) handled_message = true;
+	if(cmd=="list macros"  ) handled_message = true;
+	if(cmd=="tree info"    ) handled_message = true;
 	//===========================================================
 	if(!handled_message){
 		_DBG_<<"Received unknown message --  Subject:"<<msg->getSubject()<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
