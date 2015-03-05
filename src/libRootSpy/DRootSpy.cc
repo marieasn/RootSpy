@@ -127,7 +127,7 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	char hostname[256];
 	gethostname(hostname, 256);
 	char str[512];
-	sprintf(str, "%s_%d", hostname, getpid());
+	sprintf(str, "rs_%s_%d", hostname, getpid());
 	myname = string(str);
 	
 	// Determine UDL for connecting to cMsg server
@@ -149,7 +149,7 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	// Connect to cMsg system
 	string myName = myname;
 	string myDescr = "Access ROOT objects in JANA program";
-	cMsgSys = new cMsg(myUDL,myName,myDescr);      // the cM#include <pthread.h>sg system object, where
+	cMsgSys = new cMsg(myUDL,myName,myDescr);      // the cMsg system object, where
 	try {                                    //  all args are of type string
 		cMsgSys->connect(); 
 	} catch (cMsgException e) {
