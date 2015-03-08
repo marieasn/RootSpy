@@ -66,6 +66,8 @@ _DBG_<<"Creating select hists dialog with: " << hnamepaths->size() << " entries"
 	list<string>::iterator it = hnamepaths->begin();
 	for(; it!=hnamepaths->end(); it++) item_checked[*it] = true;
 
+for(it=hnamepaths->begin(); it!=hnamepaths->end(); it++) _DBG_<<"hnamepaths="<<(*it)<<endl;
+
 	// Set up timer to call the DoTimer() method repeatedly
 	// so events can be automatically advanced.
 	timer = new TTimer();
