@@ -45,6 +45,7 @@ typedef struct{
 
 
 // --------- GLOBALS ----------------
+string gROOTSPY_PROGRAM_NAME = "rootspy-server";
 DRootSpy *gROOTSPY = NULL;
 sem_t RootSpy_final_sem;
 pthread_rwlock_t *gROOTSPY_RW_LOCK = NULL;
@@ -265,6 +266,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	// Dispatch command 
 	if(cmd == "who's there?") {
 		response->setText("I am here");
+		response->add("program", gROOTSPY_PROGRAM_NAME);
 		cMsgSys->send(response);
 		//delete msg;
 		//return;
@@ -286,7 +288,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 		getTree(*response, name, path, nentries);
 		//delete msg;
 		//return;
-	} else 	if(cmd == "tree info") {
+	} else 	if(cmd == "get tree info") {
 	    // For a normal request, we send all the information about the TTrees in memory,
 	    // including the information about the branches, with one TTree per message.
 	    // For a synchronous request, we can only send one response, so we send info about

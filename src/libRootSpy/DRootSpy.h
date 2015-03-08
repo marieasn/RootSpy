@@ -13,6 +13,7 @@
 #define _DRootSpy_
 
 #include <vector>
+#include <string>
 
 #include "macro_info_t.h"
 
@@ -22,7 +23,7 @@
 using namespace cmsg;
 
 extern pthread_rwlock_t *gROOTSPY_RW_LOCK;
-
+extern string gROOTSPY_PROGRAM_NAME;
 
 class DRootSpy:public cMsgCallback{
  public:

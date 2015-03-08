@@ -28,7 +28,6 @@ using namespace std;
 
 double rs_cmsg::start_time=0.0; // overwritten on fist call to rs_cmsg::GetTime()
 
-
 //// See http://www.jlab.org/Hall-D/software/wiki/index.php/Serializing_and_deserializing_root_objects
 //class MyTMessage : public TMessage {
 //public:
@@ -61,6 +60,8 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 
 	verbose = 2; // higher values=more messages. 0=minimal messages
 	hist_default_active = true;
+	program_name = "rootspy-client"; // should be overwritten by specific program
+
 
 	// Connect to cMsg system
 	is_online = connect_to_cmsg;
@@ -163,7 +164,7 @@ void rs_cmsg::BuildRequestTreeInfo(cMsgMessage &msg, string servername)
 {
     msg.setSubject(servername);
     msg.setType(myname);
-    msg.setText("tree info");
+    msg.setText("get tree info");
 }
 
 //---------------------------------
@@ -440,6 +441,13 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	//===========================================================
 	if(cmd=="who's there?"){
 		// We don't actually respond to these, only servers
+		cMsgMessage *response = new cMsgMessage();
+		response->setSubject(sender);
+		response->setType(myname);
+		response->setText("I am here");
+		response->add("program", program_name);
+		cMsgSys->send(response);
+		delete response;
 		handled_message = true;
 	}
 	//===========================================================
@@ -461,22 +469,22 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	}
 	//===========================================================
 	if(cmd == "tree info") {
-	        RegisterTreeInfo(sender, msg);
+		RegisterTreeInfo(sender, msg);
 		handled_message = true;
 	}
 	//===========================================================
 	if(cmd == "tree") {
-	        RegisterTree(sender, msg);
+		RegisterTree(sender, msg);
 		handled_message = true;
 	}
 	//===========================================================
 	if(cmd == "macros list") {
-	        RegisterMacroList(sender, msg);
+		RegisterMacroList(sender, msg);
 		handled_message = true;
 	}
 	//===========================================================
 	if(cmd == "macro") {
-	        RegisterMacro(sender, msg);
+		RegisterMacro(sender, msg);
 		handled_message = true;
 	}
 	//===========================================================
@@ -490,7 +498,7 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	if(cmd=="who's there?" ) handled_message = true;
 	if(cmd=="list hists"   ) handled_message = true;
 	if(cmd=="list macros"  ) handled_message = true;
-	if(cmd=="tree info"    ) handled_message = true;
+	if(cmd=="get tree info") handled_message = true;
 	//===========================================================
 	if(!handled_message){
 		_DBG_<<"Received unknown message --  Subject:"<<msg->getSubject()<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
@@ -599,23 +607,28 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 
 	//TODO: (maybe) test that the msg is valid.
 	RS_INFO->Lock();
+	try{
 	vector<tree_info_t> &rs_trees = RS_INFO->servers[server].trees;
-	string name = msg->getString("tree_name");
-	string path = msg->getString("tree_path");
-	vector<string> branch_info = *(msg->getStringVector("branch_info"));
-	vector<tree_info_t>::iterator veciter = rs_trees.begin();
-	bool duplicate = false;
-	for(; veciter != rs_trees.end(); veciter ++) {
-		if(veciter->name.compare(name) == 0) duplicate = true;
+		string name = msg->getString("tree_name");
+		string path = msg->getString("tree_path");
+		vector<string> branch_info = *(msg->getStringVector("branch_info"));
+		vector<tree_info_t>::iterator veciter = rs_trees.begin();
+		bool duplicate = false;
+		for(; veciter != rs_trees.end(); veciter ++) {
+			if(veciter->name.compare(name) == 0) duplicate = true;
+		}
+		if(!duplicate) {
+	   	 // assume that branches are defined at initialization
+	   	 // and don't change during running
+	   	 rs_trees.push_back(tree_info_t(server, name, path, branch_info));
+
+			 tree_id_t tid(server, name, path);
+			 RS_INFO->treedefs[tid.tnamepath] = tid;
+		} 
+	}catch(cMsgException &e){
+		_DBG_ << "Bad cMsg in RegisterTreeInfo from: " << server << endl;
+		_DBG_ << e.what() << endl;
 	}
-	if(!duplicate) {
-	    // assume that branches are defined at initialization
-	    // and don't change during running
-	    rs_trees.push_back(tree_info_t(server, name, path, branch_info));
-		 
-		 tree_id_t tid(server, name, path);
-		 RS_INFO->treedefs[tid.tnamepath] = tid;
-	} 
 	RS_INFO->Unlock();
 
 //Test: check RS_INFO for trees

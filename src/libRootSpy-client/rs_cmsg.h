@@ -49,7 +49,9 @@ class rs_cmsg:public cMsgCallback{
 		void RequestMacroListSync(string servername, timespec_t &myTimeout);
 		void RequestMacroSync(string servername, string hnamepath, timespec_t &myTimeout);
 
-		bool IsOnline() { return is_online; }
+		bool   IsOnline(void)   { return is_online; }
+		cMsg*  GetcMsgPtr(void) { return cMsgSys;   }
+		string GetMyName(void)  { return myname;    }
 
 		// Static method to return time in seconds with microsecond accuracy
 		static double GetTime(void){
@@ -64,6 +66,7 @@ class rs_cmsg:public cMsgCallback{
 		bool hist_default_active;
 		int verbose;
 		static double start_time;
+		string program_name;
 
 		
 	public:

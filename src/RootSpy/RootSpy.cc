@@ -59,6 +59,7 @@ int main(int narg, char *argv[])
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME, INPUT_ROOT_FILENAME=="");
 	RS_CMSG->verbose = 1;
 	RS_CMSG->hist_default_active = false;
+	RS_CMSG->program_name = "RootSpy";
 	
 	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
 	if(ROOTSPY_VERBOSE) RS_CMSG->verbose = atoi(ROOTSPY_VERBOSE);
