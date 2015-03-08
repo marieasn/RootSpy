@@ -17,6 +17,8 @@ using namespace std;
 #include <rs_cmsg.h>
 #include <rs_info.h>
 
+#include "rsmon_cmsg.h"
+
 
 #include <TH1.h>
 #include <TH2.h>
@@ -30,18 +32,28 @@ bool DONE =false;
 uint32_t DELAY=400000; // in microseconds
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 int VERBOSE=0;
+bool REDRAW_SCREEN = true; // for debugging
 int REQUESTS_SENT=0;
 int REQUESTS_SATISFIED=0;
+double START_TIME = 0;
+map<hid_t, double> LAST_REQUEST_TIME;
 
+enum RSMON_MODE{
+	MODE_OBSERVE,
+	MODE_SPEED_TEST
+};
 
-rs_mainframe *RSMF;
-rs_cmsg *RS_CMSG;
-rs_info *RS_INFO;
-pthread_rwlock_t *ROOT_MUTEX;
+rsmon_cmsg *RSMON_CMSG = NULL;
+rs_cmsg *RS_CMSG = NULL;
+rs_info *RS_INFO = NULL;
+pthread_rwlock_t *ROOT_MUTEX = NULL;
+RSMON_MODE MODE = MODE_OBSERVE;
 
 void Usage(void);
 void ParseCommandLineArguments(int narg, char *argv[]);
 void sigHandler(int sig) { DONE = true; }
+void UpdateHistoRequests(double now);
+
 
 #define ESC (char)0x1B
 //#define ESC endl<<"ESC"
@@ -106,6 +118,10 @@ string PrintToString(hinfo_t &hinfo, hdef_t &hdef)
 //------------------------------
 void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos, uint32_t Ntdefs)
 {
+	if(!REDRAW_SCREEN){   // for debugging
+		cout << "---------- Skipping screen redraw of " << lines.size() << " content lines ----------" << endl;
+		return;
+	}
 	// Get size of terminal
 	struct winsize w;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
@@ -118,12 +134,19 @@ void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos, uint
 	PRINTAT(1, 1, string(Ncols,'-'));
 	PRINTCENTERED(2, "ROOTSpy Monitor");
 	PRINTAT(1, 3, string(Ncols,'-'));
+	
+	string mode_str = "UNKNOWN";
+	switch(MODE){
+		case MODE_OBSERVE   :  mode_str="OBSERVE ONLY" ;    break;
+		case MODE_SPEED_TEST:  mode_str="SPEED TEST"   ;    break;
+	}
 
 	MOVETO( 3, 4); cout << " Number of histograms published: " << Nhdefs;
 	MOVETO( 3, 5); cout << "Number of histograms downloaded: " << Nhinfos;
 	MOVETO( 3, 6); cout << "      Number of trees published: " << Ntdefs;
-	MOVETO(40, 4); cout << "Number of requests   issued: " << REQUESTS_SENT;
-	MOVETO(40, 5); cout << "Number of requests received: " << REQUESTS_SATISFIED;
+	MOVETO(41, 4); cout << "Number of requests   issued: " << REQUESTS_SENT;
+	MOVETO(41, 5); cout << "Number of requests received: " << REQUESTS_SATISFIED;
+	MOVETO(41, 6); cout << "MODE: " << mode_str;
 	PRINTAT(1, 7, string(Ncols,'.'));
 
 	for(unsigned int i=0; i<lines.size(); i++){
@@ -169,6 +192,9 @@ void Usage(void)
 	" -delay us  Set the minimum delay between\n"
 	"            requests for a histogram. Value is\n"
 	"            in microseconds. (See not below)\n"
+	" --noredraw Do not redraw the screen (only useful\n"
+	"            for debugging to allow print statments\n"
+	"            to show up.\n"
 	"\n"
 	"If the -udl option is not given, the value is\n"
 	"taken from the ROOTSPY_UDL environment variable.\n"
@@ -212,10 +238,12 @@ void ParseCommandLineArguments(int narg, char *argv[])
 		
 		bool needs_arg = false;
 
-		if(arg=="-h" || arg=="--help" || arg=="-help") Usage();
-		else if(arg=="-v" || arg=="--verbose") {VERBOSE = atoi(next.c_str()); needs_arg=true;}
-		else if(arg=="-udl" || arg=="--udl") {ROOTSPY_UDL = next; needs_arg=true;}
-		else if(arg=="-delay" || arg=="--delay") {DELAY = atoi(next.c_str()); needs_arg=true;}
+		     if(arg=="-h"     || arg=="--help"    )  Usage();
+		else if(arg=="-v"     || arg=="--verbose" ) {VERBOSE = atoi(next.c_str()); needs_arg=true;}
+		else if(arg=="-udl"   || arg=="--udl"     ) {ROOTSPY_UDL = next; needs_arg=true;}
+		else if(arg=="-delay" || arg=="--delay"   ) {DELAY = atoi(next.c_str()); needs_arg=true;}
+		else if(arg=="-s"     || arg=="--speed"   ) {MODE = MODE_SPEED_TEST;}
+		else if(arg=="--noredraw"                 ) {REDRAW_SCREEN = false;}
 		else{
 			cout << "Unknown argument: " << arg << endl;
 			exit(-2);
@@ -229,6 +257,77 @@ void ParseCommandLineArguments(int narg, char *argv[])
 			
 			iarg++;
 		}
+	}
+}
+
+//------------------------------
+// UpdateHistoRequests
+//------------------------------
+void UpdateHistoRequests(double now)
+{
+	// Loop over currently defined histograms, making list of histograms
+	// to request because they have been updated since our last request 
+	// or have never been updated
+	RS_INFO->Lock();
+//		map<string,server_info_t> &servers = RS_INFO->servers;
+	map<string,hdef_t> &hdefs = RS_INFO->histdefs;
+	map<hid_t,hinfo_t> &hinfos = RS_INFO->hinfos;
+	//map<string,tree_id_t> &treedefs = RS_INFO->treedefs;
+	vector<hid_t> hists_to_request;
+	map<string,hdef_t>::iterator hdef_iter = hdefs.begin();
+	for(; hdef_iter!= hdefs.end() ; hdef_iter++){
+
+		hdef_t &hdef = hdef_iter->second;
+		string &hnamepath = hdef.hnamepath;
+
+		// Loop over servers who can provide this histogram
+		map<string, bool>::iterator it = hdef.servers.begin();
+		for(; it!=hdef.servers.end(); it++){
+			string server = it->first;
+
+			hid_t hid(server, hnamepath);
+
+			map<hid_t, double>::iterator it_lrt = LAST_REQUEST_TIME.find(hid);
+			if(it_lrt != LAST_REQUEST_TIME.end()){
+
+				// Time we last sent a request
+				double lrt = it_lrt->second;
+
+				// Look to see if we've received this histogram from this server
+				map<hid_t,hinfo_t>::iterator it_hinfo = hinfos.find(hid);
+				if(it_hinfo != hinfos.end()){
+
+					double received = it_hinfo->second.received - START_TIME;
+					if( lrt<received ){
+						REQUESTS_SATISFIED++;
+					}else{
+						// Don't send second request within 2 seconds of previous
+						if((now-lrt)<2.0) continue;
+
+						// Stop requesting histograms from non-responsive servers
+						if((now-received)>10.0 ) continue;
+					}
+				}else{
+					// If we've never received this histogram and
+					// it has been less than 2 seconds, don't send
+					// another request
+					if((now-lrt)<2.0) continue;
+				}
+			}
+			hists_to_request.push_back(hid);
+		}
+
+	}
+
+	RS_INFO->Unlock();
+
+	// Request histograms outside of mutex lock
+	for(unsigned int i=0; i<hists_to_request.size(); i++){
+		string &server = hists_to_request[i].serverName;
+		string &hnamepath = hists_to_request[i].hnamepath;
+		RS_CMSG->RequestHistogram(server, hnamepath);
+		LAST_REQUEST_TIME[hid_t(server, hnamepath)] = now;
+		REQUESTS_SENT++;
 	}
 }
 
@@ -256,109 +355,80 @@ int main(int narg, char *argv[])
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
 	RS_CMSG->verbose=VERBOSE;
+	RS_CMSG->program_name = "RSMonitor";
+	
+	//if(MODE==MODE_OBSERVE && RS_CMSG->IsOnline()) RSMON_CMSG = new rsmon_cmsg(RS_CMSG->GetMyName(),RS_CMSG->GetcMsgPtr());
 
 	signal(SIGINT, sigHandler);
 	
 	// Loop forever Getting all Histograms
-	double start_time = rs_cmsg::GetTime();
+	START_TIME = rs_cmsg::GetTime();
 	double next_update = 1.0; // time relative to start_time
-	map<hid_t, double> last_request_time;
 	while(!DONE){
 
 		// Get Current time
-		double now = rs_cmsg::GetTime() - start_time; // measure time relative to program start
+		double now = rs_cmsg::GetTime() - START_TIME; // measure time relative to program start
 		
-		// Loop over currently defined histograms, making list of histograms
-		// to request because they have been updated since our last request 
-		// or have never been updated
-		RS_INFO->Lock();
-//		map<string,server_info_t> &servers = RS_INFO->servers;
-		map<string,hdef_t> &hdefs = RS_INFO->histdefs;
-		map<hid_t,hinfo_t> &hinfos = RS_INFO->hinfos;
-		map<string,tree_id_t> &treedefs = RS_INFO->treedefs;
-		uint32_t Nhdefs = hdefs.size();
-		uint32_t Nhinfos = hinfos.size();
-		uint32_t Ntdefs = treedefs.size();
-		vector<hid_t> hists_to_request;
-		map<string,hdef_t>::iterator hdef_iter = hdefs.begin();
-		for(; hdef_iter!= hdefs.end() ; hdef_iter++){
-			
-			hdef_t &hdef = hdef_iter->second;
-			string &hnamepath = hdef.hnamepath;
-			
-			// Loop over servers who can provide this histogram
-			map<string, bool>::iterator it = hdef.servers.begin();
-			for(; it!=hdef.servers.end(); it++){
-				string server = it->first;
-			
-				hid_t hid(server, hnamepath);
-
-				map<hid_t, double>::iterator it_lrt = last_request_time.find(hid);
-				if(it_lrt != last_request_time.end()){
-
-					// Time we last sent a request
-					double lrt = it_lrt->second;
-					
-					// Look to see if we've received this histogram from this server
-					map<hid_t,hinfo_t>::iterator it_hinfo = hinfos.find(hid);
-					if(it_hinfo != hinfos.end()){
-
-						double received = it_hinfo->second.received - start_time;
-						if( lrt<received ){
-							REQUESTS_SATISFIED++;
-						}else{
-							// Don't send second request within 2 seconds of previous
-							if((now-lrt)<2.0) continue;
-
-							// Stop requesting histograms from non-responsive servers
-							if((now-received)>10.0 ) continue;
-						}
-					}else{
-						// If we've never received this histogram and
-						// it has been less than 2 seconds, don't send
-						// another request
-						if((now-lrt)<2.0) continue;
-					}
+		switch(MODE){
+			case MODE_OBSERVE:
+				if(RSMON_CMSG==NULL && RS_CMSG->IsOnline()){
+					RSMON_CMSG = new rsmon_cmsg(RS_CMSG->GetMyName(),RS_CMSG->GetcMsgPtr());
 				}
-				hists_to_request.push_back(hid);
-			}
-			
+				break;
+			case MODE_SPEED_TEST:
+				UpdateHistoRequests(now);
+				break;
 		}
-
-		RS_INFO->Unlock();
 		
-		// Request histograms outside of mutex lock
-		for(unsigned int i=0; i<hists_to_request.size(); i++){
-			string &server = hists_to_request[i].serverName;
-			string &hnamepath = hists_to_request[i].hnamepath;
-			RS_CMSG->RequestHistogram(server, hnamepath);
-			last_request_time[hid_t(server, hnamepath)] = now;
-			REQUESTS_SENT++;
-		}
 
 		// Update screen occasionally
 		if( now >= next_update ){
-			RS_INFO->Lock();
-			
+		
+			// Container to hold lines to print in main content area of screen
 			vector<string> lines;
-			map<hid_t,hinfo_t> &hinfos = RS_INFO->hinfos;
-			for(map<hid_t,hinfo_t>::iterator iter=hinfos.begin(); iter!=hinfos.end(); iter++){
-				hinfo_t &hinfo = iter->second;
-				if(now + start_time - hinfo.received > 4.0) continue; // don't print lines for hists that are no longer being updated
-				hdef_t &hdef = RS_INFO->histdefs[hinfo.hnamepath];
-				string line = PrintToString(hinfo, hdef);
-				lines.push_back(line);
+
+			// Fill in lines based on what mode we're running in
+			switch(MODE){
+				case MODE_OBSERVE:
+					if(RSMON_CMSG) RSMON_CMSG->FillLines(now, lines);
+					break;
+				case MODE_SPEED_TEST:
+					RS_INFO->Lock();			
+					map<hid_t,hinfo_t> &hinfos = RS_INFO->hinfos;
+					for(map<hid_t,hinfo_t>::iterator iter=hinfos.begin(); iter!=hinfos.end(); iter++){
+						hinfo_t &hinfo = iter->second;
+						if(now + START_TIME - hinfo.received > 4.0) continue; // don't print lines for hists that are no longer being updated
+						hdef_t &hdef = RS_INFO->histdefs[hinfo.hnamepath];
+						string line = PrintToString(hinfo, hdef);
+						lines.push_back(line);
+					}		
+					RS_INFO->Unlock();
+					break;
 			}
 			
+			// Get some statistics to display
+			RS_INFO->Lock();
+			uint32_t Nhdefs  = RS_INFO->histdefs.size();
+			uint32_t Nhinfos = RS_INFO->hinfos.size();
+			uint32_t Ntdefs  = RS_INFO->treedefs.size();
 			RS_INFO->Unlock();
-			
+
+			// Redraw the screen
 			RedrawScreen(lines, Nhdefs, Nhinfos, Ntdefs);
 			
-			// Request new histogram list from all servers
-			RS_CMSG->RequestHists("rootspy");
+			// Do any follow-up based on mode
+			switch(MODE){
+				case MODE_OBSERVE:
+					RS_CMSG->PingServers();
+					break;
+				case MODE_SPEED_TEST:
+					// Request new histogram list from all servers
+					RS_CMSG->RequestHists("rootspy");
 
-			// Request new tree list from all servers
-			RS_CMSG->RequestTreeInfo("rootspy");
+					// Request new tree list from all servers
+					RS_CMSG->RequestTreeInfo("rootspy");
+					break;
+			}
 
 			next_update = now + 1.0; // update again in 1s
 		}		
@@ -369,6 +439,9 @@ int main(int narg, char *argv[])
 
 	cout << endl;
 	cout << "Ending" << endl;
+	
+	if(RSMON_CMSG) delete RSMON_CMSG;
+	if(RS_CMSG) delete RS_CMSG;
 
 	return 0;
 }
