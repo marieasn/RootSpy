@@ -42,8 +42,13 @@ class rsmon_cmsg:public cMsgCallback{
 			
 				void* subscription_handle;
 				string program_name;
+				double lastHeardFrom;
+
 				map<string, uint32_t> cmd_types_sent_from;
 				map<string, uint32_t> cmd_types_sent_to;
+
+				map<string, uint32_t> last_cmd_types_sent_from;
+				map<string, uint32_t> last_cmd_types_sent_to;
 
 				uint32_t Ncmds_sent_from;
 				uint32_t Ncmds_sent_to;
@@ -60,9 +65,13 @@ class rsmon_cmsg:public cMsgCallback{
 		
 	public:
 
-		void callback(cMsgMessage *msg, void *userObject);
-		
+		string focus_node;
+		bool include_rootspy_in_stats;
+		bool respond_to_pings;
+
+		void callback(cMsgMessage *msg, void *userObject);		
 		void FillLines(double now, vector<string> &lines);
+		void PingServers(void);
 
 	private:
 		cMsg *cMsgSys;
@@ -70,14 +79,7 @@ class rsmon_cmsg:public cMsgCallback{
 		string myname;
 		
 		map<string, nodeInfo_t> all_nodes;
-		
-// 		set<string> all_nodes;
-// 		map<string, void*> subscription_handles;
-// 		map<string, string > program_name;
-// 		map<string, map<string, uint32_t> > cmd_types_sent_from;
-// 		map<string, map<string, uint32_t> > cmd_types_sent_to;
-// 		map<string, uint32_t > cmds_sent_from;
-// 		map<string, uint32_t > cmds_sent_to;
+
 };
 
 

@@ -31,8 +31,14 @@ using namespace std;
 bool DONE =false;
 uint32_t DELAY=400000; // in microseconds
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
+string CMSG_NAME;
 int VERBOSE=0;
 bool REDRAW_SCREEN = true; // for debugging
+string FOCUS_NODE = "";
+bool INCLUDE_ROOTSPY_STATS = true;
+bool USE_RS_CMSG=false;
+bool PING_SERVERS = false;
+bool RESPOND_TO_PINGS = true;
 int REQUESTS_SENT=0;
 int REQUESTS_SATISFIED=0;
 double START_TIME = 0;
@@ -64,6 +70,7 @@ void UpdateHistoRequests(double now);
 #define PRINTCENTERED(Y,S) {MOVETO((Ncols-string(S).length())/2,Y);cout<<S;}
 #define REVERSE()       {cout<<ESC<<"[7m";}
 #define RESET()         {cout<<ESC<<"[0m";}
+#define BOLD()         {cout<<ESC<<"[1m";}
 
 //------------------------------
 // PrintToString
@@ -153,7 +160,14 @@ void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos, uint
 		int row = i+10;
 		MOVETO(1, row);
 		if(row == (Nrows-1)){ cout << " ..."; break; }
-		cout << lines[i];
+		string &line = lines[i];
+		if(line.find("BOLD")==0){
+			BOLD();
+			cout << line.substr(4);
+			RESET();
+		}else{
+			cout << line;
+		}
 	}
 	
 	// Print current time at bottom
@@ -189,9 +203,26 @@ void Usage(void)
 	" -v verbose Set verbosity level (def. is 0)\n"
 	" -udl UDL   Set the RootSpy UDL for connecting\n"
 	"            to the cMsg server.\n"
+	" -s,--speed Run in speed test mode where all histograms\n"
+	"            from all processes are grabbed as quickly as\n"
+	"            possible to system capabilities.\n"
+	" -f focus   Set the \"focus\" node. This should be\n"
+	"            the rootspy name of the process you wish\n"
+	"            to focus on. Information on other processes\n"
+	"            will not be printed while more details of the\n"
+	"            focus process will. This only affects normal\n"
+	"            mode and not speed test mode.\n"
+	" -p         Ping servers (default is to not ping servers but\n"
+	"            to listen for responses to others' pings\n"
+	" --stealth  Operate in stealth mode. Basically, do not respond\n"
+	"            to pings. This has not effect if in speed test mode\n"
+	"            and does not ensure complete stealthy-ness since\n"
+	"            one can still specfiy \"-p\"\n"
 	" -delay us  Set the minimum delay between\n"
 	"            requests for a histogram. Value is\n"
 	"            in microseconds. (See not below)\n"
+	" --norootspy Do not include stats for commands sent to the\n"
+	"            generic \"rootspy\" subject in reported stats.\n"
 	" --noredraw Do not redraw the screen (only useful\n"
 	"            for debugging to allow print statments\n"
 	"            to show up.\n"
@@ -243,6 +274,10 @@ void ParseCommandLineArguments(int narg, char *argv[])
 		else if(arg=="-udl"   || arg=="--udl"     ) {ROOTSPY_UDL = next; needs_arg=true;}
 		else if(arg=="-delay" || arg=="--delay"   ) {DELAY = atoi(next.c_str()); needs_arg=true;}
 		else if(arg=="-s"     || arg=="--speed"   ) {MODE = MODE_SPEED_TEST;}
+		else if(arg=="-f"     || arg=="--focus"   ) {FOCUS_NODE = next; needs_arg=true;}
+		else if(arg=="-p"     || arg=="--ping"    ) {PING_SERVERS = true;}
+		else if(arg=="--stealth"                  ) {RESPOND_TO_PINGS = false;}
+		else if(arg=="--norootspy"                ) {INCLUDE_ROOTSPY_STATS=false;}
 		else if(arg=="--noredraw"                 ) {REDRAW_SCREEN = false;}
 		else{
 			cout << "Unknown argument: " << arg << endl;
@@ -258,6 +293,8 @@ void ParseCommandLineArguments(int narg, char *argv[])
 			iarg++;
 		}
 	}
+	
+	if(MODE == MODE_SPEED_TEST) USE_RS_CMSG = true;
 }
 
 //------------------------------
@@ -269,10 +306,8 @@ void UpdateHistoRequests(double now)
 	// to request because they have been updated since our last request 
 	// or have never been updated
 	RS_INFO->Lock();
-//		map<string,server_info_t> &servers = RS_INFO->servers;
 	map<string,hdef_t> &hdefs = RS_INFO->histdefs;
 	map<hid_t,hinfo_t> &hinfos = RS_INFO->hinfos;
-	//map<string,tree_id_t> &treedefs = RS_INFO->treedefs;
 	vector<hid_t> hists_to_request;
 	map<string,hdef_t>::iterator hdef_iter = hdefs.begin();
 	for(; hdef_iter!= hdefs.end() ; hdef_iter++){
@@ -350,14 +385,14 @@ int main(int narg, char *argv[])
 	char hostname[256];
 	gethostname(hostname, 256);
 	char str[512];
-	sprintf(str, "rootspy_consumer_%s-%d", hostname, getpid());
-	string CMSG_NAME = string(str);
+	sprintf(str, "rs_%s_%d", hostname, getpid());
+	CMSG_NAME = string(str);
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
-	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
-	RS_CMSG->verbose=VERBOSE;
-	RS_CMSG->program_name = "RSMonitor";
-	
-	//if(MODE==MODE_OBSERVE && RS_CMSG->IsOnline()) RSMON_CMSG = new rsmon_cmsg(RS_CMSG->GetMyName(),RS_CMSG->GetcMsgPtr());
+	if(USE_RS_CMSG){
+		RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
+		RS_CMSG->verbose=VERBOSE;
+		RS_CMSG->program_name = "RSMonitor";
+	}
 
 	signal(SIGINT, sigHandler);
 	
@@ -371,8 +406,10 @@ int main(int narg, char *argv[])
 		
 		switch(MODE){
 			case MODE_OBSERVE:
-				if(RSMON_CMSG==NULL && RS_CMSG->IsOnline()){
-					RSMON_CMSG = new rsmon_cmsg(RS_CMSG->GetMyName(),RS_CMSG->GetcMsgPtr());
+				if(RSMON_CMSG==NULL && (RS_CMSG==NULL || RS_CMSG->IsOnline())){
+					RSMON_CMSG = new rsmon_cmsg(CMSG_NAME, (RS_CMSG==NULL ? NULL:RS_CMSG->GetcMsgPtr()));
+					RSMON_CMSG->focus_node = FOCUS_NODE;
+					RSMON_CMSG->respond_to_pings = RESPOND_TO_PINGS;
 				}
 				break;
 			case MODE_SPEED_TEST:
@@ -419,14 +456,18 @@ int main(int narg, char *argv[])
 			// Do any follow-up based on mode
 			switch(MODE){
 				case MODE_OBSERVE:
-					RS_CMSG->PingServers();
+					if(RS_CMSG) {
+						if(PING_SERVERS) RS_CMSG->PingServers();
+					} else {
+						if(PING_SERVERS) RSMON_CMSG->PingServers();
+					}
 					break;
 				case MODE_SPEED_TEST:
 					// Request new histogram list from all servers
-					RS_CMSG->RequestHists("rootspy");
+					if(RS_CMSG) RS_CMSG->RequestHists("rootspy");
 
 					// Request new tree list from all servers
-					RS_CMSG->RequestTreeInfo("rootspy");
+					if(RS_CMSG) RS_CMSG->RequestTreeInfo("rootspy");
 					break;
 			}
 

@@ -10,6 +10,7 @@
 #include "RootSpy.h"
 #include "rsmon_cmsg.h"
 #include "rs_info.h"
+#include "rs_cmsg.h"
 #include "tree_info_t.h"
 #include "cMsg.h"
 
@@ -20,22 +21,49 @@
 using namespace std;
 
 
+extern string ROOTSPY_UDL;
+extern string CMSG_NAME;
+extern double START_TIME;
 
 //---------------------------------
 // rsmon_cmsg    (Constructor)
 //---------------------------------
 rsmon_cmsg::rsmon_cmsg(string myname, cMsg *cMsgSys)
 {
+
+	// If the cMsgSys pointer is NULL, then make our own connection
+	if(cMsgSys==NULL){
+		string myDescr = "Access ROOT objects in a running program";
+		cMsgSetDebugLevel(CMSG_DEBUG_INFO); // print all messages
+		cMsgSys = new cMsg(ROOTSPY_UDL, CMSG_NAME, myDescr);   	// the cMsg system object, where
+		try {                         	           	//  all args are of type string
+			cMsgSys->connect();
+			cMsgSys->start();
+		} catch (cMsgException e) {
+			cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to cMsg system! __________________"<<endl;
+			cout << e.toString() << endl; 
+			cout<<endl<<endl<<endl<<endl;
+
+			// we need to connect to cMsg to run
+			exit(0);          
+		}
+	}
+
 	this->myname = myname;
 	this->cMsgSys = cMsgSys;
+	this->focus_node = "";
+	this->include_rootspy_in_stats = true;
+	this->respond_to_pings=true;
 
 	all_nodes[myname].program_name = "RSMonitor (this program)";
 
 	// Subscribe to generic rootspy info requests
 	all_nodes["rootspy"].subscription_handle = cMsgSys->subscribe("rootspy", "*", this, NULL);
+	all_nodes["rootspy"].program_name = "(all processes)";
 
 	// Subscribe to rootspy requests specific to us
-	all_nodes[myname].subscription_handle = cMsgSys->subscribe(myname, "*", this, NULL);
+//	all_nodes[myname].subscription_handle = cMsgSys->subscribe(myname, "*", this, NULL);
+	all_nodes[myname].subscription_handle = cMsgSys->subscribe("rs_*", "*", this, NULL);
 }
 
 //---------------------------------
@@ -68,17 +96,32 @@ void rsmon_cmsg::callback(cMsgMessage *msg, void *userObject)
 	nodeInfo_t &ni_subject = all_nodes[subject];
 
 	if(ni_sender.subscription_handle == NULL ){
-		ni_sender.subscription_handle = cMsgSys->subscribe(sender, "*", this, NULL);
+//		ni_sender.subscription_handle = cMsgSys->subscribe(sender, "*", this, NULL);
 	}
 	
 	ni_sender.cmd_types_sent_from[cmd]++;
 	ni_sender.Ncmds_sent_from++;
 	ni_sender.Nbytes_sent_from += Nbytes;
+	ni_sender.lastHeardFrom = rs_cmsg::GetTime() - START_TIME;
 
 	ni_subject.cmd_types_sent_to[cmd]++;
 	ni_subject.Ncmds_sent_to++;
 	ni_subject.Nbytes_sent_to += Nbytes;
 	
+	// User may specify whether things sent to "rootspy" are included
+	// in stats for individual nodes.
+	if(include_rootspy_in_stats && subject=="rootspy"){
+		map<string, nodeInfo_t>::iterator it;
+		for(it=all_nodes.begin(); it!=all_nodes.end(); it++){
+			const string &nodeName = it->first;
+			nodeInfo_t &ni = it->second;
+			if(nodeName == "rootspy") continue; // already handled above
+			
+			ni.cmd_types_sent_to[cmd]++;
+			ni.Ncmds_sent_to++;
+			ni.Nbytes_sent_to += Nbytes;
+		}
+	}
 	
 	//===========================================================
 	if(cmd=="I am here"){
@@ -88,6 +131,16 @@ void rsmon_cmsg::callback(cMsgMessage *msg, void *userObject)
 				ni_sender.program_name = program;
 			}catch(cMsgException &e){
 			}
+		}
+	}else if(cmd=="who's there?"){
+		if(respond_to_pings){
+			cMsgMessage *response = new cMsgMessage();
+			response->setSubject(sender);
+			response->setType(myname);
+			response->setText("I am here");
+			response->add("program", "RSMonitor");
+			cMsgSys->send(response);
+			delete response;
 		}
 	}
 	//===========================================================
@@ -100,34 +153,61 @@ void rsmon_cmsg::callback(cMsgMessage *msg, void *userObject)
 //---------------------------------
 void rsmon_cmsg::FillLines(double now, vector<string> &lines)
 {
-	// There are two time referneces used below. One is in
-	// seconds with the zero being in unix time. This is
-	// needed to compare to the "lastHeardFrom" field of the
-	// RSINFO->servers. The other is the ms accurate time
-	// also in seconds, but in the form of a double. It is
-	// used to calculate rates more accurately.
 
 	static double last_time = 0.0;
 	double tdiff = now - last_time;
 	last_time = now;
 
-	time_t now_sec = time(NULL);
+	// If user has specified a "focus" node, then only print lines for that
+	// node along with details on the commands sent to/from. If the specified
+	// focus node does not exist, then print that as a message.
+	bool has_focus_node = (focus_node!="");
+	if(has_focus_node){
+		map<string, nodeInfo_t>::iterator it = all_nodes.find(focus_node);
+		if(it == all_nodes.end()){
+			lines.push_back("");
+			lines.push_back("The node \"" + focus_node + "\" was specified");
+			lines.push_back("as the focus node (i.e. have detailed info printed)");
+			lines.push_back("but it is not in the list of active nodes.");
+			return;
+		}
+	}
+
 	map<string, nodeInfo_t>::iterator it;
 	for(it=all_nodes.begin(); it!=all_nodes.end(); it++){
 		const string &nodeName = it->first;
 		nodeInfo_t &ni = it->second;
+		
+		if(has_focus_node && (nodeName!=focus_node)) continue;
 
 		time_t tdiff_sec = 0;
 		if(nodeName!=myname && nodeName!="rootspy"){
-			RS_INFO->Lock();
-			tdiff_sec = now_sec - RS_INFO->servers[nodeName].lastHeardFrom;
-			RS_INFO->Unlock();
+			tdiff_sec = now - ni.lastHeardFrom;
 			if(tdiff_sec>10) continue;
 		}
 		
 		uint32_t Ncommandtypes_to = ni.cmd_types_sent_to.size();
 		uint32_t Ncommandtypes_from = ni.cmd_types_sent_from.size();
 		
+		// Individual Command rates
+		map<string, double> Rcmd_types_sent_from;
+		map<string, uint32_t>::iterator it_types;
+		for(it_types=ni.cmd_types_sent_from.begin(); it_types!=ni.cmd_types_sent_from.end(); it_types++){
+			const string &cmd = it_types->first;
+			uint32_t calls = it_types->second;
+			uint32_t last_calls = ni.last_cmd_types_sent_from[cmd];
+			ni.last_cmd_types_sent_from[cmd] = calls;
+			Rcmd_types_sent_from[cmd] = (double)(calls - last_calls)/tdiff;
+		}
+		map<string, double> Rcmd_types_sent_to;
+		for(it_types=ni.cmd_types_sent_to.begin(); it_types!=ni.cmd_types_sent_to.end(); it_types++){
+			const string &cmd = it_types->first;
+			uint32_t calls = it_types->second;
+			uint32_t last_calls = ni.last_cmd_types_sent_to[cmd];
+			ni.last_cmd_types_sent_to[cmd] = calls;
+			Rcmd_types_sent_to[cmd] = (double)(calls - last_calls)/tdiff;
+		}
+
 		// Command rates
 		double Rcmds_sent_from = (double)(ni.Ncmds_sent_from - ni.last_Ncmds_sent_from)/tdiff;
 		double Rcmds_sent_to   = (double)(ni.Ncmds_sent_to   - ni.last_Ncmds_sent_to  )/tdiff;
@@ -156,11 +236,12 @@ void rsmon_cmsg::FillLines(double now, vector<string> &lines)
 		sprintf(Rbytes_sent_from_str, "%5.1f %s/s", Rbytes_sent_from, units_from); // convert to kB
 		sprintf(Rbytes_sent_to_str, "%5.1f %s/s", Rbytes_sent_to, units_to);  // convert to kB
 
-		// Title line
-		lines.push_back(nodeName + ":  " + ni.program_name);
+		// Title line (write in bold)
+		stringstream ss;
+		ss << "BOLD" << nodeName << ":  " << ni.program_name;
+		lines.push_back(ss.str());
 		
 		char str[256];
-		stringstream ss;
 		int spaces;
 		int colon_col = 45;
 
@@ -220,8 +301,49 @@ void rsmon_cmsg::FillLines(double now, vector<string> &lines)
 		ss << str << tdiff_sec << "s ago";
 		lines.push_back(ss.str());
 		
-		lines.push_back("");
+		// Only print the following a focus node was specified
+		if(has_focus_node){
+			lines.push_back("Commands sent from:");
+			map<string, uint32_t>::iterator it_types;
+			for(it_types=ni.cmd_types_sent_from.begin(); it_types!=ni.cmd_types_sent_from.end(); it_types++){
+				const string &cmd = it_types->first;
+				double rate = Rcmd_types_sent_from[cmd];
+				
+				ss.str(std::string()); // clear ss
+				sprintf(str, "%6d (%5.2fHz)",it_types->second ,rate);
+				spaces = colon_col - cmd.length();
+				if(spaces<1) spaces = 1;
+				ss << string(spaces, ' ');
+				ss << cmd << ": " << str;
+				lines.push_back(ss.str());
+			}
+			
+			lines.push_back("");
+			lines.push_back("Commands sent to:");
+			for(it_types=ni.cmd_types_sent_to.begin(); it_types!=ni.cmd_types_sent_to.end(); it_types++){
+				const string &cmd = it_types->first;
+				double rate = Rcmd_types_sent_to[cmd];
+				
+				ss.str(std::string()); // clear ss
+				sprintf(str, "%6d (%5.2fHz)",it_types->second ,rate);
+				spaces = colon_col - cmd.length();
+				if(spaces<1) spaces = 1;
+				ss << string(spaces, ' ');
+				ss << cmd << ": " << str;
+				lines.push_back(ss.str());
+			}
+		}		
 	}
 }
 
-
+//---------------------------------
+// PingServers
+//---------------------------------
+void rsmon_cmsg::PingServers(void)
+{
+	cMsgMessage whosThere;
+	whosThere.setSubject("rootspy");
+	whosThere.setType(myname);
+	whosThere.setText("who's there?");
+	cMsgSys->send(&whosThere);
+}
