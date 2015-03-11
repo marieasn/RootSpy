@@ -54,7 +54,7 @@ void Dialog_SelectHists::Init(list<string> *hnamepaths)
 	// Store pointer to the container where we should store
 	// the results after the user hits "OK"
 	this->hnamepaths = hnamepaths;
-_DBG_<<"Creating select hists dialog with: " << hnamepaths->size() << " entries" <<endl;
+//_DBG_<<"Creating select hists dialog with: " << hnamepaths->size() << " entries" <<endl;
 
 	// Define all of the of the graphics objects. 
 	CreateGUI();
@@ -201,7 +201,9 @@ void Dialog_SelectHists::DoTimer(void)
 //---------------------------------
 void Dialog_SelectHists::DoOK(void)
 {	
-_DBG_<<"Replacing select hists dialog that has: " << hnamepaths->size() << " entries" <<endl;
+//_DBG_<<"Replacing select hists dialog that has: " << hnamepaths->size() << " entries" <<endl;
+
+	GetChecked(listTree->GetFirstItem());
 
 	// Replace existing list of hnamepaths
 	hnamepaths->clear();
@@ -211,8 +213,8 @@ _DBG_<<"Replacing select hists dialog that has: " << hnamepaths->size() << " ent
 		if(iter->second) hnamepaths->push_back(iter->first);
 	}
 
-_DBG_<<"item_checked.size(): " << 	item_checked.size() << endl;
-_DBG_<<" hnamepaths->size(): " << 	hnamepaths->size() << endl;
+//_DBG_<<"item_checked.size(): " << 	item_checked.size() << endl;
+//_DBG_<<" hnamepaths->size(): " << 	hnamepaths->size() << endl;
 	
 #if 0
 	map<hid_t, TGListTreeItem*>::iterator hist_items_iter = hist_items.begin();
@@ -345,6 +347,7 @@ void Dialog_SelectHists::GetChecked(TGListTreeItem *item, bool check_siblings)
 		if(item_exists) {
 			item_checked[hnamepath] = item->IsChecked();
 		}
+//_DBG_<<"  checking: " << (item_exists ? (item_checked[hnamepath] ? "Y":"N"):"X") << " " << hnamepath << endl;
 		if(item->GetFirstChild()) GetChecked(item->GetFirstChild());
 		
 		item = check_siblings ? item->GetNextSibling():NULL;
@@ -463,6 +466,7 @@ void Dialog_SelectHists::GetAllHistos(vector<hid_t> &hids)
 //---------------------------------
 void Dialog_SelectHists::UpdateListTree(vector<hid_t> hids)
 {
+_DBG__;
 	// Delete any existing items (seems like there should be a better way)
 	TGListTreeItem *my_item = listTree->GetFirstItem();
 	while(my_item){
