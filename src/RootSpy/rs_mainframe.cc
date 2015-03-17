@@ -1701,6 +1701,8 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 	// Lock ROOT
 	pthread_rwlock_wrlock(ROOT_MUTEX);
 
+	TStyle savestyle(*gStyle);
+
 	TDirectory *savedir = gDirectory;
 	f->cd();
 
@@ -1733,7 +1735,7 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 			string h = s.substr(spos, epos-spos+1); // chop off prefix + whitespace
 			RS_INFO->RequestTrees(h, -1, false);
 		}
-
+		
 		Long_t err = gROOT->ProcessLine(s.c_str());
 		if(err != TInterpreter::kNoError){
 			cout << "Error processing the following macro line:" << endl;
@@ -1743,7 +1745,9 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 	}
 
 	// restore
-	savedir->cd();	
+	savedir->cd();
+	
+	*gStyle = savestyle;
 
 	// Unlock ROOT
 	pthread_rwlock_unlock(ROOT_MUTEX);
