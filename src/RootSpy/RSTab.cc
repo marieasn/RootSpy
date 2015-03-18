@@ -34,7 +34,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	
 	// Hoizontal frame (controls to left, canvas to the right)
 	fTabMain = new TGHorizontalFrame(f);
-	f->AddFrame(fTabMain, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
+	f->AddFrame(fTabMain, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY ,2,2,2,2));
 	
 	//...... Controls ......
 	fTabMainLeft = new TGVerticalFrame(fTabMain);
