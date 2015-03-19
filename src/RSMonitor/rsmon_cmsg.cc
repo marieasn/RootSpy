@@ -25,7 +25,7 @@ extern string ROOTSPY_UDL;
 extern string CMSG_NAME;
 extern double START_TIME;
 
-bool sizeSort (pair<string,double> &a, pair<string,double> &b) { return (b.second<a.second); }
+bool sizeSort (const pair<string,double> &a, const pair<string,double> &b) { return (b.second<a.second); }
 
 
 //---------------------------------
