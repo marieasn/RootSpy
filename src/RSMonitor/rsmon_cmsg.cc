@@ -361,20 +361,59 @@ void rsmon_cmsg::FillLines(double now, vector<string> &lines)
 void rsmon_cmsg::FillLinesMessageSizes(double now, vector<string> &lines)
 {
 	// Copy the map into a vector so we can sort it by size
+	// At the same time, record some cumulative info.
 	vector<pair<string, double> > sorted;
+	double tot_sizekB = 0.0;
+	map<string,double> path_tot; // key=path  val=total size in kB
+	map<string,uint32_t> path_Nobjs; // key=path  val=num. of hnamepaths in path
 	map<string, double>::iterator it;
 	for(it=message_sizes.begin(); it!=message_sizes.end(); it++){
-		sorted.push_back(pair<string, double>(it->first, it->second));
+		string hnamepath(it->first);
+		double sizekB = it->second;
+		sorted.push_back(pair<string, double>(hnamepath, sizekB));
+		
+		tot_sizekB += sizekB;
+		size_t pos1 = hnamepath.find("/");
+		if(pos1 != string::npos){
+			size_t pos2 = hnamepath.find("/",pos1+1);
+			if(pos2 != string::npos){
+				string path = hnamepath.substr(pos1, pos2-pos1);
+				path_tot[path] += sizekB;
+				path_Nobjs[path]++;
+			}
+		}
 	}
 	
+	// Copy the path_tot map into a vector so we can sort it
+	vector<pair<string, double> > path_tot_sorted; // key=path  val=total size in kB
+	for(it=path_tot.begin(); it!=path_tot.end(); it++){
+		string path(it->first);
+		double sizekB = it->second;
+		path_tot_sorted.push_back(pair<string, double>(path, sizekB));
+	}
+
 	// Sort by size
 	sort(sorted.begin(), sorted.end(), sizeSort);
+	sort(path_tot_sorted.begin(), path_tot_sorted.end(), sizeSort);
+
+	char str[256];
+	sprintf(str, "    Total size : %6.1f MB", tot_sizekB/1000.0);
+	lines.push_back(str);
+	lines.push_back("");
+	lines.push_back("    Biggest paths (limit 4):");
+	for(uint32_t i=0; i<path_tot_sorted.size(); i++){
+		if(i>=4) break;
+		string path = path_tot_sorted[i].first;
+		double sizekB = path_tot_sorted[i].second;
+		sprintf(str, "       %6.1f kB : %4d items : %s", sizekB, path_Nobjs[path], path.c_str());
+		lines.push_back(str);
+	}
+	lines.push_back("");
 
 	// Add lines
 	for(uint32_t i=0; i<sorted.size(); i++){
 		string label = sorted[i].first;
 		double sizekB = sorted[i].second;
-		char str[256];
 		sprintf(str, " %6.1f kB : %s", sizekB, label.c_str());
 		lines.push_back(str);
 	}
