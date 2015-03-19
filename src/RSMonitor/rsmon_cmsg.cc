@@ -25,6 +25,9 @@ extern string ROOTSPY_UDL;
 extern string CMSG_NAME;
 extern double START_TIME;
 
+bool sizeSort (pair<string,double> &a, pair<string,double> &b) { return (b.second<a.second); }
+
+
 //---------------------------------
 // rsmon_cmsg    (Constructor)
 //---------------------------------
@@ -142,6 +145,22 @@ void rsmon_cmsg::callback(cMsgMessage *msg, void *userObject)
 			cMsgSys->send(response);
 			delete response;
 		}
+	}else if(cmd=="histogram"){
+		string hnamepath = msg->getString("hnamepath");
+		double sizekB = (double)msg->getByteArrayLength()/1000.0;
+		message_sizes[string(" HIST - ") + hnamepath] = sizekB;
+	}else if(cmd=="tree"){
+    	string name = msg->getString("tree_name");
+    	string path = msg->getString("tree_path");
+		string hnamepath = path + "/" + name;
+		double sizekB = (double)msg->getByteArrayLength()/1000.0;
+		message_sizes[string(" TREE - ") + hnamepath] = sizekB;
+	}else if(cmd=="tree"){
+    	string name = msg->getString("macro_name");
+    	string path = msg->getString("macro_path");
+		string hnamepath = path + "/" + name;
+		double sizekB = (double)msg->getByteArrayLength()/1000.0;
+		message_sizes[string("MACRO - ") + hnamepath] = sizekB;
 	}
 	//===========================================================
 
@@ -333,6 +352,31 @@ void rsmon_cmsg::FillLines(double now, vector<string> &lines)
 				lines.push_back(ss.str());
 			}
 		}		
+	}
+}
+
+//---------------------------------
+// FillLinesMessageSizes
+//---------------------------------
+void rsmon_cmsg::FillLinesMessageSizes(double now, vector<string> &lines)
+{
+	// Copy the map into a vector so we can sort it by size
+	vector<pair<string, double> > sorted;
+	map<string, double>::iterator it;
+	for(it=message_sizes.begin(); it!=message_sizes.end(); it++){
+		sorted.push_back(pair<string, double>(it->first, it->second));
+	}
+	
+	// Sort by size
+	sort(sorted.begin(), sorted.end(), sizeSort);
+
+	// Add lines
+	for(uint32_t i=0; i<sorted.size(); i++){
+		string label = sorted[i].first;
+		double sizekB = sorted[i].second;
+		char str[256];
+		sprintf(str, " %6.1f kB : %s", sizekB, label.c_str());
+		lines.push_back(str);
 	}
 }
 

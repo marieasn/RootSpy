@@ -71,6 +71,7 @@ class rsmon_cmsg:public cMsgCallback{
 
 		void callback(cMsgMessage *msg, void *userObject);		
 		void FillLines(double now, vector<string> &lines);
+		void FillLinesMessageSizes(double now, vector<string> &lines);
 		void PingServers(void);
 
 	private:
@@ -79,6 +80,7 @@ class rsmon_cmsg:public cMsgCallback{
 		string myname;
 		
 		map<string, nodeInfo_t> all_nodes;
+		map<string, double> message_sizes; // key=hnamepath  val=size in kB
 
 };
 

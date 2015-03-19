@@ -46,7 +46,8 @@ map<hid_t, double> LAST_REQUEST_TIME;
 
 enum RSMON_MODE{
 	MODE_OBSERVE,
-	MODE_SPEED_TEST
+	MODE_SPEED_TEST,
+	MODE_MESS_SIZES
 };
 
 rsmon_cmsg *RSMON_CMSG = NULL;
@@ -146,6 +147,7 @@ void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos, uint
 	switch(MODE){
 		case MODE_OBSERVE   :  mode_str="OBSERVE ONLY" ;    break;
 		case MODE_SPEED_TEST:  mode_str="SPEED TEST"   ;    break;
+		case MODE_MESS_SIZES:  mode_str="MESSAGE SIZES";    break;
 	}
 
 	MOVETO( 3, 4); cout << " Number of histograms published: " << Nhdefs;
@@ -206,6 +208,8 @@ void Usage(void)
 	" -s,--speed Run in speed test mode where all histograms\n"
 	"            from all processes are grabbed as quickly as\n"
 	"            possible to system capabilities.\n"
+	" --sizes    Run in message size mode where the size of messages\n"
+	"            is shown (in decreasing order)\n"
 	" -f focus   Set the \"focus\" node. This should be\n"
 	"            the rootspy name of the process you wish\n"
 	"            to focus on. Information on other processes\n"
@@ -274,6 +278,7 @@ void ParseCommandLineArguments(int narg, char *argv[])
 		else if(arg=="-udl"   || arg=="--udl"     ) {ROOTSPY_UDL = next; needs_arg=true;}
 		else if(arg=="-delay" || arg=="--delay"   ) {DELAY = atoi(next.c_str()); needs_arg=true;}
 		else if(arg=="-s"     || arg=="--speed"   ) {MODE = MODE_SPEED_TEST;}
+		else if(arg=="--sizes"                    ) {MODE = MODE_MESS_SIZES;}
 		else if(arg=="-f"     || arg=="--focus"   ) {FOCUS_NODE = next; needs_arg=true;}
 		else if(arg=="-p"     || arg=="--ping"    ) {PING_SERVERS = true;}
 		else if(arg=="--stealth"                  ) {RESPOND_TO_PINGS = false;}
@@ -406,6 +411,7 @@ int main(int narg, char *argv[])
 		
 		switch(MODE){
 			case MODE_OBSERVE:
+			case MODE_MESS_SIZES:
 				if(RSMON_CMSG==NULL && (RS_CMSG==NULL || RS_CMSG->IsOnline())){
 					RSMON_CMSG = new rsmon_cmsg(CMSG_NAME, (RS_CMSG==NULL ? NULL:RS_CMSG->GetcMsgPtr()));
 					RSMON_CMSG->focus_node = FOCUS_NODE;
@@ -428,6 +434,9 @@ int main(int narg, char *argv[])
 			switch(MODE){
 				case MODE_OBSERVE:
 					if(RSMON_CMSG) RSMON_CMSG->FillLines(now, lines);
+					break;
+				case MODE_MESS_SIZES:
+					if(RSMON_CMSG) RSMON_CMSG->FillLinesMessageSizes(now, lines);
 					break;
 				case MODE_SPEED_TEST:
 					RS_INFO->Lock();			
@@ -456,6 +465,7 @@ int main(int narg, char *argv[])
 			// Do any follow-up based on mode
 			switch(MODE){
 				case MODE_OBSERVE:
+				case MODE_MESS_SIZES:
 					if(RS_CMSG) {
 						if(PING_SERVERS) RS_CMSG->PingServers();
 					} else {
