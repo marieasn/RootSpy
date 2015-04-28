@@ -79,9 +79,11 @@ using namespace config;
 // ---------------------------------------------------------------------------------
 
 
-void MainLoop(rs_archiver &c);
+//void MainLoop(rs_archiver &c);
+void MainLoop(void);
 void GetAllHists(uint32_t Twait=2); // Twait is in seconds
-void EndRunProcessing(rs_archiver &c);
+//void EndRunProcessing(rs_archiver &c);
+void EndRunProcessing(void);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
 //void SaveDirectory( TDirectory *the_dir, TFile *the_file );
@@ -176,19 +178,21 @@ int main(int narg, char *argv[])
     if(SESSION.empty()) SESSION="halldsession";
     
     // connect to run management system
-    rs_archiver c(DAQ_UDL, CMSG_NAME, "RSArchiver", SESSION);
-    c.setRunNumber(RUN_NUMBER);
-    c.startProcessing();
-    cout << "Process startup:  " << CMSG_NAME << " in session " << SESSION <<endl;
+//     rs_archiver c(DAQ_UDL, CMSG_NAME, "RSArchiver", SESSION);
+//     c.setRunNumber(RUN_NUMBER);
+//     c.startProcessing();
+//     cout << "Process startup:  " << CMSG_NAME << " in session " << SESSION <<endl;
     
     //if(FORCE_START)
     RUN_IN_PROGRESS = true;   // always start processing when we are called!
 
     //  regularly poll servers for new histograms
-    MainLoop(c);
+//    MainLoop(c);
+    MainLoop();
 
     // Get the "final" histograms and archive them to disk
-    EndRunProcessing(c);
+//    EndRunProcessing(c);
+    EndRunProcessing();
 
     // clean up and write out the current state of the summed histograms to a file
     // before quitting
@@ -216,7 +220,8 @@ int main(int narg, char *argv[])
 //-----------
 // EndRUnProcessing
 //-----------
-void EndRunProcessing(rs_archiver &c)
+//void EndRunProcessing(rs_archiver &c)
+void EndRunProcessing(void)
 {
 	if(ARCHIVE_FILENAME == "<nofile>") {
 		cout << "No archive file specified, skipping..." << endl;
@@ -252,7 +257,9 @@ void EndRunProcessing(rs_archiver &c)
 	//new map<string,server_info_t>(RS_INFO->servers) ); 
 	//thread_ids.push_back(the_thread);
 	
-	ArchiveFile( c.getRunNumber(), current_servers );
+//	ArchiveFile( c.getRunNumber(), current_servers );
+	ArchiveFile( RUN_NUMBER, current_servers );
+	
 		
 	FINALIZE=false;   // done getting final histograms
 }
@@ -261,19 +268,19 @@ void EndRunProcessing(rs_archiver &c)
 //-----------
 // MainLoop
 //-----------
-void MainLoop(rs_archiver &c)
+//void MainLoop(rs_archiver &c)
+void MainLoop(void)
 {
+
+	if(VERBOSE>0) _DBG_ << "Running main event loop..." << endl;
 
     // Loop until we are told to stop for some reason	
     while(!DONE) {
-		
-	if(VERBOSE>0) {
-	    _DBG_ << "Running main event loop..." << endl;
-	    _DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
-	}
-
+		    
 	// keeps the connections alive, and keeps the list of servers up-to-date
 	RS_CMSG->PingServers();
+	
+	if(VERBOSE>1)  _DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
 
 	GetAllHists();
 
