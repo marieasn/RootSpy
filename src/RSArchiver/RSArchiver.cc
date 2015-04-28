@@ -284,8 +284,18 @@ void MainLoop(void)
 
 	GetAllHists();
 
-	// sleep for awhile
-	sleep(POLL_DELAY);
+	// sleep for awhile. We need to break this up into a bunch of
+	// smaller sleeps so when a signal is caught and we're told to
+	// quit we can do so quickly before a stronger kill comes
+	// along and kills us with prejudice. Sleep in 0.1sec intervals.
+	//sleep(POLL_DELAY);
+	int Nsleeps = (POLL_DELAY*1000000) / 100000;
+	if(Nsleeps<0 || Nsleeps>10000)Nsleeps = 5; // bombproof 
+	for(int i=0; i<Nsleeps; i++){
+		if(DONE) break;
+		usleep(100000);
+	}
+	
     }
 }
 
