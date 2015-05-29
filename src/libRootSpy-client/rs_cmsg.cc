@@ -1234,6 +1234,10 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 //TODO: documentation comment.
 void rs_cmsg::RegisterFinalHistogram(string server, cMsgMessage *msg) {
 
+    // first, save the histogram in memory
+    RegisterHistogram(server, msg);
+
+    // then, store the histogram in a list for optional processing by the client program
     // Get hnamepath from message
     string hnamepath = msg->getString("hnamepath");
 
