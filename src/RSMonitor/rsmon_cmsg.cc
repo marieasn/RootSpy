@@ -37,7 +37,7 @@ rsmon_cmsg::rsmon_cmsg(string myname, cMsg *cMsgSys)
 	// If the cMsgSys pointer is NULL, then make our own connection
 	if(cMsgSys==NULL){
 		string myDescr = "Access ROOT objects in a running program";
-		cMsgSetDebugLevel(CMSG_DEBUG_INFO); // print all messages
+		cMsgSetDebugLevel(CMSG_DEBUG_WARN); // print most messages
 		cMsgSys = new cMsg(ROOTSPY_UDL, CMSG_NAME, myDescr);   	// the cMsg system object, where
 		try {                         	           	//  all args are of type string
 			cMsgSys->connect();

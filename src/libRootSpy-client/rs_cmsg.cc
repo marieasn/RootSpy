@@ -66,7 +66,7 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	// Connect to cMsg system
 	is_online = connect_to_cmsg;
 	string myDescr = "Access ROOT objects in a running program";
-	cMsgSetDebugLevel(CMSG_DEBUG_INFO); // print all messages
+	cMsgSetDebugLevel(CMSG_DEBUG_WARN); // print most messages
 	cMsgSys = new cMsg(udl, name, myDescr);   	// the cMsg system object, where
 	try {                         	           	//  all args are of type string
 		if(connect_to_cmsg) cMsgSys->connect(); 
