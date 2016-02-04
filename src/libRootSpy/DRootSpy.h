@@ -81,7 +81,8 @@ class DRootSpy:public cMsgCallback{
     //methods
     void traverseTree(TObjArray *branch_list, vector<string> &treeinfo);
     void listHists(cMsgMessage &response);
-    void getHist(cMsgMessage &response, string &hnamepath);
+    void getHist(cMsgMessage &response, string &hnamepath, bool send_message=true);
+	void getHists(cMsgMessage &response, vector<string> &hnamepaths);
     void getTree(cMsgMessage &response, string &name, string &path, int64_t nentries);
     void treeInfo(string sender);
     void treeInfoSync(cMsgMessage &response, string sender);

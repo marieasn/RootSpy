@@ -280,6 +280,10 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 		getHist(*response, hnamepath);
 		//delete msg;
 		//return;
+	} else 	if(cmd == "get hists") {
+		// Get name of requested histograms
+		vector<string> *hnamepaths = msg->getStringVector("hnamepaths");
+		getHists(*response, *hnamepaths);
 	} else 	if(cmd == "get tree") {
 		// Get name of requested tree
 		string name = msg->getString("tree_name");
@@ -393,7 +397,7 @@ void DRootSpy::listHists(cMsgMessage &response)
 // getHist
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
+void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_message) {
 	// split hnamepath into histo name and path
 	size_t pos = hnamepath.find_last_of("/");
 	if(pos == string::npos)return;
@@ -428,9 +432,38 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath) {
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// Send message containing histogram (asynchronously)
-	cMsgSys->send(&response);	
+	if(send_message) cMsgSys->send(&response);	
 }
 
+//---------------------------------
+// getHists
+//---------------------------------
+//TODO: documentation comment.
+void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths) {
+
+	// Create a new cMsgMessage for each hnamepath and add it
+	// the vector of cMsgMessage's that are added a payload of
+	// the cMsgMessage that is actually sent.
+	vector<cMsgMessage*> cmsgs;
+	for(uint32_t i=0; i<hnamepaths.size(); i++){
+		cMsgMessage *cmsg = new cMsgMessage();
+		getHist(*cmsg, hnamepaths[i], false);
+		if(cmsg->getByteArrayLength()<1){
+			// No payload. Must have been a problem. Drop message.
+			delete cmsg;
+			continue;
+		}
+		cmsgs.push_back(cmsg);
+	}
+	
+	if(cmsgs.empty()) return;
+	
+	response.setText("histograms");
+	response.add("histograms", cmsgs);
+
+	// Send message containing histogram (asynchronously)
+	cMsgSys->send(&response);	
+}
 
 //---------------------------------
 // listMacros

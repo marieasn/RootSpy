@@ -468,6 +468,11 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		handled_message = true;
 	}
 	//===========================================================
+	if(cmd=="histograms"){	
+		RegisterHistograms(sender, msg);
+		handled_message = true;
+	}
+	//===========================================================
 	if(cmd == "tree info") {
 		RegisterTreeInfo(sender, msg);
 		handled_message = true;
@@ -1061,7 +1066,33 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     RS_INFO->Unlock();
 }
 
+//---------------------------------
+// RegisterHistograms
+//---------------------------------
+//TODO: documentation comment.
+void rs_cmsg::RegisterHistograms(string server, cMsgMessage *msg) 
+{
+	// The cMsgMessage that was sent should contain a vector of other
+	// cMgMessage's that are identical to a single histogram's message.
+	// Get the vector of these and pass the processing of each to the 
+	// single histogram method RegisterHistogram.
+	vector<cMsgMessage*> *cmsgs = msg->getMessagePVector("histograms");
+	if(!cmsgs){
+		_DBG_ << "NULL returned from getMessagePVector() for multiple histograms message!" << endl;
+		return;
+	}
+	if(cmsgs->empty()){
+		_DBG_ << "Empty vector (no histograms) for multiple histograms message!" << endl;
+		return;
+	}
 
+	// Loop over all items and register each
+	for(uint32_t i=0; i<cmsgs->size(); i++){
+		cMsgMessage *cmsg = (*cmsgs)[i];
+		
+		RegisterHistogram(server, cmsg);
+	}
+}
 
 //---------------------------------
 // RegisterMacro
