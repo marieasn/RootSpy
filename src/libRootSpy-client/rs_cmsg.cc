@@ -211,6 +211,7 @@ void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnam
     msg.setType(myname);
     msg.setText("get macro");
     msg.add("hnamepath", hnamepath);
+	 if(verbose>4) _DBG_ << "preparing to request macro with hnamepath=\"" << hnamepath << "\"" << endl;
 }
 
 
@@ -228,7 +229,10 @@ void rs_cmsg::PingServers(void)
 	whosThere.setType(myname);
 	whosThere.setText("who's there?");
 	
-	if(is_online) cMsgSys->send(&whosThere);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << whosThere.getText() << endl;
+		cMsgSys->send(&whosThere);
+	}
 }
 
 //---------------------------------
@@ -238,7 +242,10 @@ void rs_cmsg::RequestHists(string servername)
 {
 	cMsgMessage listHists;
 	BuildRequestHists(listHists, servername);	
-	if(is_online) cMsgSys->send(&listHists);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << endl;
+		cMsgSys->send(&listHists);
+	}
 }
 
 //---------------------------------
@@ -248,7 +255,10 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 {
 	cMsgMessage requestHist;
 	BuildRequestHistogram(requestHist, servername, hnamepath);
-	if(is_online) cMsgSys->send(&requestHist);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
+		cMsgSys->send(&requestHist);
+	}
 }
 
 //---------------------------------
@@ -258,7 +268,10 @@ void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
 {
 	cMsgMessage requestHist;
 	BuildRequestHistograms(requestHist, servername, hnamepaths);
-	if(is_online) cMsgSys->send(&requestHist);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
+		cMsgSys->send(&requestHist);
+	}
 }
 
 //---------------------------------
@@ -268,7 +281,10 @@ void rs_cmsg::RequestTreeInfo(string servername)
 {
 	cMsgMessage treeinfo;
 	BuildRequestTreeInfo(treeinfo, servername);
-	if(is_online) cMsgSys->send(&treeinfo);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << treeinfo.getText() << endl;
+		cMsgSys->send(&treeinfo);
+	}
 }
 
 //---------------------------------
@@ -278,7 +294,10 @@ void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path,
 {
 	cMsgMessage requestTree;
 	BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
-	if(is_online) cMsgSys->send(&requestTree);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << requestTree.getText() << endl;
+		cMsgSys->send(&requestTree);
+	}
 }
 
 //---------------------------------
@@ -288,7 +307,10 @@ void rs_cmsg::RequestMacroList(string servername)
 {
 	cMsgMessage listHists;
 	BuildRequestMacroList(listHists, servername);	
-	if(is_online) cMsgSys->send(&listHists);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << endl;
+		cMsgSys->send(&listHists);
+	}
 }
 
 //---------------------------------
@@ -298,7 +320,10 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 {
 	cMsgMessage requestHist;
 	BuildRequestMacro(requestHist, servername, hnamepath);
-	if(is_online) cMsgSys->send(&requestHist);
+	if(is_online){
+		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << endl;
+		cMsgSys->send(&requestHist);
+	}
 }
 
 
@@ -313,6 +338,7 @@ void rs_cmsg::RequestHistsSync(string servername, timespec_t &myTimeout)
 
     cMsgMessage requestHist;
     BuildRequestHists(requestHist, servername);
+    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
 
     string sender = response->getType();
@@ -329,6 +355,7 @@ void rs_cmsg::RequestHistogramSync(string servername, string hnamepath, timespec
 
     cMsgMessage requestHist;
     BuildRequestHistogram(requestHist, servername, hnamepath);
+    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
 
     string sender = response->getType();
@@ -347,6 +374,7 @@ void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
     BuildRequestTreeInfo(treeinfo, servername);
 
     //_DBG_ << " Sending getTreeInfo message..." << endl;
+    if(verbose>3) _DBG_ << "Sending \"" << treeinfo.getText() << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(treeinfo, &myTimeout);  // check for exception?
     //_DBG_ <<"Received message --  Subject:"<<response->getSubject()
 	 // <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
@@ -369,6 +397,7 @@ void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_p
     BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
 
     //_DBG_ << " Sending getTree message..." << endl;
+    if(verbose>3) _DBG_ << "Sending \"" << requestTree.getText() << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(requestTree, &myTimeout);  // check for exception?
     //_DBG_ <<"Received message --  Subject:"<<response->getSubject()
 	 // <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
@@ -388,6 +417,7 @@ void rs_cmsg::RequestMacroListSync(string servername, timespec_t &myTimeout)
 
     cMsgMessage requestHist;
     BuildRequestMacroList(requestHist, servername);
+    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
 
     string sender = response->getType();
@@ -404,6 +434,7 @@ void rs_cmsg::RequestMacroSync(string servername, string hnamepath, timespec_t &
 
     cMsgMessage requestHist;
     BuildRequestMacro(requestHist, servername, hnamepath);
+    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
     cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
 
     string sender = response->getType();
@@ -424,7 +455,10 @@ void rs_cmsg::FinalHistogram(string servername, vector<string> hnamepaths)
     finalhist.setText("provide final");
     finalhist.add("hnamepaths", hnamepaths);
     
-    if(is_online) cMsgSys->send(&finalhist);
+    if(is_online){
+    	if(verbose>3) _DBG_ << "Sending \"" << finalhist.getText() << endl;
+	 	cMsgSys->send(&finalhist);
+	}
     cerr<<"final hist request sent"<<endl;
 }
 
@@ -440,7 +474,26 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	// unique name of the sender and therefore should be the "subject" to
 	// which any reponse should be sent.
 	string sender = msg->getType();
-	if(sender == myname){delete msg; return;} // no need to process messages we sent!
+	if(sender == myname){  // no need to process messages we sent!
+		if(verbose>4) cout << "Ignoring message from ourself (\""<<sender<<"\")" << endl;
+		delete msg; 
+		return;
+	}
+	
+	// Optional Debugging messages
+	if(verbose>3){
+		map<string,int> *payloads = msg->payloadGet();
+		_DBG_ << "cMsg recieved:" << endl;
+		if(payloads){
+			map<string,int>::iterator iter = payloads->begin();
+			for(; iter!=payloads->end(); iter++){
+				int payloadtype = msg->payloadGetType(iter->first);
+				_DBG_ << "    " << iter->second << " : type=" << payloadtype << " : " << iter->first << endl; 
+			}
+		}else{
+			_DBG_ << "   <no payloads map!>" << endl;
+		}
+	}
 	
 	// Look for an entry for this server in RS_INFO map.
 	// If it is not there then add it.
@@ -452,11 +505,13 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	}else{
 		// Update lastHeardFrom time for this server
 		RS_INFO->servers[sender].lastHeardFrom = time(NULL);
+		if(verbose>2) cout<<"Updated \""<<sender<<"\" lastHeardFrom."<<endl;
 	}
 	RS_INFO->Unlock();
 	// The actual command is always sent in the text of the message
-	if (msg->getText() == "null"){delete msg; return;}
 	string cmd = msg->getText();
+	if(verbose>3) _DBG_ << "msg->getText() = \"" << cmd << "\"" << endl;
+	if (cmd == "null"){delete msg; return;}
 	// Dispatch command
 	bool handled_message = false;
 	
@@ -468,6 +523,7 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		response->setType(myname);
 		response->setText("I am here");
 		response->add("program", program_name);
+		if(verbose>3) _DBG_ << "Sending \"" << response->getText() << endl;
 		cMsgSys->send(response);
 		delete response;
 		handled_message = true;
@@ -1217,7 +1273,10 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 
     TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
     if(verbose>=2) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
-    //f->ls(); // debugging
+    if(verbose>3){
+	 	_DBG_ << "TMemFile contents: " << endl;
+		f->ls();
+	 }
     savedir->cd();
     
 	TObjString *macro_str = (TObjString *)f->Get("macro");

@@ -57,6 +57,7 @@ int main(int narg, char *argv[])
 	sprintf(str, "RootSpy GUI %s-%d", hostname, getpid());
 	CMSG_NAME = string(str);
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
+	cout << "Setting verbosity level to " << VERBOSE <<endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME, INPUT_ROOT_FILENAME=="");
 	RS_CMSG->verbose = VERBOSE;
 	RS_CMSG->hist_default_active = false;
