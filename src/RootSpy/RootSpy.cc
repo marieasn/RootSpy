@@ -18,6 +18,7 @@ rs_mainframe *RSMF = NULL;
 rs_cmsg *RS_CMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
+int VERBOSE = 1;
 
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 string CMSG_NAME = "<not set here. see below>";
@@ -57,7 +58,7 @@ int main(int narg, char *argv[])
 	CMSG_NAME = string(str);
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME, INPUT_ROOT_FILENAME=="");
-	RS_CMSG->verbose = 1;
+	RS_CMSG->verbose = VERBOSE;
 	RS_CMSG->hist_default_active = false;
 	RS_CMSG->program_name = "RootSpy";
 	
@@ -99,6 +100,9 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 		switch(argv[i][1]){
 			case 'h':
 				Usage();
+				break;
+			case 'v':
+				VERBOSE++;
 				break;
 			case 'u':
 				if(i>=(narg-1)){
@@ -174,6 +178,7 @@ void Usage(void)
 	cout<<"Options:"<<endl;
 	cout<<endl;
 	cout<<"   -h          Print this message"<<endl;
+	cout<<"   -v          Increase verbosity level"<<endl;
 	cout<<"   -c config   Read config specified configuartion file"<<endl;
 	cout<<"   -s server   Build UDL using specified cMsg server host"<<endl;
 	cout<<"   -u udl      UDL of cMsg server(def. "<<ROOTSPY_UDL<<")"<<endl;
