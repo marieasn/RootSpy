@@ -10,6 +10,7 @@
 #include <semaphore.h>
 
 #include <iostream>
+#include <iomanip>
 #include<sstream>
 #include <cmath>
 using namespace std;
@@ -423,8 +424,10 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 	// Serialize object and put it into a response message
 	TMessage *tm = new TMessage(kMESS_OBJECT);
 	tm->WriteObject(obj);
-	response.setByteArray(tm->Buffer(),tm->Length());
+	uint8_t *buff = (uint8_t*)tm->Buffer();
+	int len = tm->Length();
 	response.add("hnamepath", hnamepath);
+	response.add("TMessage", buff, len);
 	response.setText("histogram");
 
 	// Finished with TMessage object. Free it and release lock on ROOT global
@@ -445,18 +448,24 @@ void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths) {
 	// the vector of cMsgMessage's that are added a payload of
 	// the cMsgMessage that is actually sent.
 	vector<cMsgMessage*> cmsgs;
-	for(uint32_t i=0; i<hnamepaths.size(); i++){
+	for(uint32_t j=0; j<hnamepaths.size(); j++){
+
 		cMsgMessage *cmsg = new cMsgMessage();
-		getHist(*cmsg, hnamepaths[i], false);
-		if(cmsg->getByteArrayLength()<1){
+
+		getHist(*cmsg, hnamepaths[j], false);
+		if(cmsg->payloadGetCount()<2){
 			// No payload. Must have been a problem. Drop message.
+			cout << "Unable to create cMsg for " << hnamepaths[j] << endl;
 			delete cmsg;
 			continue;
 		}
 		cmsgs.push_back(cmsg);
 	}
 	
-	if(cmsgs.empty()) return;
+	if(cmsgs.empty()){
+		_DBG_<<"cmsgs is empty!!" << endl;
+		return;
+	}
 	
 	response.setText("histograms");
 	response.add("histograms", cmsgs);

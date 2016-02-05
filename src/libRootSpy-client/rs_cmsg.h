@@ -33,6 +33,7 @@ class rs_cmsg:public cMsgCallback{
 		void PingServers(void);
 		void RequestHists(string servername);
 		void RequestHistogram(string servername, string hnamepath);
+		void RequestHistograms(string servername, vector<string> &hnamepaths);
 		void FinalHistogram(string servername, vector<string> hnamepath);
 		void RequestTreeInfo(string servername);
 		void RequestTree(string servername, string tree_name, string tree_path, int64_t num_entries);
@@ -84,6 +85,7 @@ class rs_cmsg:public cMsgCallback{
 
                 void BuildRequestHists(cMsgMessage &msg, string servername);
                 void BuildRequestHistogram(cMsgMessage &msg, string servername, string hnamepath);
+                void BuildRequestHistograms(cMsgMessage &msg, string servername, vector<string> &hnamepaths);
                 void BuildRequestTreeInfo(cMsgMessage &msg, string servername);
                 void BuildRequestTree(cMsgMessage &msg, string servername, string tree_name, string tree_path, int64_t num_entries);
 		void BuildRequestMacroList(cMsgMessage &msg, string servername);

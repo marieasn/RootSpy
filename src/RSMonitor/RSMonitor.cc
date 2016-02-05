@@ -361,6 +361,27 @@ void UpdateHistoRequests(double now)
 
 	RS_INFO->Unlock();
 
+	// Sort list by server so we can send single request to each
+	// server and they can return all histograms in single message
+	map<string, vector<string> > hnamepaths_by_server;
+	for(unsigned int i=0; i<hists_to_request.size(); i++){
+		string &server = hists_to_request[i].serverName;
+		string &hnamepath = hists_to_request[i].hnamepath;
+		hnamepaths_by_server[server].push_back(hnamepath);
+	}
+	map<string, vector<string> >::iterator hbs_iter = hnamepaths_by_server.begin();
+	for(; hbs_iter!=hnamepaths_by_server.end(); hbs_iter++){
+		string server = hbs_iter->first;
+		vector<string> &hnamepaths = hbs_iter->second;
+		RS_CMSG->RequestHistograms(server, hnamepaths);
+		for(uint32_t i=0; i<hnamepaths.size(); i++){
+			LAST_REQUEST_TIME[hid_t(server, hnamepaths[i])] = now;
+			REQUESTS_SENT++;
+		}
+	}
+
+#if 0
+
 	// Request histograms outside of mutex lock
 	for(unsigned int i=0; i<hists_to_request.size(); i++){
 		string &server = hists_to_request[i].serverName;
@@ -369,6 +390,7 @@ void UpdateHistoRequests(double now)
 		LAST_REQUEST_TIME[hid_t(server, hnamepath)] = now;
 		REQUESTS_SENT++;
 	}
+#endif
 }
 
 //------------------------------

@@ -14,6 +14,7 @@
 #include "cMsg.h"
 
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <cmath>
 #include <algorithm>
@@ -158,6 +159,17 @@ void rs_cmsg::BuildRequestHistogram(cMsgMessage &msg, string servername, string 
 }
 
 //---------------------------------
+// BuildRequestHistograms
+//---------------------------------
+void rs_cmsg::BuildRequestHistograms(cMsgMessage &msg, string servername, vector<string> &hnamepaths)
+{
+    msg.setSubject(servername);
+    msg.setType(myname);
+    msg.setText("get hists");
+    msg.add("hnamepaths", hnamepaths);
+}
+
+//---------------------------------
 // BuildRequestTreeInfo
 //---------------------------------
 void rs_cmsg::BuildRequestTreeInfo(cMsgMessage &msg, string servername)
@@ -236,6 +248,16 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 {
 	cMsgMessage requestHist;
 	BuildRequestHistogram(requestHist, servername, hnamepath);
+	if(is_online) cMsgSys->send(&requestHist);
+}
+
+//---------------------------------
+// RequestHistograms
+//---------------------------------
+void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
+{
+	cMsgMessage requestHist;
+	BuildRequestHistograms(requestHist, servername, hnamepaths);
 	if(is_online) cMsgSys->send(&requestHist);
 }
 
@@ -935,7 +957,6 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 //TODO: documentation comment.
 void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg) 
 {
-
     //cerr << "In rs_cmsg::RegisterHistogram()..." << endl;
     
     // Get hnamepath from message
@@ -978,14 +999,20 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     pthread_rwlock_wrlock(ROOT_MUTEX);
     
     // Get ROOT object from message and cast it as a TNamed*
-    MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
-    TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
-    if(!namedObj){
-	_DBG_<<"No valid object returned in histogram message."<<endl;
-	pthread_rwlock_unlock(ROOT_MUTEX);
-	RS_INFO->Unlock();
-	return;
-    }
+
+	 TNamed *namedObj = NULL;
+	 vector<uint8_t> *mybytes = msg->getUint8Vector("TMessage");
+	 if(mybytes){
+		MyTMessage *myTM = new MyTMessage(&(*mybytes)[0], mybytes->size());
+		namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
+		if(!namedObj){
+			pthread_rwlock_unlock(ROOT_MUTEX);
+			RS_INFO->Unlock();
+			delete mybytes;
+			return;
+		}
+		delete mybytes;
+	}
     
     // Cast this as a histogram pointer
     TH1 *h = dynamic_cast<TH1*>(namedObj);
@@ -1091,7 +1118,10 @@ void rs_cmsg::RegisterHistograms(string server, cMsgMessage *msg)
 		cMsgMessage *cmsg = (*cmsgs)[i];
 		
 		RegisterHistogram(server, cmsg);
+		
+		delete cmsg;
 	}
+	delete cmsgs;
 }
 
 //---------------------------------
