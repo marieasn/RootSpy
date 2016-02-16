@@ -501,7 +501,7 @@ void SaveFinalHistogram(final_hist_t &final_hist_info, TFile *archive_file)
 //-----------
 string CollectFinalHistogramLoop(map<string,server_info_t> *the_servers, TFile *archive_file)
 {
-    const int FINAL_TIMEOUT = 600;       // only wait 5 minutes for everyone to report in
+    const int FINAL_TIMEOUT = 5;       // only wait 5 minutes for everyone to report in
     const int FINAL_LOOP_DELAY = 10000;  // period of time to wait in between checking for more histograms that have been sent to us (in us)
 
     // save the time so that we can decide when to stop processing
