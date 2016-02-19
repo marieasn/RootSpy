@@ -230,7 +230,7 @@ void rs_cmsg::PingServers(void)
 	whosThere.setText("who's there?");
 	
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << whosThere.getText() << endl;
+		if(verbose>3) _DBG_ << "Sending \"" << whosThere.getText() << "\"" << endl;
 		cMsgSys->send(&whosThere);
 	}
 }
@@ -243,7 +243,7 @@ void rs_cmsg::RequestHists(string servername)
 	cMsgMessage listHists;
 	BuildRequestHists(listHists, servername);	
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << endl;
+		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << "\"" << endl;
 		cMsgSys->send(&listHists);
 	}
 }
@@ -256,7 +256,7 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 	cMsgMessage requestHist;
 	BuildRequestHistogram(requestHist, servername, hnamepath);
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
+		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\" for " << hnamepath << endl;
 		cMsgSys->send(&requestHist);
 	}
 }
@@ -269,7 +269,7 @@ void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
 	cMsgMessage requestHist;
 	BuildRequestHistograms(requestHist, servername, hnamepaths);
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
+		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << endl;
 		cMsgSys->send(&requestHist);
 	}
 }
@@ -282,7 +282,7 @@ void rs_cmsg::RequestTreeInfo(string servername)
 	cMsgMessage treeinfo;
 	BuildRequestTreeInfo(treeinfo, servername);
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << treeinfo.getText() << endl;
+		if(verbose>3) _DBG_ << "Sending \"" << treeinfo.getText() << "\"" << endl;
 		cMsgSys->send(&treeinfo);
 	}
 }
@@ -308,7 +308,7 @@ void rs_cmsg::RequestMacroList(string servername)
 	cMsgMessage listHists;
 	BuildRequestMacroList(listHists, servername);	
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << endl;
+		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << "\"" << endl;
 		cMsgSys->send(&listHists);
 	}
 }
@@ -321,7 +321,7 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 	cMsgMessage requestHist;
 	BuildRequestMacro(requestHist, servername, hnamepath);
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << endl;
+		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << "\"" << endl;
 		cMsgSys->send(&requestHist);
 	}
 }
@@ -481,7 +481,7 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	}
 	
 	// Optional Debugging messages
-	if(verbose>3){
+	if(verbose>6){
 		map<string,int> *payloads = msg->payloadGet();
 		_DBG_ << "cMsg recieved:" << endl;
 		if(payloads){

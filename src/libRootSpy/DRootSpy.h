@@ -17,7 +17,9 @@
 
 #include "macro_info_t.h"
 
+#include <TFile.h>
 #include <TDirectory.h>
+#include <TH1.h>
 #include <cMsg.hxx>
 #include <pthread.h>
 using namespace cmsg;
@@ -31,6 +33,10 @@ class DRootSpy:public cMsgCallback{
     DRootSpy(pthread_rwlock_t *rw_lock=NULL, string udl="<default>");
     void Initialize(pthread_rwlock_t *rw_lock, string udl);
     virtual ~DRootSpy();
+
+	 void ConnectToCMSG(void);
+	 void* WatchConnection(void);
+	 void* DebugSampler(void);
     
     class hinfo_t{
     public:
@@ -55,6 +61,38 @@ class DRootSpy:public cMsgCallback{
     bool SetMacroVersion(string name, string path, int version_number);
 	 
 	 int VERBOSE;
+	 bool DEBUG;
+	 
+	 bool in_callback;
+	 bool in_list_hists;
+	 bool in_list_macros;
+	 bool in_get_hist;
+	 bool in_get_hists;
+	 bool in_get_tree;
+	 bool in_get_tree_info;
+	 bool in_get_macro;
+	 
+	 enum{
+	 
+	 	kNSAMPLES,
+	 	kREADLOCKED,
+		kWRITELOCKED,
+
+		kINCALLBACK,
+		kIN_LIST_HISTS,
+		kIN_LIST_MACROS,
+		kIN_GET_HIST,
+		kIN_GET_HISTS,
+		kIN_GET_TREE,
+		kIN_GET_TREE_INFO,
+		kIN_GET_MACRO,
+		
+		kNCOUNTERS
+	 }RSBinDefs_t;
+	 
+	 TFile *debug_file;
+	 TH1I *hcounts;
+	 TH1D *hfractions;
 
  protected:
     
@@ -71,10 +109,14 @@ class DRootSpy:public cMsgCallback{
     bool own_gROOTSPY_RW_LOCK;
     TDirectory *hist_dir; // save value of gDirectory used when forming response to "list hist" request
     string myname;
+	 string myudl;
     std::vector<void*> subscription_handles;
     vector<string> *finalhists;
     pthread_t mythread;
+    pthread_t mywatcherthread;
+    pthread_t mydebugthread;
     string finalsender;
+	 bool done;
 
     map<string,macro_info_t> macros;
 
@@ -82,7 +124,7 @@ class DRootSpy:public cMsgCallback{
     void traverseTree(TObjArray *branch_list, vector<string> &treeinfo);
     void listHists(cMsgMessage &response);
     void getHist(cMsgMessage &response, string &hnamepath, bool send_message=true);
-	void getHists(cMsgMessage &response, vector<string> &hnamepaths);
+    void getHists(cMsgMessage &response, vector<string> &hnamepaths);
     void getTree(cMsgMessage &response, string &name, string &path, int64_t nentries);
     void treeInfo(string sender);
     void treeInfoSync(cMsgMessage &response, string sender);

@@ -15,7 +15,8 @@
 
 #include "TGaxis.h"
 
-
+#include <stdlib.h>
+static int VERBOSE = 0;
 
 //---------------------------------
 // RSTab    (Constructor)
@@ -24,6 +25,9 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 {
 	//- - - - - - - - - - - - - - - - - - - - - - - - - 
 	// Build all GUI elements in a single tab
+	
+	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
+	if(ROOTSPY_VERBOSE) VERBOSE = atoi(ROOTSPY_VERBOSE);
  	
 	// Copy point to TGTab object to member variable
 	fTab = rsmf->fMainTab;
@@ -271,12 +275,17 @@ void RSTab::DoNext(void)
 {
 	currently_displayed++;
 	if((uint32_t)currently_displayed >= hnamepaths.size()) currently_displayed = 0;
-	DoUpdateWithFollowUp();
 
-list<string>::iterator it = hnamepaths.begin();
-for(; it!=hnamepaths.end(); it++){
-	_DBG_<<*it<<endl;
-}
+	if(VERBOSE>1){
+		_DBG_ << " Advanced to next item:" << endl;
+		list<string>::iterator it = hnamepaths.begin();
+		for(int i=0; it!=hnamepaths.end(); it++, i++){
+			string prefix = i==currently_displayed ? "   ---> ":"        ";
+			cout << prefix <<*it<<endl;
+		}
+	}
+
+	DoUpdateWithFollowUp();
 }
 
 //-------------------

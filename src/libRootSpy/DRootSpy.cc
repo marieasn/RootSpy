@@ -32,6 +32,8 @@ using namespace std;
 #define _DBG_ cerr<<__FILE__<<":"<<__LINE__<<" "
 #define _DBG__ cerr<<__FILE__<<":"<<__LINE__<<endl;
 #endif
+void *WatchConnectionC(void *ptr);
+void* DebugSamplerC(void *ptr);
 void *ReturnFinalsC(void * ptr);
 
 //...................................................
@@ -104,6 +106,18 @@ DRootSpy::DRootSpy(pthread_rwlock_t *rw_lock, string udl)
 void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 {
 
+	// These are used help profile the program
+	// when the ROOTSPY_DEBUG environment variable
+	// is set.
+	in_callback = false;
+	in_list_hists = false;
+	in_list_macros = false;
+	in_get_hist = false;
+	in_get_hists = false;
+	in_get_tree = false;
+	in_get_tree_info = false;
+	in_get_macro = false;
+
 	// Initialize the gROOTSPY_RW_LOCK global either with the user
 	// supplied rw_lock or by allocating our own.
 	if(rw_lock){
@@ -147,38 +161,19 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 			myUDL = "cMsg://127.0.0.1/cMsg/rootspy";
 		}
 	}
-
-	// Connect to cMsg system
-	string myName = myname;
-	string myDescr = "Access ROOT objects in JANA program";
-	cMsgSys = new cMsg(myUDL,myName,myDescr);      // the cMsg system object, where
-	try {                                    //  all args are of type string
-		cMsgSys->connect(); 
-	} catch (cMsgException e) {
-		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to cMsg system! __________________"<<endl;
-		cout << e.toString() << endl; 
-		cout<<endl<<endl<<endl<<endl;
-		return;
-	}
-
-	cout<<"---------------------------------------------------"<<endl;
-	cout<<"rootspy name: \""<<myname<<"\""<<endl;
-	cout<<"---------------------------------------------------"<<endl;
-
-	// Subscribe to generic rootspy info requests
-	subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
-
-	// Subscribe to rootspy requests specific to us
-	subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
 	
-	// Start cMsg system
-	cMsgSys->start();
+	// Copy to member
+	myudl = myUDL;
+
+	// Make connection to cMsg system and subscribe to messages
+	cMsgSys = NULL;
+	done= false;
+	ConnectToCMSG();
 	
-	// Broadcast that we're here to anyone already listening
-	cMsgMessage ImAlive;
-	ImAlive.setSubject("rootspy");
-	ImAlive.setType(myname);
-	cMsgSys->send(&ImAlive);
+	// Launch thread to watch connection and re-establish if it
+	// goes away.
+	pthread_create(&mywatcherthread, NULL, WatchConnectionC, this);
+
 
 	// semaphore for handling sending final histograms
 	int err = sem_init(&RootSpy_final_sem, 0, 1);
@@ -208,6 +203,46 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	VERBOSE=1;
 	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
 	if(ROOTSPY_VERBOSE) VERBOSE = atoi(ROOTSPY_VERBOSE);
+	const char *ROOTSPY_DEBUG = getenv("ROOTSPY_DEBUG");
+	if(ROOTSPY_DEBUG) DEBUG = true;
+	
+	debug_file = NULL;
+	hcounts = NULL;
+	hfractions = NULL;
+	
+	if(DEBUG){
+		string fname = strlen(ROOTSPY_DEBUG)>0 ? ROOTSPY_DEBUG:"rs_stats.root";
+		cout << "ROOTSPY_DEBUG is set. Will write stats to \"" << fname << "\"" << endl;
+
+		pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
+		debug_file = new TFile(fname.c_str(), "RECREATE");
+		
+		hcounts = new TH1I("counts", "Sampling counts", kNCOUNTERS, 0, kNCOUNTERS);
+		TAxis *xaxis = hcounts->GetXaxis();
+		xaxis->SetBinLabel(1+kNSAMPLES,         "Num. Samples");
+		xaxis->SetBinLabel(1+kREADLOCKED,       "read locked");
+		xaxis->SetBinLabel(1+kWRITELOCKED,      "write locked");
+		xaxis->SetBinLabel(1+kINCALLBACK,       "in callback");
+		xaxis->SetBinLabel(1+kIN_LIST_HISTS,    "in list hists");
+		xaxis->SetBinLabel(1+kIN_LIST_MACROS,   "in list macros");
+		xaxis->SetBinLabel(1+kIN_GET_HIST,      "in get hist");
+		xaxis->SetBinLabel(1+kIN_GET_HISTS,     "in get hists");
+		xaxis->SetBinLabel(1+kIN_GET_TREE,      "in get tree");
+		xaxis->SetBinLabel(1+kIN_GET_TREE_INFO, "in get tree info");
+		xaxis->SetBinLabel(1+kIN_GET_MACRO,     "in get macro");
+		
+		hfractions = new TH1D("fractions", "Sampling fractions", kNCOUNTERS, 0, kNCOUNTERS);
+		for(int ibin=1; ibin<=kNCOUNTERS; ibin++){
+			hfractions->GetXaxis()->SetBinLabel(ibin, hcounts->GetXaxis()->GetBinLabel(ibin));
+		}
+		
+		hist_dir->cd();
+		
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		
+		// Launch thread to record samples for debugging
+		pthread_create(&mydebugthread, NULL, DebugSamplerC, this);
+	}
 	
 	gROOTSPY = this;
 }
@@ -217,6 +252,12 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 //---------------------------------
 DRootSpy::~DRootSpy()
 {
+	// Tell watcher thread to stop
+	void *retval;
+	done = true;
+	pthread_join(mywatcherthread, &retval);
+	if(DEBUG) pthread_join(mydebugthread, &retval);
+
 	// Unsubscribe
 	for(unsigned int i=0; i<subscription_handles.size(); i++){
 		cMsgSys->unsubscribe(subscription_handles[i]);
@@ -228,10 +269,172 @@ DRootSpy::~DRootSpy()
 
 	sem_destroy(&RootSpy_final_sem);
 	
+	// If writing DEBUG stats, then finish that off
+	if(debug_file){
+		
+		cout << "--- Closing ROOTSPY_DEBUG root file ----" << endl;
+	
+		pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
+		TDirectory *savedir = gDirectory;
+
+		double nsamples = (double)hcounts->GetBinContent(1);
+		if(nsamples>0){
+			for(int ibin=1; ibin<kNCOUNTERS; ibin++){
+				double val = (double)hcounts->GetBinContent(ibin);
+				hfractions->SetBinContent(ibin, val/nsamples);
+			}
+		}
+
+		debug_file->Write();
+		debug_file->Close();
+		delete debug_file;
+		debug_file = NULL;
+		
+		savedir->cd();
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+	}
+	
 	if(own_gROOTSPY_RW_LOCK && gROOTSPY_RW_LOCK!=NULL){
 		delete gROOTSPY_RW_LOCK;
 		gROOTSPY_RW_LOCK = NULL;
 	}
+}
+
+//---------------------------------
+// ConnectToCMSG
+//---------------------------------
+void DRootSpy::ConnectToCMSG(void)
+{
+	// Connect to cMsg system
+	string myName = myname;
+	string myDescr = "Access ROOT objects in JANA program";
+	cMsgSys = new cMsg(myudl,myname,myDescr);      // the cMsg system object, where
+	try {                                    //  all args are of type string
+		cMsgSys->connect(); 
+	} catch (cMsgException e) {
+		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to cMsg system! __________________"<<endl;
+		cout << e.toString() << endl; 
+		cout<<endl<<endl<<endl<<endl;
+		return;
+	}
+
+	cout<<"---------------------------------------------------"<<endl;
+	cout<<"rootspy name: \""<<myname<<"\""<<endl;
+	cout<<"---------------------------------------------------"<<endl;
+
+	// Subscribe to generic rootspy info requests
+	subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
+
+	// Subscribe to rootspy requests specific to us
+	subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
+	
+	// Start cMsg system
+	cMsgSys->start();
+	
+	// Broadcast that we're here to anyone already listening
+	cMsgMessage ImAlive;
+	ImAlive.setSubject("rootspy");
+	ImAlive.setType(myname);
+	cMsgSys->send(&ImAlive);
+}
+
+//---------------------------------
+// WatchConnectionC
+//---------------------------------
+void* WatchConnectionC(void *ptr)
+{
+	// C-style wrapper for WatchConnection
+	// method so it can be run in a separate
+	// thread.
+	DRootSpy *rootspy = (DRootSpy*)ptr;
+	return rootspy->WatchConnection();
+}
+
+//---------------------------------
+// WatchConnection
+//---------------------------------
+void* DRootSpy::WatchConnection(void)
+{
+	/// This is called in its own thread. It mostly sleeps
+	/// but wakes up once in a while to check that we are
+	/// still connected. If not, it will try and delete the 
+	/// existing cMsg object and then call ConnectToCMSG()
+	/// to create a new one, reconnecting to the server.
+	
+	while(!done){
+		usleep(1000);
+		if(cMsgSys){
+			if(!cMsgSys->isConnected()){
+				delete cMsgSys;
+				cMsgSys = NULL;
+			}
+		}else{
+			ConnectToCMSG();
+		}
+	}
+
+	return NULL;
+}
+
+//---------------------------------
+// DebugSamplerC
+//---------------------------------
+void* DebugSamplerC(void *ptr)
+{
+	// C-style wrapper for DebugSampler
+	// method so it can be run in a separate
+	// thread.
+	DRootSpy *rootspy = (DRootSpy*)ptr;
+	return rootspy->DebugSampler();
+}
+
+
+//---------------------------------
+// DebugSampler
+//---------------------------------
+void* DRootSpy::DebugSampler(void)
+{
+	/// This method runs in a dedicated thread, but
+	/// is only launched if the ROOTSPY_DEBUG envar
+	/// is set. (If this is set to something other
+	/// than an empty string then that is used as
+	/// the name of the output ROOT file.) This thread
+	/// will mostly sleep, but occasionally wake
+	/// up to record the state of the system in 
+	/// output histogram.
+	
+	// Note that this is the only thread that should
+	// fill these histograms. Thus, we shouldn't need
+	// to get the ROOT lock.
+	
+	while(!done){
+
+		hcounts->Fill(kNSAMPLES);
+
+		if(!pthread_rwlock_tryrdlock(gROOTSPY_RW_LOCK)){
+			pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		}else{
+			hcounts->Fill(kREADLOCKED);
+		}
+		if(!pthread_rwlock_trywrlock(gROOTSPY_RW_LOCK)){
+			pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		}else{
+			hcounts->Fill(kWRITELOCKED);
+		}
+
+		if(in_callback)      hcounts->Fill(kINCALLBACK);
+		if(in_list_hists)    hcounts->Fill(kIN_LIST_HISTS);
+		if(in_list_macros)   hcounts->Fill(kIN_LIST_MACROS);
+		if(in_get_hist)      hcounts->Fill(kIN_GET_HIST);
+		if(in_get_hists)     hcounts->Fill(kIN_GET_HISTS);
+		if(in_get_tree)      hcounts->Fill(kIN_GET_TREE);
+		if(in_get_tree_info) hcounts->Fill(kIN_GET_TREE_INFO);
+		if(in_get_macro)     hcounts->Fill(kIN_GET_MACRO);
+
+		usleep(20000); // sample at ~50Hz
+	}
+
+	return NULL;
 }
 
 //---------------------------------
@@ -241,6 +444,9 @@ DRootSpy::~DRootSpy()
 void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 
 	if(!msg)return;
+	
+	in_callback = true;
+
 	if(VERBOSE>1) cout<<"Received message --  Subject:"<<msg->getSubject()
 			<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
 
@@ -268,29 +474,39 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	if(cmd == "who's there?") {
 		response->setText("I am here");
 		response->add("program", gROOTSPY_PROGRAM_NAME);
+		if(VERBOSE>1) _DBG_ << "responding to \"who's there\"..." << endl;
 		cMsgSys->send(response);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 		//delete msg;
 		//return;
 	} else 	if(cmd == "list hists") {
+		if(VERBOSE>1) _DBG_ << "responding to \"list hists\"..." << endl;
 		listHists(*response);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 		//delete msg;
 		//return;
 	} else 	if(cmd == "get hist") {
 		// Get name of requested histogram
 		string hnamepath = msg->getString("hnamepath");
+		if(VERBOSE>1) _DBG_ << "responding to \"get hist\" for " << hnamepath << " ..." << endl;
 		getHist(*response, hnamepath);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 		//delete msg;
 		//return;
 	} else 	if(cmd == "get hists") {
 		// Get name of requested histograms
 		vector<string> *hnamepaths = msg->getStringVector("hnamepaths");
+		if(VERBOSE>1) _DBG_ << "responding to \"get hists\" for " << hnamepaths->size() << "hnamepaths ..." << endl;
 		getHists(*response, *hnamepaths);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	} else 	if(cmd == "get tree") {
 		// Get name of requested tree
+		if(VERBOSE>1) _DBG_ << "responding to \"get tree\"..." << endl;
 		string name = msg->getString("tree_name");
 		string path = msg->getString("tree_path");
 		int64_t nentries = msg->getInt64("num_entries");
 		getTree(*response, name, path, nentries);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 		//delete msg;
 		//return;
 	} else 	if(cmd == "get tree info") {
@@ -299,26 +515,33 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	    // For a synchronous request, we can only send one response, so we send info about
 	    // all of the trees without branch information.  The structure of these messages
 	    // is slightly different, so the receiver should handle that.
+		if(VERBOSE>1) _DBG_ << "responding to \"get tree info\"..." << endl;
 	    if(msg->isGetRequest()) {
 		treeInfoSync(*response, sender);
 	    } else {
 		treeInfo(sender);
 		delete msg;
+		in_callback = false;
 		return;
 	    }
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	} else 	if(cmd == "list macros") {
+		if(VERBOSE>1) _DBG_ << "responding to \"list macros\"..." << endl;
 		listMacros(*response);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	} else 	if(cmd == "get macro") {
 		// Get name of requested histogram
 		string hnamepath = msg->getString("hnamepath");
 		if(VERBOSE>1) _DBG_ << "sending out macro " << hnamepath << endl;
 		getMacro(*response, hnamepath);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	} else 	if(cmd == "provide final") {
 		finalhists = msg->getStringVector("hnamepaths");
 		finalsender = msg->getType();
 		sem_post(&RootSpy_final_sem);
 		if(VERBOSE>1) cerr<<"got finalhists"<<endl;
 		delete msg;
+		in_callback = false;
 		return;
 	}
 
@@ -332,6 +555,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 
 	delete msg;
 
+	in_callback = false;
 }
 
 //---------------------------------
@@ -348,6 +572,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 // at least will for the simplest cases.
 void DRootSpy::listHists(cMsgMessage &response) 
 {
+	in_list_hists = true;
 
 	// Lock access to ROOT global while we access it
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
@@ -392,16 +617,22 @@ void DRootSpy::listHists(cMsgMessage &response)
 	
 	response.setText("hists list");
 	cMsgSys->send(&response);
+	
+	in_list_hists = false;
 }
 
 //---------------------------------
 // getHist
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_message) {
+void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_message)
+{
+
+	in_get_hist = true;
+
 	// split hnamepath into histo name and path
 	size_t pos = hnamepath.find_last_of("/");
-	if(pos == string::npos)return;
+	if(pos == string::npos){in_get_hist=false; return;}
 	string hname = hnamepath.substr(pos+1, hnamepath.length()-1);
 	string path = hnamepath.substr(0, pos);
 	if(path[path.length()-1]==':')path += "/";
@@ -418,6 +649,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 	// If object not found, release lock on ROOT global and return
 	if(!obj){
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		in_get_hist = false;
 		return;
 	}
 
@@ -436,13 +668,17 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 
 	// Send message containing histogram (asynchronously)
 	if(send_message) cMsgSys->send(&response);	
+	
+	in_get_hist = false;
 }
 
 //---------------------------------
 // getHists
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths) {
+void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths)
+{
+	in_get_hists = true;
 
 	// Create a new cMsgMessage for each hnamepath and add it
 	// the vector of cMsgMessage's that are added a payload of
@@ -464,6 +700,7 @@ void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths) {
 	
 	if(cmsgs.empty()){
 		_DBG_<<"cmsgs is empty!!" << endl;
+		in_get_hists = false;
 		return;
 	}
 	
@@ -471,7 +708,9 @@ void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths) {
 	response.add("histograms", cmsgs);
 
 	// Send message containing histogram (asynchronously)
-	cMsgSys->send(&response);	
+	cMsgSys->send(&response);
+	
+	in_get_hists = false;
 }
 
 //---------------------------------
@@ -479,6 +718,8 @@ void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths) {
 //---------------------------------
 void DRootSpy::listMacros(cMsgMessage &response) 
 {
+	in_list_macros = true;
+
 	// If any histograms were found, copy their info into the message
 	if(macros.size()>0) {
 		vector<string> macro_names;
@@ -494,16 +735,23 @@ void DRootSpy::listMacros(cMsgMessage &response)
 	
 	response.setText("macros list");
 	cMsgSys->send(&response);
+	
+	in_list_macros = false;
 }
 
 //---------------------------------
 // getMacro
 //---------------------------------
-void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath) {
+void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath)
+{
+
+	in_get_macro = true;
+
 	// find the macro
 	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
 	if(the_macro_itr == macros.end()) {
 		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
+		in_get_macro = false;
 		return;
 	}
 	macro_info_t &the_macro = the_macro_itr->second;
@@ -565,17 +813,18 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath) {
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// Send message containing histogram (asynchronously)
-	cMsgSys->send(&response);	
+	cMsgSys->send(&response);
+	
+	in_get_macro = false;
 }
-
-
-
 
 //---------------------------------
 // getTree
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_t nentries_to_save) {
+void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_t nentries_to_save)
+{
+	in_get_tree = true;
 
 	// Lock access to ROOT global while we access it
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
@@ -589,6 +838,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	// If object not found, release lock on ROOT global and return
 	if(!obj){
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		in_get_tree = false;
 		return;
 	}
 
@@ -596,6 +846,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	if(strcmp(obj->ClassName(), "TTree")){
 		cout << "Request for tree \""<<name<<"\" but that's not a TTree (it's a "<<obj->ClassName()<<")" << endl;
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		in_get_tree = false;
 		return;
 	}
 
@@ -627,6 +878,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 		cout << "Unable to make temporary copy of tree for transport!" << endl;
 		if(f) { f->Close(); delete f; f = NULL;}
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		in_get_tree = false;
 		return;
 	}
 
@@ -666,14 +918,17 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	cMsgSys->send(&response);
-
+	
+	in_get_tree = false;
 }
 
 //---------------------------------
 // treeInfo
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::treeInfo(string sender) {
+void DRootSpy::treeInfo(string sender)
+{
+	in_get_tree_info = true;
 
 	// Lock access to ROOT global while we access it
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
@@ -683,13 +938,18 @@ void DRootSpy::treeInfo(string sender) {
 
 	// Release ROOT global
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+	
+	in_get_tree_info = false;
 }
 
 //---------------------------------
 // treeInfoSync
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
+void DRootSpy::treeInfoSync(cMsgMessage &response, string sender)
+{
+
+	in_get_tree_info = true;
 
 	// Lock access to ROOT global while we access it
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
@@ -719,6 +979,8 @@ void DRootSpy::treeInfoSync(cMsgMessage &response, string sender) {
 	}
     response.setText("tree info");
     cMsgSys->send(&response);
+	 
+	 in_get_tree_info = false;
 }
 
 //---------------------------------
