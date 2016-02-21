@@ -424,7 +424,7 @@ void RSTab::DoUpdate(void)
 			if(hdef_it != RS_INFO->histdefs.end()) RSMF->DrawMacro(canvas, hdef_it->second);
 			RS_INFO->Unlock();
 			canvas->Update();
-			RequestUpdatedMacroHists();
+			RequestUpdatedMacroHists((hdef_it->second).macro_hnamepaths);
 			break;
 		default:
 			//cout << "histogram/macro not available (is producer program running?)" << endl;
@@ -614,10 +614,11 @@ void RSTab::DoSelectHists(void)
 //----------
 void RSTab::DoReset(void)
 {
-	vector<string> hnamepaths;
+	set<string> hnamepaths;
 	GetMacroHists(hnamepaths);
-	for(uint32_t i=0; i<hnamepaths.size(); i++){
-		RS_INFO->ResetHisto(hnamepaths[i]);
+	set<string>::iterator iter = hnamepaths.begin();
+	for(; iter!=hnamepaths.end(); iter++){
+		RS_INFO->ResetHisto(*iter);
 	}
 }
 
@@ -626,10 +627,11 @@ void RSTab::DoReset(void)
 //----------
 void RSTab::DoRestore(void)
 {
-	vector<string> hnamepaths;
+	set<string> hnamepaths;
 	GetMacroHists(hnamepaths);
-	for(uint32_t i=0; i<hnamepaths.size(); i++){
-		RS_INFO->RestoreHisto(hnamepaths[i]);
+	set<string>::iterator iter = hnamepaths.begin();
+	for(; iter!=hnamepaths.end(); iter++){
+		RS_INFO->RestoreHisto(*iter);
 	}
 }
 
@@ -667,12 +669,15 @@ void RSTab::DoViewMacro(void)
 //----------
 // GetMacroHists
 //----------
-void RSTab::GetMacroHists(vector<string> &hnamepaths)
+void RSTab::GetMacroHists(set<string> &hnamepaths)
 {
 	/// Look through all of the pads and find the hnamepath for all TH1
 	/// objects associated with them. This allows us to figure out which 
 	/// histograms were used in a macro. This only looks for hists existing
 	/// in the sum hist directory ("RootSpy:/rootspy/").
+	///
+	/// Also, look for the macro string and identify any hnamepaths in
+	/// it and add those to the list.
 
 	for(int ipad=0; ipad<100; ipad++){
 		TVirtualPad *pad = canvas->GetPad(ipad);
@@ -689,17 +694,18 @@ void RSTab::GetMacroHists(vector<string> &hnamepaths)
 				string prefix = "RootSpy:/rootspy/";
 				if(path.find(prefix) == 0){
 					string hnamepath = path.substr(prefix.length()-1) + "/" + h->GetName();
-					hnamepaths.push_back(hnamepath);
+					hnamepaths.insert(hnamepath);
 				}
 			}			
 		}
 	}
+	
 }
 
 //----------
 // RequestUpdatedMacroHists
 //----------
-void RSTab::RequestUpdatedMacroHists(void)
+void RSTab::RequestUpdatedMacroHists(set<string> &hnamepaths)
 {
 	/// Request updated histograms based on what is currently displayed in
 	/// the canvas. This used when a macro has been used to draw on the canvas
@@ -708,10 +714,11 @@ void RSTab::RequestUpdatedMacroHists(void)
 	/// TH1 is located in the sum hist directory ("RootSpy:/rootspy/") then a request
 	/// is sent out to all servers with the appropriate namepath.
 
-	vector<string> hnamepaths;
-	GetMacroHists(hnamepaths);
-	for(uint32_t i=0; i<hnamepaths.size(); i++){
-		RS_INFO->RequestHistograms(hnamepaths[i]);
+	set<string> myhnamepaths = hnamepaths; // initialize with hnamepaths found in macro string
+	GetMacroHists(myhnamepaths); // Add hnamepaths for histograms found on canvas
+	set<string>::iterator iter = myhnamepaths.begin();
+	for(; iter!=myhnamepaths.end(); iter++){
+		RS_INFO->RequestHistograms(*iter);
 	}
 }
 

@@ -11,6 +11,7 @@
 #include "Dialog_ScaleOpts.h"
 
 #include <TROOT.h>
+#include <TSystem.h>
 #include <TStyle.h>
 #include <TApplication.h>
 #include <TInterpreter.h>
@@ -664,7 +665,10 @@ void rs_mainframe::DoQuit(void)
 
 	// This is supposed to return from the Run() method in "main()"
 	// since we call SetReturnFromRun(true), but it doesn't seem to work.
-	gApplication->Terminate(0);	
+	//gApplication->SetReturnFromRun(true);
+	cout << "DoQuit called. ReturnFromRun=" << gApplication->ReturnFromRun() << endl;
+	gApplication->Terminate(0);
+	//gSystem->ExitLoop();
 }
 
 //-------------------

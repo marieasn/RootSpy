@@ -18,6 +18,7 @@
 #include <sstream>
 #include <cmath>
 #include <algorithm>
+#include <set>
 using namespace std;
 
 #include <TDirectoryFile.h>
@@ -129,6 +130,60 @@ rs_cmsg::~rs_cmsg()
 		// Stop cMsg system
 		cMsgSys->stop();
 		cMsgSys->disconnect();
+	}
+	
+	// Optionally write out stats to ROOT file
+	const char *ROOTSPY_DEBUG = getenv("ROOTSPY_DEBUG");
+	if(ROOTSPY_DEBUG!=NULL){
+		string fname = strlen(ROOTSPY_DEBUG)>0 ? ROOTSPY_DEBUG:"rsclient_stats.root";
+
+		// Grab ROOT lock and open output file
+		pthread_rwlock_wrlock(ROOT_MUTEX);
+		TDirectory *savedir = gDirectory;
+		TFile *debug_file = new TFile(fname.c_str(), "RECREATE");
+		cout << "--- Writing ROOTSPY_DEBUG to: " << fname << " ----" << endl;
+
+		// Make complete list of all requested and received 
+		// hnamepaths. This will allow us to make the x-axis
+		// bins of both the requested and received identical
+		_DBG_<<"requested_histograms,size()="<<requested_histograms.size()<<endl;
+		_DBG_<<"received_histograms,size()="<<received_histograms.size()<<endl;
+		set<string> hnamepaths;
+		map<string, uint32_t>::iterator iter;
+		for(iter=requested_histograms.begin(); iter!=requested_histograms.end(); iter++){
+			hnamepaths.insert(iter->first);
+			_DBG_<<iter->first<<endl;
+		}
+		for(iter=received_histograms.begin(); iter!=received_histograms.end(); iter++){
+			hnamepaths.insert(iter->first);
+			_DBG_<<iter->first<<endl;
+		}
+		
+		if(hnamepaths.empty()) hnamepaths.insert("no_histograms");
+
+		// Requested/received hists
+		TH1I * hreqhists = new TH1I("requestedhists", "Requested histograms", hnamepaths.size(), 0, hnamepaths.size());
+		TH1I * hrcdhists = new TH1I("receivedhists", "Received histograms", hnamepaths.size(), 0, hnamepaths.size());
+		set<string>::iterator siter=hnamepaths.begin();
+		for(int ibin=1; siter!=hnamepaths.end(); siter++, ibin++){
+			string hnamepath = *siter;
+			hreqhists->GetXaxis()->SetBinLabel(ibin, hnamepath.c_str());
+			hrcdhists->GetXaxis()->SetBinLabel(ibin, hnamepath.c_str());
+			
+			hreqhists->SetBinContent(ibin, requested_histograms[hnamepath]);
+			hrcdhists->SetBinContent(ibin, received_histograms[hnamepath]);
+		}
+		
+		// Close ROOT file
+		debug_file->Write();
+		debug_file->Close();
+		delete debug_file;
+
+		// Restore ROOT directory and release lock
+		savedir->cd();
+		pthread_rwlock_unlock(ROOT_MUTEX);
+
+		cout << "-------------- Done --------------" << endl;
 	}
 }
 
@@ -258,6 +313,7 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\" for " << hnamepath << endl;
 		cMsgSys->send(&requestHist);
+		requested_histograms[hnamepath]++;
 	}
 }
 
@@ -271,6 +327,7 @@ void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << endl;
 		cMsgSys->send(&requestHist);
+		for(uint32_t i=0; i<hnamepaths.size(); i++) requested_histograms[hnamepaths[i]]++;
 	}
 }
 
@@ -323,6 +380,7 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << "\"" << endl;
 		cMsgSys->send(&requestHist);
+		requested_macros[hnamepath]++;
 	}
 }
 
@@ -796,7 +854,7 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 		RS_INFO -> Lock();
 		if(RS_INFO->histdefs.find(macrodef.hnamepath)==RS_INFO->histdefs.end()){
 			RS_INFO->histdefs[macrodef.hnamepath]=macrodef;
-			_DBG_ << "Added macro with hnamepath = " << macrodef.hnamepath << endl;
+			if(verbose>0)_DBG_ << "Added macro with hnamepath = " << macrodef.hnamepath << endl;
 		}else{
 			// Need code to verify hdefs ae same!!
 			// for now do some sanity check to at least make sure it is a macro
@@ -1020,6 +1078,8 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     
     // Lock RS_INFO mutex while working with RS_INFO
     RS_INFO->Lock();
+	 
+	 received_histograms[hnamepath]++;
     
     // Get pointer to hdef_t
     map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
@@ -1197,6 +1257,8 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     // Lock RS_INFO mutex while working with RS_INFO
     RS_INFO->Lock();
     
+	 received_macros[hnamepath]++;
+
     // Get pointer to hdef_t
     map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
     if(hdef_iter==RS_INFO->histdefs.end()){
@@ -1283,44 +1345,20 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	if(macro_str) hinfo->macroString = macro_str->GetString().Data();
     hinfo->macroData = f;
 	hinfo->Nkeys = f->GetNkeys();
+	
+	// Look for special comments declaring hnamepaths this
+	// macro requires.
+	istringstream ss(hinfo->macroString);
+	string line;
+	while(getline(ss, line)){
+		if(line.find("// hnamepath")==0){
+			string myhnamepath = line.substr(12);
+			myhnamepath.erase(myhnamepath.find_last_not_of(" \n\r\t")+1);
+			hdef->macro_hnamepaths.insert(myhnamepath);
+			if(verbose>1) _DBG_<<"Added " <<  myhnamepath << " to macro: " << hnamepath << endl;
+		}
+	}
 
-    //TNamed *namedObj = NULL;
-    /*
-    TIter iter(f->GetListOfKeys());
-    TKey *key;
-    while( (key = (TKey*)iter()) ) {
-	    string objname(key->GetName());
-	    
-	    cout << "TMemFile object: " << objname << endl;
-	    if(objname == name) {
-		    TObject *obj = key->ReadObj();
-		    TNamed *nobj = dynamic_cast<TNamed*>(obj);
-		    if(nobj != NULL) {
-			    // save objects from the file
-		    }
-	    }
-    }
-    */
-    /*
-    if(!namedObj){
-	_DBG_<<"No valid object returned in histogram message."<<endl;
-	pthread_rwlock_unlock(ROOT_MUTEX);
-	RS_INFO->Unlock();
-	return;
-    }
-        
-    // Cast this as a tree pointer
-    TTree *T = dynamic_cast<TTree*>(namedObj);
-    if(!T){
-	_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TTree type"<<endl;
-	pthread_rwlock_unlock(ROOT_MUTEX);
-	RS_INFO->Unlock();
-	return;
-    }
-    */
-    // _DBG_ << "unpacked macro!" << endl;
-    //T->Print();
-    
     // Update hinfo
 	double last_received = hinfo->received;
     hinfo->received = GetTime();

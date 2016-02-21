@@ -8,6 +8,7 @@
 #ifndef _RSTab_
 #define _RSTab_
 
+#include <set>
 #include <string>
 #include <list>
 #include <iostream>
@@ -73,8 +74,8 @@ class RSTab{
 		void DoRestore(void);
 		void DoViewMacro(void);
 		
-		void GetMacroHists(vector<string> &hnamepaths);
-		void RequestUpdatedMacroHists(void);
+		void GetMacroHists(set<string> &hnamepaths);
+		void RequestUpdatedMacroHists(set<string> &hnamepaths);
 	
 	protected:
 

@@ -204,7 +204,7 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
 	if(ROOTSPY_VERBOSE) VERBOSE = atoi(ROOTSPY_VERBOSE);
 	const char *ROOTSPY_DEBUG = getenv("ROOTSPY_DEBUG");
-	if(ROOTSPY_DEBUG) DEBUG = true;
+	DEBUG = ROOTSPY_DEBUG!=NULL;
 	
 	debug_file = NULL;
 	hcounts = NULL;

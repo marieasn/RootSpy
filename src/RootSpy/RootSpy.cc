@@ -44,7 +44,7 @@ int main(int narg, char *argv[])
 	RS_INFO = new rs_info();
 
 	// Create a ROOT TApplication object
-	TApplication app("RootSpy", &narg, argv);
+	TApplication *app = new TApplication("RootSpy", &narg, argv);
 
 	// Makes a Mutex to lock / unlock Root Global
 	ROOT_MUTEX = new pthread_rwlock_t;
@@ -76,11 +76,30 @@ int main(int narg, char *argv[])
 	RSMF = new rs_mainframe(gClient->GetRoot(), 10, 10, true, CONFIG_FILENAME);
 	
 	// Hand control to the ROOT "event" loop
-	app.SetReturnFromRun(true);
-	app.Run();
+	app->Run(kTRUE);
 	
 	delete RS_CMSG;
 	delete RSMF;
+
+	// I recall spending some time tearing my hair out over
+	// this in the past. Currently though, it will seg. fault
+	// in the online system (RHEL6.4 + ROOT 5.34) if the TApplication
+	// is deleted. Until recently, the TApplication was allocated
+	// on the stack so it was automatically getting deleted. This
+	// seemed to work since SetReturnFromTrue() was being called before
+	// Run() and Run() was not passed any arguments. This caused it
+	// to set the ReturnFromRun flag to false so the program terminated
+	// without returning from TApplication::Run(). This was bad since
+	// the rs_cmsg object was not being deleted, therefore preventing
+	// its destructor from being called, therefore denying it the
+	// opportunity to write out a debug file. Phew! I know that is
+	// long winded, but wanted to leave a note to myself reminding
+	// me of the ramifications if this were changed. Also, because
+	// this seems to be a somewhat workable solution in the counting
+	// house, I don't want this changed to make it work on other
+	// platforms unless it is fully tested on the counting house 
+	// system too!
+	//delete app;
 
 	return 0;
 }

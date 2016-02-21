@@ -9,6 +9,7 @@
 #define _hdef_t_
 
 #include <vector>
+#include <set>
 #include <list>
 #include <map>
 #include <TDirectory.h>
@@ -115,6 +116,8 @@ class hdef_t{
 		map<string, bool> save_servers;
 		bool active;				// include histos with this definition in display?
 		bool save_active;
+		
+		set<string> macro_hnamepaths;
 
 		hdisplay_info_t display_info;    // various options that modify how the histogram is displayed
 };

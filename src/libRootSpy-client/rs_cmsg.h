@@ -68,6 +68,10 @@ class rs_cmsg:public cMsgCallback{
 		int verbose;
 		static double start_time;
 		string program_name;
+		map<string,uint32_t> requested_histograms;
+		map<string,uint32_t> received_histograms;
+		map<string,uint32_t> requested_macros;
+		map<string,uint32_t> received_macros;
 
 		
 	public:
