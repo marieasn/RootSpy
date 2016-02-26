@@ -332,8 +332,11 @@ void RSTab::DoSaveCanvas(void)
 //----------
 void RSTab::DoUpdate(void)
 {
-	/// This is called by the rs_mainframe::DoTimer about every 250 milliseconds
-	/// to refresh the canvas as needed. It is also called if the 
+	/// This is called by the rs_mainframe::DoTimer about
+	/// every 250 milliseconds to refresh the canvas as needed.
+	/// It is also called if the histogram/macro has changed
+	/// and DoUpdateWithFollowUp gets called which schedules
+	/// this to be called a few extra times.
 
 	double now = RS_CMSG->GetTime();
 
@@ -411,6 +414,7 @@ void RSTab::DoUpdate(void)
 					DoOverlay();
 					sum_hist->UseCurrentStyle();   // updates in case the style paramteres change
 					canvas->Update();
+					currently_displayed_hnamepath = hnamepath;
 					pthread_rwlock_unlock(ROOT_MUTEX);				
 				}
 			}
@@ -424,6 +428,7 @@ void RSTab::DoUpdate(void)
 			if(hdef_it != RS_INFO->histdefs.end()) RSMF->DrawMacro(canvas, hdef_it->second);
 			RS_INFO->Unlock();
 			canvas->Update();
+			currently_displayed_hnamepath = hnamepath;
 			RequestUpdatedMacroHists((hdef_it->second).macro_hnamepaths);
 			break;
 		default:
@@ -596,9 +601,19 @@ void RSTab::DoUpdateWithFollowUp(void)
 	// NOTE: Calling DoUpdate() directly here was resulting in se.g faults on
 	// OS X in the rs_cmg::RegisterHistogram() method (??!!) Register for ROOT
 	// to call it in 10ms 
-	TTimer::SingleShot(10, "RSTab", this, "DoUpdate()");
+
+	//TTimer::SingleShot(10, "RSTab", this, "DoUpdate()");
 	TTimer::SingleShot(250, "RSTab", this, "DoUpdate()");
-	TTimer::SingleShot(1000, "RSTab", this, "DoUpdate()");
+	//TTimer::SingleShot(1000, "RSTab", this, "DoUpdate()");
+}
+
+//----------
+// DoUpdateCanvas
+//----------
+void RSTab::DoUpdateCanvas(void)
+{
+	/// call canvas->Update();
+	canvas->Update();
 }
 
 //----------

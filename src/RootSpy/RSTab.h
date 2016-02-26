@@ -54,6 +54,7 @@ class RSTab{
 		list<string> hnamepaths; // histos and macros to loop through showing
 		int currently_displayed; // index of element in hnamepaths
 		double currently_displayed_modified; // Time at which the currently displayed histo was last modified
+		string currently_displayed_hnamepath;
 		double last_update; // last time when DoUpdate() was called
 		double last_request_sent;
 		string last_request_hnamepath;
@@ -68,6 +69,7 @@ class RSTab{
 		void DoSaveCanvas(void);
 		void DoUpdate(void);
 		void DoUpdateWithFollowUp(void);
+		void DoUpdateCanvas(void);
 		void DoSelectHists(void);
 		void DoOverlay(void);
 		void DoReset(void);
