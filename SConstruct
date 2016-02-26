@@ -81,6 +81,9 @@ if not DEBUG=='0':
 	env.PrependUnique(    CXXFLAGS = ['-g'])
 	env.PrependUnique(FORTRANFLAGS = ['-g'])
 
+# Enable some C++11 features available in gcc4.4
+env.AppendUnique(CXXFLAGS=['-std=c++0x'])
+
 # Apply any platform/architecture specific settings
 sbms.ApplyPlatformSpecificSettings(env, arch)
 sbms.ApplyPlatformSpecificSettings(env, osname)
