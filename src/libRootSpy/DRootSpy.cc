@@ -9,10 +9,12 @@
 #include <stdlib.h>
 #include <semaphore.h>
 
+
 #include <iostream>
 #include <iomanip>
 #include<sstream>
 #include <cmath>
+#include <thread>
 using namespace std;
 
 #include <TROOT.h>
@@ -28,6 +30,10 @@ using namespace std;
 #include <TMemFile.h>
 
 #include "DRootSpy.h"
+#include "rs_udpmessage.h"
+
+double DRootSpy::start_time=0.0; // overwritten on fist call to rs_cmsg::GetTime()
+
 #ifndef _DBG_
 #define _DBG_ cerr<<__FILE__<<":"<<__LINE__<<" "
 #define _DBG__ cerr<<__FILE__<<":"<<__LINE__<<endl;
@@ -469,6 +475,8 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	}
 	response->setSubject(sender);
 	response->setType(myname);
+	
+	double now = GetTime(); // current time in s (arbitrary zero)
 
 	// Dispatch command 
 	if(cmd == "who's there?") {
@@ -483,16 +491,32 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 		if(VERBOSE>1) _DBG_ << "responding to \"list hists\"..." << endl;
 		listHists(*response);
 		if(VERBOSE>3) _DBG_ << "...done" << endl;
-		//delete msg;
-		//return;
 	} else 	if(cmd == "get hist") {
 		// Get name of requested histogram
 		string hnamepath = msg->getString("hnamepath");
-		if(VERBOSE>1) _DBG_ << "responding to \"get hist\" for " << hnamepath << " ..." << endl;
-		getHist(*response, hnamepath);
-		if(VERBOSE>3) _DBG_ << "...done" << endl;
-		//delete msg;
-		//return;
+		double delta_t = now - last_sent[sender][hnamepath];
+		if(delta_t > 1.0){
+			last_sent[sender][hnamepath] = now; // record time
+			try{
+				uint32_t addr = msg->getUint32("udpaddr");
+				uint16_t port = msg->getUint16("udpport");
+				if(VERBOSE>1){
+					struct in_addr sin_addr;
+					sin_addr.s_addr = ntohl(addr);
+					string ip_dotted = inet_ntoa(sin_addr);
+					_DBG_ << "request has UDP info: " << ip_dotted << " : " << port << endl;
+				}
+				if(VERBOSE>1) _DBG_ << "responding via UDP to \"get hist\" for " << hnamepath << " ..." << endl;
+				thread t(&DRootSpy::getHistUDP, this, sender, hnamepath, addr, port);
+				t.detach();
+			}catch(...){
+				if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
+				getHist(*response, hnamepath);
+			}
+			if(VERBOSE>3) _DBG_ << "...done" << endl;
+		}else{
+			if(VERBOSE>3) _DBG_ << "ignoring request for " << hnamepath << " (recently sent)" << endl;
+		}
 	} else 	if(cmd == "get hists") {
 		// Get name of requested histograms
 		vector<string> *hnamepaths = msg->getStringVector("hnamepaths");
@@ -667,9 +691,118 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// Send message containing histogram (asynchronously)
-	if(send_message) cMsgSys->send(&response);	
+	if(send_message) cMsgSys->send(&response);
 	
 	in_get_hist = false;
+}
+
+//---------------------------------
+// getHistUDP
+//---------------------------------
+//TODO: documentation comment.
+void DRootSpy::getHistUDP(string sender, string hnamepath, uint32_t addr32, uint16_t port)
+{
+	/// This method will be run in a separate thread.
+	/// It will pack up the histogram and send it to 
+	/// the specified host/port directly via UDP.
+	/// Once complete, the thread will exit.
+	/// This is an alternative to getHist method which
+	/// sends the histograms via cMsg.
+
+	// split hnamepath into histo name and path
+	size_t pos = hnamepath.find_last_of("/");
+	if(pos == string::npos) return;
+	string hname = hnamepath.substr(pos+1, hnamepath.length()-1);
+	string path = hnamepath.substr(0, pos);
+	if(path[path.length()-1]==':')path += "/";
+
+	// Lock access to ROOT global while we access it
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
+
+	// Get pointer to ROOT object
+	TDirectory *savedir = gDirectory;
+	hist_dir->cd(path.c_str()); // use directory from last time "list hist" request was serviced
+	TObject *obj = gROOT->FindObject(hname.c_str());
+	savedir->cd();
+	
+	// If object not found, release lock on ROOT global and return
+	if(!obj){
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		return;
+	}
+
+	// Serialize object and put it into a response message
+	TMessage *tm = new TMessage(kMESS_OBJECT | kMESS_ZIP);
+	tm->WriteObject(obj);
+	tm->SetCompressionLevel(9);
+	tm->Compress();
+	uint8_t *buff = (uint8_t*)tm->CompBuffer();
+	int len = tm->CompLength();
+	
+	// There is a limit to how big a UDP packet can be.
+	// Nominally, this is quoted at 512. another common
+	// size that originates with Windows is 65507.
+	// We limit the payload size to 65000 and if it is
+	// larger than that, we revert to sending it as
+	// a cMsg.
+	if(len>65000){
+		
+		// Send as cMsg
+		cMsgMessage msg;
+		msg.setSubject(sender);
+		msg.setType(myname);
+		msg.setText("histogram");
+		msg.add("hnamepath", hnamepath);
+		msg.add("TMessage", buff, len);
+
+		// Finished with TMessage object. Free it and release lock on ROOT global
+		delete tm;
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		
+		if(VERBOSE>2) _DBG_ << "Message size too big for UDP (" << len << ">65000) sending as cMsg ..." << endl;
+		cMsgSys->send(&msg);
+		
+	}else{
+	
+		// Send as UDP packet
+	
+		// Allocate buffer for UDP packet and fill it
+		// (- sizeof(uint32_t) is to remove buff_start)
+		uint32_t udpbuff_len = sizeof(rs_udpmessage) - sizeof(uint32_t) + (uint32_t)len;
+		uint8_t *udpbuff = new uint8_t[udpbuff_len];
+		rs_udpmessage *rsudp = (rs_udpmessage*)udpbuff;
+		rsudp->len = udpbuff_len;
+		rsudp->mess_type = kUDP_HISTOGRAM;
+		memset(rsudp->hnamepath, 0, 256);
+		strcpy((char*)rsudp->hnamepath, hnamepath.c_str());
+		memset(rsudp->sender, 0, 256);
+		strcpy((char*)rsudp->sender, myname.c_str());
+		rsudp->buff_len = len;
+		memcpy((uint8_t*)&rsudp->buff_start, buff, len);
+
+		// Finished with TMessage object. Free it and release lock on ROOT global
+		delete tm;
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+
+		// Send UDP packet
+		struct sockaddr_in si_other;
+		int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+		if(fd<0){
+			_DBG_ << "Can't create socket!" << endl;
+			delete[] udpbuff;
+			return;
+		}
+		memset((char*)&si_other, 0, sizeof(si_other));
+		si_other.sin_family = AF_INET;
+		si_other.sin_port = port;
+		si_other.sin_addr.s_addr = htonl(addr32);
+
+		if(VERBOSE>2) _DBG_ << "Sending UDP packet with len = " <<udpbuff_len << endl;
+		sendto(fd, udpbuff, udpbuff_len, 0, (sockaddr*)&si_other, sizeof(si_other));
+
+		delete[] udpbuff;
+		close(fd);
+	}
 }
 
 //---------------------------------

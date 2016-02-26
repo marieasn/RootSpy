@@ -11,9 +11,12 @@
 #include <sys/time.h>
 
 #include "hinfo_t.h"
+#include "rs_netdevice.h"
+#include "rs_udpmessage.h"
 
 #include <vector>
 #include <string>
+#include <thread>
 
 #include <cMsg.hxx>
 using namespace cmsg;
@@ -73,12 +76,17 @@ class rs_cmsg:public cMsgCallback{
 		map<string,uint32_t> requested_macros;
 		map<string,uint32_t> received_macros;
 
+		vector<rs_netdevice*> netdevices;
+		rs_netdevice *udpdev;
+		uint16_t udpport;
+		std::thread *udpthread;
+		bool stop_udpthread;
 		
 	public:
 
 		void callback(cMsgMessage *msg, void *userObject);
 		void RegisterHistList(string server, cMsgMessage *msg);
-		void RegisterHistogram(string server, cMsgMessage *msg);
+		void RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg=false);
 		void RegisterHistograms(string server, cMsgMessage *msg);
 		void RegisterFinalHistogram(string server, cMsgMessage *msg);
 		void RegisterTreeInfo(string server, cMsgMessage *msg);
@@ -95,6 +103,7 @@ class rs_cmsg:public cMsgCallback{
 		void BuildRequestMacroList(cMsgMessage &msg, string servername);
 		void BuildRequestMacro(cMsgMessage &msg, string servername, string hnamepath);
 
+		void DirectUDPServerThread(void);
 
 	private:
 		cMsg *cMsgSys;

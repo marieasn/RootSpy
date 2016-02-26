@@ -1,5 +1,9 @@
 
 
+#ifndef _rs_netdevice_
+#define _rs_netdevice_
+
+
 #include <string.h>
 #include <stdio.h>
 #include <arpa/inet.h>
@@ -147,9 +151,9 @@ class rs_netdevice{
 
 		//-------------------------------
 		// PrintDevices
-		static void PrintDevices(vector<rs_netdevice*> &devs)
+		static void PrintDevices(vector<rs_netdevice*> &devs, string mess="Available network devices")
 		{
-			cout << "Available network devices" << endl;
+			cout << mess << endl;
 			cout << "-------------------------" << endl;
 			for(uint32_t i=0; i<devs.size(); i++){
 
@@ -157,16 +161,13 @@ class rs_netdevice{
 
 				string &name = dev->name;
 				string &ip_dotted = dev->ip_dotted;
-				uint32_t addr32 = dev->addr32;
-				uint8_t *addr8 = (uint8_t*)&addr32;
 
 				string pad1 = string(8-name.length(),' ');
-				string pad2 = string(15-ip_dotted.length(),' ');
-				cout << name << pad1 << ip_dotted << pad2 << (i==0 ? "<--":"") << endl;
+				cout << name << pad1 << ip_dotted << endl;
 			}
 			cout << endl;
 		}
 };
 
-
+#endif // _rs_netdevice_
 

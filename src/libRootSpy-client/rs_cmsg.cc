@@ -6,6 +6,7 @@
 //
 
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "RootSpy.h"
 #include "rs_cmsg.h"
@@ -64,6 +65,10 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	hist_default_active = true;
 	program_name = "rootspy-client"; // should be overwritten by specific program
 
+	udpdev         = NULL;
+	udpport        = 0;
+	udpthread      = NULL;
+	stop_udpthread = false;
 
 	// Connect to cMsg system
 	is_online = connect_to_cmsg;
@@ -114,6 +119,14 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		cout<<"  and macros will be available.                    "<<endl;
 		cout<<"---------------------------------------------------"<<endl;	
 	}
+	
+	// Getting list of network devices for direct UDP
+	rs_netdevice::GetDeviceList(netdevices);
+	rs_netdevice::PrintDevices(netdevices, "Devices available for direct UDP");
+	if(!netdevices.empty()){
+		// Launch thread to listen for direct UDP packets
+		udpthread = new thread(&rs_cmsg::DirectUDPServerThread, this);
+	}
 }
 
 //---------------------------------
@@ -130,6 +143,11 @@ rs_cmsg::~rs_cmsg()
 		// Stop cMsg system
 		cMsgSys->stop();
 		cMsgSys->disconnect();
+	}
+	
+	if(udpthread){
+		stop_udpthread = true;
+		udpthread->join();
 	}
 	
 	// Optionally write out stats to ROOT file
@@ -211,6 +229,10 @@ void rs_cmsg::BuildRequestHistogram(cMsgMessage &msg, string servername, string 
     msg.setType(myname);
     msg.setText("get hist");
     msg.add("hnamepath", hnamepath);
+	 if(udpdev){
+    	msg.add("udpaddr", udpdev->addr32);
+    	msg.add("udpport", udpport);
+	}
 }
 
 //---------------------------------
@@ -1069,7 +1091,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 // RegisterHistogram
 //---------------------------------
 //TODO: documentation comment.
-void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg) 
+void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg) 
 {
     //cerr << "In rs_cmsg::RegisterHistogram()..." << endl;
     
@@ -1087,6 +1109,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 	_DBG_<<"No hdef_t object for hnamepath=\""<<hnamepath<<"\"!"<<endl;
 	_DBG_<<"Throwing away histogram."<<endl;
 	RS_INFO->Unlock();
+	if(delete_msg) delete msg;
 	return;
     }
     hdef_t *hdef = &(hdef_iter->second);
@@ -1097,6 +1120,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 	_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
 	_DBG_<<"Throwing away histogram."<<endl;
 	RS_INFO->Unlock();
+	if(delete_msg) delete msg;
 	return;
     }
     server_info_t *server_info = &(server_info_iter->second);
@@ -1125,6 +1149,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 			pthread_rwlock_unlock(ROOT_MUTEX);
 			RS_INFO->Unlock();
 			delete mybytes;
+			if(delete_msg) delete msg;
 			return;
 		}
 		delete mybytes;
@@ -1136,6 +1161,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
 	_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TH1 type"<<endl;
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
+	if(delete_msg) delete msg;
 	return;
     }
     
@@ -1207,6 +1233,8 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg)
     // Unlock mutexes
     pthread_rwlock_unlock(ROOT_MUTEX);
     RS_INFO->Unlock();
+
+	if(delete_msg) delete msg;
 }
 
 //---------------------------------
@@ -1432,3 +1460,117 @@ void rs_cmsg::RegisterFinalHistogram(string server, cMsgMessage *msg) {
     pthread_rwlock_unlock(ROOT_MUTEX);
     RS_INFO->Unlock();
 }
+
+//---------------------------------
+// DirectUDPServerThread
+//---------------------------------
+void rs_cmsg::DirectUDPServerThread(void)
+{
+	/// This method is run in a thread to listen for
+	/// UDP packets sent here directly from a remote
+	/// histogram producer. This allows the bulky
+	/// histogram messages to be sent this way instead
+	/// of through the cMsg server.
+
+	if(netdevices.empty()) return; // extra bomb-proofing
+
+	rs_netdevice *dev = netdevices[0];
+	
+	// Create socket
+	int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if(fd<0){
+		perror("unable to create socket for UDP direct!");
+		return;
+	}
+	
+	// Make socket non-blocking
+	if(fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) < 0 ){
+		perror("can't set socket to non-blocking!");
+		return;
+	}
+	
+	// Bind to address and have system assign port number
+	struct sockaddr_in myaddr;
+	memset((char*)&myaddr, 0, sizeof(myaddr));
+	myaddr.sin_family = AF_INET;
+	myaddr.sin_addr.s_addr = htonl(INADDR_ANY); // accept packets from any device
+	myaddr.sin_port = 0; // let system assign a port
+	if( ::bind(fd, (struct sockaddr*)&myaddr, sizeof(myaddr)) < 0){
+		perror("bind failed");
+		close(fd);
+		return;
+	}
+	
+	// Get port number
+	socklen_t socklen = sizeof(myaddr);
+	if(getsockname(fd, (struct sockaddr*)&myaddr, &socklen) < 0){
+		perror("getsockname failed");
+		close(fd);
+		return;
+	}
+	udpport = myaddr.sin_port;
+
+	cout << "Launched UDP server using " << dev->name << " - " << dev->ip_dotted << " : " << udpport << endl;
+	
+	// upddev is used as flag to indicate we're able to
+	// receive histograms this way. If we don't get here,
+	// it will be left as NULL and the direct UDP feature
+	// will not be used.
+	udpdev = dev;
+	
+	uint32_t buff_size = 10000000;
+	uint8_t *buff = new uint8_t[buff_size];
+	
+	while(!stop_udpthread){
+	
+		// Try and read some data
+		socklen = sizeof(myaddr);
+		ssize_t bytes_recvd = recvfrom(fd, buff, buff_size, 0, (struct sockaddr*)&myaddr, &socklen);
+		if(bytes_recvd < 0){
+			// Seems dangerous to check errno here due to
+			// there being multiple threads ....
+			if( (errno==EAGAIN) || (errno==EWOULDBLOCK) ){
+				// no data. sleep for 10ms
+				usleep(10000);
+				continue;
+			}else{
+				perror("receiving on rootspy direct UDP");
+				break;
+			}
+		}
+		
+		if(verbose>4) _DBG_ << "received UDP with " << bytes_recvd << " bytes!" << endl;
+		
+		rs_udpmessage *rsudp = (rs_udpmessage*)buff;
+		string mtype = "unknown";
+		switch(rsudp->mess_type){
+			case kUDP_HISTOGRAM: mtype="histogram"; break;
+			case kUDP_MACRO    : mtype="macro";     break;
+		}
+		string hnamepath = (const char*)rsudp->hnamepath;
+		string sender = (const char*)rsudp->sender;
+		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
+		if(verbose>2) _DBG_ << "UDP: hnamepath=" << rsudp->hnamepath << " type=" << mtype << " from " << sender << endl;
+
+		// Write info into a cMsg object so we can
+		// let the same RegisterHistogram method handle
+		// it as handles histograms coming from cMsg itself.
+		cMsgMessage *cmsg = new cMsgMessage();
+		cmsg->setSubject(myname);
+		cmsg->setType(sender);
+		cmsg->setText("histogram");
+		cmsg->add("hnamepath", hnamepath);
+		cmsg->add("TMessage", buff8, rsudp->buff_len);
+
+		// Launch separate thread to handle this
+		thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
+		t.detach();
+		
+	}
+	
+	close(fd);
+	delete[] buff;
+}
+
+
+

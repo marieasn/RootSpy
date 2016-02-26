@@ -12,6 +12,14 @@
 #ifndef _DRootSpy_
 #define _DRootSpy_
 
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <sys/time.h>
+
+
 #include <vector>
 #include <string>
 
@@ -26,6 +34,7 @@ using namespace cmsg;
 
 extern pthread_rwlock_t *gROOTSPY_RW_LOCK;
 extern string gROOTSPY_PROGRAM_NAME;
+
 
 class DRootSpy:public cMsgCallback{
  public:
@@ -59,7 +68,19 @@ class DRootSpy:public cMsgCallback{
     bool AddMacroHistogram(string name, string path, TH1 *the_hist);
     bool AddMacroHistogram(string name, string path, vector<TH1*> the_hists);
     bool SetMacroVersion(string name, string path, int version_number);
-	 
+
+	static double GetTime(void){
+		struct timeval tval;
+		struct timezone tzone;
+		gettimeofday(&tval, &tzone);
+		double t = (double)tval.tv_sec+(double)tval.tv_usec/1.0E6;
+		if(start_time==0.0) start_time = t;
+		return t - start_time;
+	}
+	static double start_time;
+	
+	 map<string, map<string, double> > last_sent; // outer key=server, inner key=hnamepath
+
 	 int VERBOSE;
 	 bool DEBUG;
 	 
@@ -124,6 +145,7 @@ class DRootSpy:public cMsgCallback{
     void traverseTree(TObjArray *branch_list, vector<string> &treeinfo);
     void listHists(cMsgMessage &response);
     void getHist(cMsgMessage &response, string &hnamepath, bool send_message=true);
+	 void getHistUDP(string sender, string hnamepath, uint32_t addr32, uint16_t port);
     void getHists(cMsgMessage &response, vector<string> &hnamepaths);
     void getTree(cMsgMessage &response, string &name, string &path, int64_t nentries);
     void treeInfo(string sender);
