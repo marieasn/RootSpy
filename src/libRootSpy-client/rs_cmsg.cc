@@ -218,6 +218,8 @@ void rs_cmsg::BuildRequestHists(cMsgMessage &msg, string servername)
     msg.setSubject(servername);
     msg.setType(myname);
     msg.setText("list hists");
+	 uint64_t tsent = (uint64_t)time(NULL);
+	 msg.add("time_sent", tsent);
 }
 
 //---------------------------------
@@ -228,6 +230,8 @@ void rs_cmsg::BuildRequestHistogram(cMsgMessage &msg, string servername, string 
     msg.setSubject(servername);
     msg.setType(myname);
     msg.setText("get hist");
+	 uint64_t tsent = (uint64_t)time(NULL);
+	 msg.add("time_sent", tsent);
     msg.add("hnamepath", hnamepath);
 	 if(udpdev){
     	msg.add("udpaddr", udpdev->addr32);
@@ -243,6 +247,8 @@ void rs_cmsg::BuildRequestHistograms(cMsgMessage &msg, string servername, vector
     msg.setSubject(servername);
     msg.setType(myname);
     msg.setText("get hists");
+	 uint64_t tsent = (uint64_t)time(NULL);
+	 msg.add("time_sent", tsent);
     msg.add("hnamepaths", hnamepaths);
 }
 
@@ -253,6 +259,8 @@ void rs_cmsg::BuildRequestTreeInfo(cMsgMessage &msg, string servername)
 {
     msg.setSubject(servername);
     msg.setType(myname);
+	 uint64_t tsent = (uint64_t)time(NULL);
+	 msg.add("time_sent", tsent);
     msg.setText("get tree info");
 }
 
@@ -264,6 +272,8 @@ void rs_cmsg::BuildRequestTree(cMsgMessage &msg, string servername, string tree_
     msg.setSubject(servername);
     msg.setType(myname);
     msg.setText("get tree");
+	 uint64_t tsent = (uint64_t)time(NULL);
+	 msg.add("time_sent", tsent);
     msg.add("tree_name", tree_name);
     msg.add("tree_path", tree_path);
     msg.add("num_entries", num_entries);
@@ -276,6 +286,8 @@ void rs_cmsg::BuildRequestMacroList(cMsgMessage &msg, string servername)
 {
     msg.setSubject(servername);
     msg.setType(myname);
+	 uint64_t tsent = (uint64_t)time(NULL);
+	 msg.add("time_sent", tsent);
     msg.setText("list macros");
 }
 
@@ -287,6 +299,8 @@ void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnam
     msg.setSubject(servername);
     msg.setType(myname);
     msg.setText("get macro");
+	 uint64_t tsent = (uint64_t)time(NULL);
+	 msg.add("time_sent", tsent);
     msg.add("hnamepath", hnamepath);
 	 if(verbose>4) _DBG_ << "preparing to request macro with hnamepath=\"" << hnamepath << "\"" << endl;
 }
@@ -305,6 +319,8 @@ void rs_cmsg::PingServers(void)
 	whosThere.setSubject("rootspy");
 	whosThere.setType(myname);
 	whosThere.setText("who's there?");
+	uint64_t tsent = (uint64_t)time(NULL);
+	whosThere.add("time_sent", tsent);
 	
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << whosThere.getText() << "\"" << endl;
@@ -574,6 +590,23 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 			_DBG_ << "   <no payloads map!>" << endl;
 		}
 	}
+
+	if(verbose>2){
+		// print round trip time
+		try{
+			uint64_t t_originated = msg->getUint64("time_requester");
+			uint64_t t_now = (uint64_t)time(NULL);
+			_DBG_ << " " << msg->getText() << " : response time from "<< sender << " = " << (t_now-t_originated) << "secs" << endl;
+			if(verbose>4){
+				uint64_t t_responded = msg->getUint64("time_sent");
+				uint64_t t_received = msg->getUint64("time_received");
+				_DBG_ << "  t_originated = " << t_originated << endl; 
+				_DBG_ << "    t_received = " << t_received << endl; 
+				_DBG_ << "   t_responded = " << t_responded << endl; 
+				_DBG_ << "         t_now = " << t_now << endl; 
+			}
+		}catch(...){}
+	}
 	
 	// Look for an entry for this server in RS_INFO map.
 	// If it is not there then add it.
@@ -603,6 +636,8 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		response->setType(myname);
 		response->setText("I am here");
 		response->add("program", program_name);
+		uint64_t tsent = (uint64_t)time(NULL);
+		response->add("time_sent", tsent);
 		if(verbose>3) _DBG_ << "Sending \"" << response->getText() << endl;
 		cMsgSys->send(response);
 		delete response;
@@ -1098,16 +1133,6 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     // Get hnamepath from message
     string hnamepath = msg->getString("hnamepath");
 
-if(verbose>4){
-	try{
-		uint64_t t_responded = msg->getUint64("time_sent");
-		uint64_t t_originated = msg->getUint64("time_requester");
-		uint64_t t_received = msg->getUint64("time_received");
-		uint64_t t_now = (uint64_t)time(NULL);
-		_DBG_<<"response time=" << (t_now-t_originated) << " for " << hnamepath << endl;
-	}catch(...){}
-}
-    
     // Lock RS_INFO mutex while working with RS_INFO
     RS_INFO->Lock();
 	 
@@ -1571,6 +1596,9 @@ void rs_cmsg::DirectUDPServerThread(void)
 		cmsg->setText("histogram");
 		cmsg->add("hnamepath", hnamepath);
 		cmsg->add("TMessage", buff8, rsudp->buff_len);
+		cmsg->add("time_sent", rsudp->time_sent);
+		cmsg->add("time_requester", rsudp->time_requester);
+		cmsg->add("time_received", rsudp->time_received);
 
 		// Launch separate thread to handle this
 		thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
