@@ -32,8 +32,11 @@ class rs_udpmessage{
 
 		uint32_t len; // total length of this message in bytes (including this word)
 		uint32_t mess_type;
-		uint8_t hnamepath[256];
-		uint8_t sender[256];
+		uint8_t  hnamepath[256];
+		uint8_t  sender[256];
+		uint64_t time_sent;
+		uint64_t time_requester;
+		uint64_t time_received;
 		uint32_t buff_len;
 		uint32_t buff_start;
 };

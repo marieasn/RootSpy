@@ -456,7 +456,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	if(VERBOSE>1) cout<<"Received message --  Subject:"<<msg->getSubject()
 			<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
 	
-	
+
 	// We want all callback threads to be run with high priority
 	// relative to the other (JANA) threads. This is so they can
 	// be responsive to the remote process. This thread is created
@@ -486,12 +486,23 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	response->setType(myname);
 	
 	double now = GetTime(); // current time in s (arbitrary zero)
+		
+	// If sender sent a timestamp, copy it to response
+	uint64_t treceived = (uint64_t)time(NULL);
+	uint64_t trequester = 0;
+	try{
+		trequester = msg->getUint64("time_sent");
+	}catch(...){}
+	response->add("time_requester", trequester);
+	response->add("time_received",  treceived);
 
 	// Dispatch command 
 	if(cmd == "who's there?") {
 		response->setText("I am here");
 		response->add("program", gROOTSPY_PROGRAM_NAME);
 		if(VERBOSE>1) _DBG_ << "responding to \"who's there\"..." << endl;
+		uint64_t tsending = (uint64_t)time(NULL);
+		response->add("time_sent",  tsending);
 		cMsgSys->send(response);
 		if(VERBOSE>3) _DBG_ << "...done" << endl;
 		//delete msg;
@@ -516,7 +527,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 					_DBG_ << "request has UDP info: " << ip_dotted << " : " << port << endl;
 				}
 				if(VERBOSE>1) _DBG_ << "responding via UDP to \"get hist\" for " << hnamepath << " ..." << endl;
-				thread t(&DRootSpy::getHistUDP, this, sender, hnamepath, addr, port);
+				thread t(&DRootSpy::getHistUDP, this, *response, hnamepath, addr, port);
 				t.detach();
 			}catch(...){
 				if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
@@ -649,6 +660,8 @@ void DRootSpy::listHists(cMsgMessage &response)
 	}
 	
 	response.setText("hists list");
+	uint64_t tsending = (uint64_t)time(NULL);
+	response.add("time_sent",  tsending);
 	cMsgSys->send(&response);
 	
 	in_list_hists = false;
@@ -700,8 +713,12 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// Send message containing histogram (asynchronously)
-	if(send_message) cMsgSys->send(&response);
-	
+	if(send_message){
+		uint64_t tsending = (uint64_t)time(NULL);
+		response.add("time_sent",  tsending);
+		cMsgSys->send(&response);
+	}
+
 	in_get_hist = false;
 }
 
@@ -709,7 +726,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 // getHistUDP
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::getHistUDP(string sender, string hnamepath, uint32_t addr32, uint16_t port)
+void DRootSpy::getHistUDP(cMsgMessage &response, string hnamepath, uint32_t addr32, uint16_t port)
 {
 	/// This method will be run in a separate thread.
 	/// It will pack up the histogram and send it to 
@@ -762,23 +779,24 @@ void DRootSpy::getHistUDP(string sender, string hnamepath, uint32_t addr32, uint
 	if(len>65000){
 		
 		// Send as cMsg
-		cMsgMessage msg;
-		msg.setSubject(sender);
-		msg.setType(myname);
-		msg.setText("histogram");
-		msg.add("hnamepath", hnamepath);
-		msg.add("TMessage", buff, len);
+		response.setText("histogram");
+		response.add("hnamepath", hnamepath);
+		response.add("TMessage", buff, len);
 
 		// Finished with TMessage object. Free it and release lock on ROOT global
 		delete tm;
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 		
 		if(VERBOSE>2) _DBG_ << "Message size too big for UDP (" << len << ">65000) sending as cMsg ..." << endl;
-		cMsgSys->send(&msg);
+		uint64_t tsending = (uint64_t)time(NULL);
+		response.add("time_sent",  tsending);
+		cMsgSys->send(&response);
 		
 	}else{
 	
 		// Send as UDP packet
+
+		string sender = response.getType();
 	
 		// Allocate buffer for UDP packet and fill it
 		// (- sizeof(uint32_t) is to remove buff_start)
@@ -791,6 +809,9 @@ void DRootSpy::getHistUDP(string sender, string hnamepath, uint32_t addr32, uint
 		strcpy((char*)rsudp->hnamepath, hnamepath.c_str());
 		memset(rsudp->sender, 0, 256);
 		strcpy((char*)rsudp->sender, myname.c_str());
+		rsudp->time_sent = (uint64_t)time(NULL);
+		rsudp->time_requester = response.getUint64("time_requester");
+		rsudp->time_received  = response.getUint64("time_received");
 		rsudp->buff_len = len;
 		memcpy((uint8_t*)&rsudp->buff_start, buff, len);
 
@@ -818,6 +839,7 @@ void DRootSpy::getHistUDP(string sender, string hnamepath, uint32_t addr32, uint
 		close(fd);
 	}
 }
+
 
 //---------------------------------
 // getHists
@@ -855,6 +877,8 @@ void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths)
 	response.add("histograms", cmsgs);
 
 	// Send message containing histogram (asynchronously)
+	uint64_t tsending = (uint64_t)time(NULL);
+	response.add("time_sent",  tsending);
 	cMsgSys->send(&response);
 	
 	in_get_hists = false;
@@ -881,6 +905,8 @@ void DRootSpy::listMacros(cMsgMessage &response)
 	}
 	
 	response.setText("macros list");
+	uint64_t tsending = (uint64_t)time(NULL);
+	response.add("time_sent",  tsending);
 	cMsgSys->send(&response);
 	
 	in_list_macros = false;
@@ -960,6 +986,8 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath)
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
 	// Send message containing histogram (asynchronously)
+	uint64_t tsending = (uint64_t)time(NULL);
+	response.add("time_sent",  tsending);
 	cMsgSys->send(&response);
 	
 	in_get_macro = false;
@@ -1064,6 +1092,8 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	delete tm;
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
+	uint64_t tsending = (uint64_t)time(NULL);
+	response.add("time_sent",  tsending);
 	cMsgSys->send(&response);
 	
 	in_get_tree = false;
@@ -1125,6 +1155,8 @@ void DRootSpy::treeInfoSync(cMsgMessage &response, string sender)
     response.add("tree_paths", tree_paths);
 	}
     response.setText("tree info");
+    uint64_t tsending = (uint64_t)time(NULL);
+    response.add("time_sent",  tsending);
     cMsgSys->send(&response);
 	 
 	 in_get_tree_info = false;

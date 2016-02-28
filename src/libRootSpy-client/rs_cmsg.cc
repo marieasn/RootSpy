@@ -1097,6 +1097,16 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     
     // Get hnamepath from message
     string hnamepath = msg->getString("hnamepath");
+
+if(verbose>4){
+	try{
+		uint64_t t_responded = msg->getUint64("time_sent");
+		uint64_t t_originated = msg->getUint64("time_requester");
+		uint64_t t_received = msg->getUint64("time_received");
+		uint64_t t_now = (uint64_t)time(NULL);
+		_DBG_<<"response time=" << (t_now-t_originated) << " for " << hnamepath << endl;
+	}catch(...){}
+}
     
     // Lock RS_INFO mutex while working with RS_INFO
     RS_INFO->Lock();
