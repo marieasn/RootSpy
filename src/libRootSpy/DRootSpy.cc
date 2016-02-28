@@ -717,6 +717,11 @@ void DRootSpy::getHistUDP(string sender, string hnamepath, uint32_t addr32, uint
 	/// Once complete, the thread will exit.
 	/// This is an alternative to getHist method which
 	/// sends the histograms via cMsg.
+	
+	// Not sure if this will work for C++11 threads. Perhaps
+	// yes on systems using posix threads underneath (?....)
+	struct sched_param sp = {16}; // thread priority
+	pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
 
 	// split hnamepath into histo name and path
 	size_t pos = hnamepath.find_last_of("/");
