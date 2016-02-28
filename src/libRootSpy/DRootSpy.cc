@@ -455,6 +455,15 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 
 	if(VERBOSE>1) cout<<"Received message --  Subject:"<<msg->getSubject()
 			<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
+	
+	
+	// We want all callback threads to be run with high priority
+	// relative to the other (JANA) threads. This is so they can
+	// be responsive to the remote process. This thread is created
+	// by cMsg however so the only way we have of bumping its priority
+	// is to do so from the thread itself.
+	struct sched_param sp = {16}; // thread priority
+	pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
 
 	// The convention here is that the message "type" always constains the
 	// unique name of the sender and therefore should be the "subject" to
