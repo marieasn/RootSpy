@@ -487,7 +487,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	
 	double now = GetTime(); // current time in s (arbitrary zero)
 		
-	// If sender sent a timestamp, copy it to response
+	// Copy timestamps to response
 	uint64_t treceived = (uint64_t)time(NULL);
 	uint64_t trequester = 0;
 	try{
@@ -495,6 +495,24 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	}catch(...){}
 	response->add("time_requester", trequester);
 	response->add("time_received",  treceived);
+
+	// Check message queue to make sure it doesn't grow too large
+	vector<int32_t> queue_counts;
+	for(uint32_t i=0; i<subscription_handles.size(); i++){
+		void *handle = subscription_handles[i];
+		int32_t queue_count = cMsgSys->subscriptionQueueCount(handle);
+		if(queue_count >= 5){
+			static int Nwarnings = 0;
+			if(Nwarnings<20){
+				_DBG_ << "cMsg queue " << i << " has >5 messages. Clearing ..." << endl;
+				if(++Nwarnings == 20) _DBG_ << "  (last warning!" << endl;
+			}
+			cMsgSys->subscriptionQueueClear(handle);
+		}
+		//queue_counts.push_back(cMsgSys->subscriptionQueueCount(subscription_handles[i]));
+	}
+	if(!queue_counts.empty()) response->add("queue_counts", queue_counts);
+
 
 	// Dispatch command 
 	if(cmd == "who's there?") {

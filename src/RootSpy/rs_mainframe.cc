@@ -51,6 +51,7 @@
 #include <sstream>
 #include <cmath>
 #include <fstream>
+#include <thread>
 using namespace std;
 
 
@@ -426,6 +427,10 @@ void rs_mainframe::ReadConfig(string fname)
 				if(tokens.size()>2){
 					rstab->currently_displayed = atoi(tokens[2].c_str());
 				}
+				
+				// Launch thread to try and preload hists and macros
+	//			thread t(&rs_cmsg::SeedHnamepaths, RS_CMSG, rstab->hnamepaths, true, true);
+	//			t.detach();
 				
 				rstab->DoUpdateWithFollowUp();
 			}

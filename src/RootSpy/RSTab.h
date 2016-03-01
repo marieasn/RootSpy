@@ -58,9 +58,7 @@ class RSTab{
 		double last_update; // last time when DoUpdate() was called
 		double last_request_sent;
 		string last_request_hnamepath;
-		bool hnamepaths_seeded; // set to true the first time we see hnamepaths is not empty
 		
-		void SeedHistos(void);
 		void SetTo(string hnamepath);
 		
 		void DoNext(void);

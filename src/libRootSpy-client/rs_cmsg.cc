@@ -607,6 +607,16 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 			}
 		}catch(...){}
 	}
+
+	if(verbose>4){
+		// print round trip time
+		try{
+			vector<int32_t> *queue_counts = msg->getInt32Vector("queue_counts");
+			for(uint32_t i=0; i<queue_counts->size() ;i++){
+				_DBG_ << "  queue_counts["<<i<<"] = " << (*queue_counts)[i] << endl;
+			}
+		}catch(...){}
+	}
 	
 	// Look for an entry for this server in RS_INFO map.
 	// If it is not there then add it.
@@ -1413,6 +1423,8 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	// macro requires.
 	istringstream ss(hinfo->macroString);
 	string line;
+	uint32_t Nprev_macro_hnamepaths = hdef->macro_hnamepaths.size();
+	hdef->macro_hnamepaths.clear();
 	while(getline(ss, line)){
 		if(line.find("// hnamepath")==0){
 			string myhnamepath = line.substr(12);
@@ -1420,6 +1432,16 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 			hdef->macro_hnamepaths.insert(myhnamepath);
 			if(verbose>1) _DBG_<<"Added " <<  myhnamepath << " to macro: " << hnamepath << endl;
 		}
+	}
+
+	// If we have a different number of macro input histograms
+	// than before then spin off a thread to start asking for
+	// them. This should usually happen only at start up when
+	// a macro is read in for the first time. This helps by 
+	// pre-loading histograms that will be needed for display.
+	if(hdef->macro_hnamepaths.size() != Nprev_macro_hnamepaths){
+//		thread t(&rs_cmsg::SeedHnamepathsSet, this, hdef->macro_hnamepaths, true, false);
+//		t.detach();
 	}
 
     // Update hinfo
@@ -1494,6 +1516,68 @@ void rs_cmsg::RegisterFinalHistogram(string server, cMsgMessage *msg) {
     // Unlock mutexes
     pthread_rwlock_unlock(ROOT_MUTEX);
     RS_INFO->Unlock();
+}
+
+//---------------------------------
+// SeedHnamepathsSet
+//---------------------------------
+void rs_cmsg::SeedHnamepathsSet(set<string> &hnamepaths, bool request_histo, bool request_macro)
+{
+	/// This is just a wrapper for the "list" version below.
+	list<string> lhnamepaths;
+	set<string>::iterator iter = hnamepaths.begin();
+	for(; iter!=hnamepaths.end(); iter++) lhnamepaths.push_back(*iter);
+	
+	SeedHnamepaths(lhnamepaths, request_histo, request_macro);
+}
+
+//---------------------------------
+// SeedHnamepaths
+//---------------------------------
+void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool request_macro)
+{
+	/// This is run in a separate, temporary thread
+	/// to request the histograms and/or macros with
+	/// the given hnamepaths. This is called either
+	/// from ReadConfig as a new RSTab's configuration
+	/// is read in, or from RegisterMacro when a macro
+	/// is first read that specifies a set of hnamepaths
+	/// it needs. The intent is for them to be slowly read 
+	/// in the background when the program first starts
+	/// up so that by the time the user asks for them,
+	/// they may already be here making the program
+	/// display them faster.
+	///
+	/// This loops over the given hnamepaths requesting
+	/// each from the generic "rootspy" since we don't
+	/// yet know what producers are there. It may also
+	/// requests the hnamepath as both a histogram and
+	/// a macro (depending on the supplied flags) since
+	/// we may not actually don't know at this point which
+	/// it is!
+	///
+	/// In order to not overwhelm the remote
+	/// processes, requests are sent out one at a time
+	/// with a sleep call in between. Thus, this may
+	/// take a while to send out all requests.
+
+	list<string>::iterator iter = hnamepaths.begin();
+	for(; iter!=hnamepaths.end(); iter++){
+		string hnamepath = *iter;
+		
+		// So we don't actually know if this hnamepath
+		// represents a histogram or a macro. Ask for
+		// both.
+		if(request_histo){
+			RequestHistogram("rootspy", hnamepath);
+			usleep(10000);
+		}
+		
+		if(request_macro){
+			RequestMacro("rootspy", hnamepath);
+			usleep(10000);
+		}
+	}
 }
 
 //---------------------------------

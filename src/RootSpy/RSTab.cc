@@ -120,7 +120,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	currently_displayed_modified = 0.0;
 	last_update = 0.0;
 	last_request_sent = -10.0;
-	hnamepaths_seeded = false;
+	
 }
 
 //---------------------------------
@@ -129,46 +129,6 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 RSTab::~RSTab()
 {
 
-}
-
-//---------------------------------
-// SeedHistos
-//---------------------------------
-void RSTab::SeedHistos(void)
-{
-	/// Get list of all currently defined histos and copy them
-	/// into our hnamepath list, overwritting any that are
-	/// currently there. This is used to seed the list when
-	/// the tab is initially created. If the hnamepaths_seeded
-	/// flag is set then this returns immediately without doing
-	/// anything.
-
-	//// For production use, default to not showing anything to start out with
-
-	/*
-	if(hnamepaths_seeded) return;
-
-	RS_INFO->Lock();
-
-	// Make list of all histograms from all servers
-	list<string> new_hnamepaths;
-	map<string,hdef_t>::iterator it = RS_INFO->histdefs.begin();
-	for(; it!=RS_INFO->histdefs.end(); it++){//iterates over servers
-
-		new_hnamepaths.push_back(it->first);
-
-	}
-	
-	RS_INFO->Unlock();
-	
-	hnamepaths = new_hnamepaths;
-
-	// Tell the screen to update quickly
-	if(!hnamepaths.empty()){
-		hnamepaths_seeded = true;
-		DoUpdateWithFollowUp();
-	}
-	*/
 }
 
 //-------------------
@@ -350,12 +310,8 @@ void RSTab::DoUpdate(void)
 			currently_displayed_modified = now;
 		}
 		
-		// Seed hnamepaths when we first start up
-		if(!hnamepaths_seeded) SeedHistos();
-
 		return;
 	}
-	hnamepaths_seeded = true;
 
 	// If the currently displayed histogram index is out of range, force it into range
 	if((uint32_t)currently_displayed >= hnamepaths.size()) currently_displayed = 0;
@@ -694,6 +650,8 @@ void RSTab::GetMacroHists(set<string> &hnamepaths)
 	/// Also, look for the macro string and identify any hnamepaths in
 	/// it and add those to the list.
 
+	pthread_rwlock_rdlock(ROOT_MUTEX);
+
 	for(int ipad=0; ipad<100; ipad++){
 		TVirtualPad *pad = canvas->GetPad(ipad);
 		if(!pad) break;
@@ -705,6 +663,7 @@ void RSTab::GetMacroHists(set<string> &hnamepaths)
 			TH1 *h = dynamic_cast<TH1*>(obj);
 			if(h != NULL){
 				TDirectory *dir = h->GetDirectory();
+				if(!dir) continue;
 				string path = dir->GetPath();
 				string prefix = "RootSpy:/rootspy/";
 				if(path.find(prefix) == 0){
@@ -714,7 +673,8 @@ void RSTab::GetMacroHists(set<string> &hnamepaths)
 			}			
 		}
 	}
-	
+
+	pthread_rwlock_unlock(ROOT_MUTEX);
 }
 
 //----------
