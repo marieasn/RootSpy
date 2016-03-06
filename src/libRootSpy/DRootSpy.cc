@@ -501,10 +501,10 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	for(uint32_t i=0; i<subscription_handles.size(); i++){
 		void *handle = subscription_handles[i];
 		int32_t queue_count = cMsgSys->subscriptionQueueCount(handle);
-		if(queue_count >= 5){
+		if(queue_count >= 32){
 			static int Nwarnings = 0;
 			if(Nwarnings<20){
-				_DBG_ << "cMsg queue " << i << " has >5 messages. Clearing ..." << endl;
+				_DBG_ << "cMsg queue " << i << " has >32 messages. Clearing ..." << endl;
 				if(++Nwarnings == 20) _DBG_ << "  (last warning!" << endl;
 			}
 			cMsgSys->subscriptionQueueClear(handle);
