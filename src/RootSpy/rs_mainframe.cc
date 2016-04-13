@@ -131,6 +131,11 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 
 	//overlay_mode = false;
 	archive_file = NULL;
+	
+	// These are used when generating plots to make an e-log entry
+	elog_timer = NULL;
+	Npages_elog = 0;
+	ipage_elog  = 0;
 
 	//overlay_mode = true;
 	//archive_file = new TFile("/u/home/sdobbs/test_archives/run1_output.root");
@@ -871,7 +876,7 @@ void rs_mainframe::DoTimer(void) {
 		if(current_tab){
 			double tdiff = now - current_tab->last_request_sent;
 			if( tdiff >= (double)delay_time ){
-				if(bAutoAdvance->GetState()==kButtonDown){
+				if(bAutoAdvance->GetState()==kButtonDown && ( ipage_elog>=Npages_elog )){
 					current_tab->DoNext();
 				}else{
 					current_tab->DoUpdate();
@@ -879,6 +884,9 @@ void rs_mainframe::DoTimer(void) {
 			}
 		}
 	}
+	
+	// If making an e-log entry, advance to next stage
+	if( ipage_elog<Npages_elog ) DoELogPage();
 
 	last_called = now;
 }
@@ -1220,6 +1228,83 @@ void rs_mainframe::DoOnline(void)
 }
 
 //-------------------
+// DoELog
+//-------------------
+void rs_mainframe::DoELog(void)
+{
+	// Unbeleivable what we have to go through for this!
+	// TTimer did NOT work as advertised. We have to piggyback
+	// off of the existing DoTimer timer. 
+
+	cout << "Generating e-log entry ..." << endl;
+
+	current_tab->currently_displayed = 0;
+	current_tab->DoUpdateWithFollowUp();
+
+	Npages_elog = current_tab->hnamepaths.size();
+	ipage_elog  = 0;
+	elog_next_action = RS_CMSG->GetTime() + 1.0;
+}
+
+//-------------------
+// DoELogPage
+//-------------------
+void rs_mainframe::DoELogPage(void)
+{
+	current_tab->DoUpdateWithFollowUp();
+	if(  RS_CMSG->GetTime() < elog_next_action ) return;
+	elog_next_action = RS_CMSG->GetTime() + 2.0;
+	ipage_elog++;
+
+	const char *dir = "/home/hdops/tmp";
+	cout << "    - Writing plot " << ipage_elog << " of " << Npages_elog << endl;
+	char str[256];
+	sprintf(str,"%s/rs_page%02d.png", dir, ipage_elog);
+	current_tab->canvas->SaveAs(str, "");
+	
+	/// Setup timer for next page if needed
+	if( ipage_elog < Npages_elog ){
+		current_tab->DoNext();
+	}else{
+		// This was the last page. Generate entry.
+		
+		char fname[256];
+		sprintf(fname, "%s/elog_occupancy.html", dir);
+		ofstream ofs(fname);
+		if(ofs.is_open()){
+			time_t t = time(NULL);
+			ofs << "Hall-D Occupancy Plots for " << ctime(&t);
+			ofs.close();
+			
+			stringstream cmd;
+			cmd << "/site/ace/certified/apps/bin/logentry";
+			cmd << " --html -b " << fname;
+			cmd << " -l TLOG";
+			cmd << " -t \"Hall-D Occupancy Plots\"";
+			
+			// attach all plots
+			for(unsigned int i=1; i<=Npages_elog; i++){
+				char str[256];
+				sprintf(str,"%s/rs_page%02d.png", dir, i);
+				cmd << " -a " << str;
+			}
+			
+			// Save command in ~hdops/tmp for debugging
+			ofstream ofcmd("/home/hdops/tmp/occ_elog_cmd");
+			ofcmd << cmd.str() << endl;
+			ofcmd.close();
+			
+			cout << "Executing:" << endl;
+			cout << "   " << cmd.str() << endl;
+			
+			system(cmd.str().c_str());
+		}
+		
+		cout << "Done" << endl;
+	}
+}
+
+//-------------------
 // AddLabel
 //-------------------
 TGLabel* rs_mainframe::AddLabel(TGCompositeFrame* frame, string text, Int_t mode, ULong_t hints)
@@ -1384,7 +1469,7 @@ void rs_mainframe::CreateGUI(void)
 
 	// label for archive file name display
 	lArchiveFile = AddLabel(fMainTopLeft, "No Archive Loaded", kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
-		
+
 	// Update options
 	bAutoRefresh = AddCheckButton(fMainTopRightOptions, "Auto-refresh");
 	bAutoAdvance = AddCheckButton(fMainTopRightOptions, "Auto-advance");
@@ -1412,6 +1497,7 @@ void rs_mainframe::CreateGUI(void)
 
 	//....... Bottom Frame .......
 	AddSpacer(fMainBot, 50, 1, kLHintsRight);
+	TGTextButton *bElog = AddButton(fMainBot, "Make HDLOG Entry", kLHintsLeft);
 	TGTextButton *bQuit = AddButton(fMainBot, "Quit", kLHintsRight);
 
 	fMain->MapSubwindows();
@@ -1419,6 +1505,7 @@ void rs_mainframe::CreateGUI(void)
 
 	//==================== Connect GUI elements to methods ====================
 	bQuit->Connect("Clicked()","rs_mainframe", this, "DoQuit()");
+	bElog->Connect("Clicked()","rs_mainframe", this, "DoELog()");
 	fMainTab->Connect("Selected(Int_t)", "rs_mainframe", this, "DoTabSelected(Int_t)");
 	bSetArchive->Connect("Clicked()","rs_mainframe", this, "DoSetArchiveFile()");
 	fDelay->Connect("Selected(Int_t)","rs_mainframe", this, "DoSelectDelay(Int_t)");
@@ -1718,9 +1805,11 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 	// execute script line-by-line
 	// maybe we should do some sort of sanity check first?
 	istringstream macro_stream(macro);
+	int iline = 0;
 	while(!macro_stream.eof()) {
 		string s;
 		getline(macro_stream, s);
+		iline++;
 		
 		// Special comment lines allow macro to communicate to RootSpy system
 		string prefix = "// hnamepath:";
@@ -1746,9 +1835,11 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 		}
 		
 		Long_t err = gROOT->ProcessLine(s.c_str());
-		if(err != TInterpreter::kNoError){
-			cout << "Error processing the following macro line:" << endl;
-			cout << s << endl;
+		if(err == TInterpreter::kProcessing){
+			cout << "Processing macro ..." << endl;
+		}else  if(err != TInterpreter::kNoError){
+			cout << "Error processing the macro line " << iline << ": " << err << endl;
+			cout << "\"" << s << "\"" << endl;
 			break;
 		}
 	}

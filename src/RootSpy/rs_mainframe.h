@@ -107,6 +107,8 @@ class rs_mainframe:public TGMainFrame {
 		void DoSaveHistsList(void);
 		void DoFinal(void);
 		void DoOnline(void);
+		void DoELog(void);
+		void DoELogPage(void);
 
 		// Helper methods for building GUI
 		TGLabel*          AddLabel(TGCompositeFrame* frame, string text, Int_t mode=kTextLeft, ULong_t hints=kLHintsLeft | kLHintsTop);
@@ -171,6 +173,10 @@ class rs_mainframe:public TGMainFrame {
 		int selected_tab_from_prefrences;
 		TGDimension winsize_from_preferences;
 		
+		TTimer *elog_timer;
+		unsigned int Npages_elog;
+		unsigned int ipage_elog;
+		double elog_next_action;
 	
 		void CreateGUI(void);
 

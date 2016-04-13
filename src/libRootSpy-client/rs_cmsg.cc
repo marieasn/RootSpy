@@ -1406,7 +1406,9 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     if(verbose>=2) _DBG_ << "     file size = " << length << endl;
    TString filename(tmpfile_name);
 
+//_DBG_<<"--- Creating TMemFile:" << tmpfile_name <<endl;
     TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
+//_DBG_<<"--- Finished" <<endl;
     if(verbose>=2) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
     if(verbose>3){
 	 	_DBG_ << "TMemFile contents: " << endl;
