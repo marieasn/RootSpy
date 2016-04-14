@@ -435,8 +435,8 @@ void rs_mainframe::ReadConfig(string fname)
 				}
 				
 				// Launch thread to try and preload hists and macros
-	//			thread t(&rs_cmsg::SeedHnamepaths, RS_CMSG, rstab->hnamepaths, true, true);
-	//			t.detach();
+				// thread t(&rs_cmsg::SeedHnamepaths, RS_CMSG, rstab->hnamepaths, true, true);
+				// t.detach();
 				
 				rstab->DoUpdateWithFollowUp();
 			}
@@ -867,24 +867,36 @@ void rs_mainframe::DoTimer(void) {
 		last_hist_requested = now;
 	}
 	
-	//	// Request histogram update if auto button is on. If either of the
-	// "Loop over servers" or "Loop over hists" boxes are checked, we
-	// call DoNext(), otherwise call DoUpdate(). If time the auto_refresh
-	// time has not expired but the last requested hist is not what is
-	// currently displayed, then go ahead and call DoUpdate() to make
-	// the display current.
-	if(bAutoRefresh->GetState()==kButtonDown){
-		if(current_tab){
-			double tdiff = now - current_tab->last_request_sent;
-			if( tdiff >= (double)delay_time ){
-				if(bAutoAdvance->GetState()==kButtonDown && ( ipage_elog>=Npages_elog )){
-					current_tab->DoNext();
-				}else{
-					current_tab->DoUpdate();
+	// If we are in the middle of making an e-log entry, then don't
+	// allow any auto advancing or refreshing.
+	if(ipage_elog==Npages_elog){
+		//	// Request histogram update if auto button is on. If either of the
+		// "Loop over servers" or "Loop over hists" boxes are checked, we
+		// call DoNext(), otherwise call DoUpdate(). If time the auto_refresh
+		// time has not expired but the last requested hist is not what is
+		// currently displayed, then go ahead and call DoUpdate() to make
+		// the display current.
+		if(bAutoRefresh->GetState()==kButtonDown){
+			if(current_tab){
+				double tdiff = now - current_tab->last_request_sent;
+				if( tdiff >= (double)delay_time ){
+				
+					// Lock ROOT
+					pthread_rwlock_wrlock(ROOT_MUTEX);
+				
+					if(bAutoAdvance->GetState()==kButtonDown){
+						current_tab->DoNext();
+					}else{
+						current_tab->DoUpdate();
+					}
+
+					// Unlock ROOT
+					pthread_rwlock_unlock(ROOT_MUTEX);
 				}
 			}
 		}
 	}
+	
 	
 	// If making an e-log entry, advance to next stage
 	if( ipage_elog<Npages_elog ) DoELogPage();
@@ -1280,7 +1292,7 @@ void rs_mainframe::DoELogPage(void)
 			stringstream cmd;
 			cmd << "/site/ace/certified/apps/bin/logentry";
 			cmd << " --html -b " << fname;
-			cmd << " -l TLOG";
+			cmd << " -l HDMONITOR";
 			cmd << " -n mstaib@jlab.org";
 			cmd << " -t \"Hall-D Occupancy Plots\"";
 			

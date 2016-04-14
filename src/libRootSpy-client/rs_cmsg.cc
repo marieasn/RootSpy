@@ -628,7 +628,7 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	}else{
 		// Update lastHeardFrom time for this server
 		RS_INFO->servers[sender].lastHeardFrom = time(NULL);
-		if(verbose>2) cout<<"Updated \""<<sender<<"\" lastHeardFrom."<<endl;
+		if(verbose>=4) _DBG_ <<"Updated \""<<sender<<"\" lastHeardFrom."<<endl;
 	}
 	RS_INFO->Unlock();
 	// The actual command is always sent in the text of the message
@@ -922,6 +922,7 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 		if(RS_INFO->histdefs.find(macrodef.hnamepath)==RS_INFO->histdefs.end()){
 			RS_INFO->histdefs[macrodef.hnamepath]=macrodef;
 			if(verbose>0)_DBG_ << "Added macro with hnamepath = " << macrodef.hnamepath << endl;
+			RequestMacro("rootspy", macrodef.hnamepath);
 		}else{
 			// Need code to verify hdefs ae same!!
 			// for now do some sanity check to at least make sure it is a macro
@@ -1143,6 +1144,8 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     // Get hnamepath from message
     string hnamepath = msg->getString("hnamepath");
 
+	  if(verbose>=3) _DBG_ << "Registering histogram " << hnamepath << endl;
+
     // Lock RS_INFO mutex while working with RS_INFO
     RS_INFO->Lock();
 	 
@@ -1186,7 +1189,12 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     // Get ROOT object from message and cast it as a TNamed*
 
 	 TNamed *namedObj = NULL;
-	 vector<uint8_t> *mybytes = msg->getUint8Vector("TMessage");
+	 vector<uint8_t> *mybytes = NULL;
+	 try{
+	 	mybytes = msg->getUint8Vector("TMessage");
+	 }catch(...){
+	   _DBG_ << "Expecting \"TMessage\" payload in histogram message for " << hnamepath << " but none found!" << endl;
+	 }
 	 if(mybytes){
 		MyTMessage *myTM = new MyTMessage(&(*mybytes)[0], mybytes->size());
 		namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
@@ -1319,7 +1327,7 @@ void rs_cmsg::RegisterHistograms(string server, cMsgMessage *msg)
 //TODO: documentation comment.
 void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg) 
 {
-	if(verbose>=2) _DBG_ << "In rs_cmsg::RegisterMacro()..." << endl;
+	if(verbose>=4) _DBG_ << "In rs_cmsg::RegisterMacro()..." << endl;
     
     // Get hnamepath from message
     string name = msg->getString("macro_name");
@@ -1385,7 +1393,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
     pthread_rwlock_wrlock(ROOT_MUTEX);
     
     // extract info from message
-    if(verbose>=2) _DBG_ << "unpacking macro..." << endl;
+    if(verbose>=2) _DBG_ << "unpacking macro \""<<hnamepath<<"\" ..." << endl;
 
     MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
     Long64_t length;
@@ -1402,15 +1410,15 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	    if(*str_itr == '/')     
 		    *str_itr = '_';
     }
-    if(verbose>=2) _DBG_ << " TMemFile name = " << tmpfile_name << endl;
-    if(verbose>=2) _DBG_ << "     file size = " << length << endl;
+    if(verbose>=4) _DBG_ << " TMemFile name = " << tmpfile_name << endl;
+    if(verbose>=4) _DBG_ << "     file size = " << length << endl;
    TString filename(tmpfile_name);
 
 //_DBG_<<"--- Creating TMemFile:" << tmpfile_name <<endl;
     TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
 //_DBG_<<"--- Finished" <<endl;
-    if(verbose>=2) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
-    if(verbose>3){
+    if(verbose>=4) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
+    if(verbose>4){
 	 	_DBG_ << "TMemFile contents: " << endl;
 		f->ls();
 	 }
@@ -1442,8 +1450,9 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	// a macro is read in for the first time. This helps by 
 	// pre-loading histograms that will be needed for display.
 	if(hdef->macro_hnamepaths.size() != Nprev_macro_hnamepaths){
-//		thread t(&rs_cmsg::SeedHnamepathsSet, this, hdef->macro_hnamepaths, true, false);
-//		t.detach();
+_DBG_<<"seeding ... hdef->macro_hnamepaths.size()="<<hdef->macro_hnamepaths.size()<<" Nprev_macro_hnamepaths="<<Nprev_macro_hnamepaths<<endl;
+		thread t(&rs_cmsg::SeedHnamepathsSet, this, hdef->macro_hnamepaths, true, false);
+		t.detach();
 	}
 
     // Update hinfo
@@ -1563,21 +1572,25 @@ void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool 
 	/// with a sleep call in between. Thus, this may
 	/// take a while to send out all requests.
 
-	list<string>::iterator iter = hnamepaths.begin();
-	for(; iter!=hnamepaths.end(); iter++){
-		string hnamepath = *iter;
+	// If requesting histos, a single request may be sent for
+	// all of them.
+	if(request_histo){
+		vector<string> shnamepaths;
+		list<string>::iterator iter = hnamepaths.begin();
+		for(; iter!=hnamepaths.end(); iter++)shnamepaths.push_back(*iter);
 		
-		// So we don't actually know if this hnamepath
-		// represents a histogram or a macro. Ask for
-		// both.
-		if(request_histo){
-			RequestHistogram("rootspy", hnamepath);
-			usleep(10000);
-		}
+		if(verbose>0) _DBG_ << "SeedHnamepaths: requesting " << shnamepaths.size() << " histos" << endl;
+		RequestHistograms("rootspy", shnamepaths);
+	}
+
+	if(request_macro){
+		list<string>::iterator iter = hnamepaths.begin();
+		for(; iter!=hnamepaths.end(); iter++){
+			string hnamepath = *iter;
 		
-		if(request_macro){
+			if(verbose>0) _DBG_ << "SeedHnamepaths: requesting macro " << hnamepath << endl;
 			RequestMacro("rootspy", hnamepath);
-			usleep(10000);
+			//usleep(10000);
 		}
 	}
 }
