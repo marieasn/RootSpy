@@ -142,6 +142,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 
 	SetWindowName("RootSpy");
 	SetIconName("RootSpy");
+
 	MapSubwindows();
 	Resize(GetDefaultSize());
 	MapWindow();
@@ -1280,6 +1281,7 @@ void rs_mainframe::DoELogPage(void)
 			cmd << "/site/ace/certified/apps/bin/logentry";
 			cmd << " --html -b " << fname;
 			cmd << " -l TLOG";
+			cmd << " -n mstaib@jlab.org";
 			cmd << " -t \"Hall-D Occupancy Plots\"";
 			
 			// attach all plots
@@ -1381,7 +1383,6 @@ void rs_mainframe::CreateGUI(void)
 	// Use the "color wheel" rather than the classic palette.
 	TColor::CreateColorWheel();
 	
-
    //==============================================================================================
    // make a menubar
    // Create menubar and popup menus. The hint objects are used to place
@@ -1497,7 +1498,7 @@ void rs_mainframe::CreateGUI(void)
 
 	//....... Bottom Frame .......
 	AddSpacer(fMainBot, 50, 1, kLHintsRight);
-	TGTextButton *bElog = AddButton(fMainBot, "Make HDLOG Entry", kLHintsLeft);
+	TGTextButton *bElog = AddButton(fMainBot, "Make e-log Entry", kLHintsLeft);
 	TGTextButton *bQuit = AddButton(fMainBot, "Quit", kLHintsRight);
 
 	fMain->MapSubwindows();

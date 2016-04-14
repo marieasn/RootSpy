@@ -44,12 +44,10 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	fTabMainLeft = new TGVerticalFrame(fTabMain);
 	fTabMain->AddFrame(fTabMainLeft, new TGLayoutHints(kLHintsLeft | kLHintsTop ,2,2,2,2));
 	
+	
 	// Info. on what's currently displayed
 	TGVerticalFrame *fTabMainLeftInfo = new TGVerticalFrame(fTabMainLeft);	
 	fTabMainLeft->AddFrame(fTabMainLeftInfo, new TGLayoutHints(kLHintsCenterX | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
-	AddLabel(fTabMainLeftInfo, "Server:"    ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
-	lServer    = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
-	AddSpacer(fTabMainLeftInfo, 1, 5);
 	
 	TGHorizontalFrame *fTabMainLeftInfoHistLabel = new TGHorizontalFrame(fTabMainLeftInfo);
 	fTabMainLeftInfo->AddFrame(fTabMainLeftInfoHistLabel, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX  ,2,2,2,2));
@@ -59,7 +57,8 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	AddSpacer(fTabMainLeftInfo, 1, 5);
 	AddLabel(fTabMainLeftInfo, "Received:"  ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
 	lReceived  = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
-	
+	AddSpacer(fTabMainLeftInfo, 1, 5);
+
 	// Add some space between labels and controls
 	AddSpacer(fTabMainLeft, 1, 10);
 	
@@ -81,11 +80,23 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	TGTextButton *bReset = AddButton(fDisplayOptions, "Reset", kLHintsExpandX);
 	TGTextButton *bRestore = AddButton(fDisplayOptions, "Restore", kLHintsExpandX);
 	
+	// Add some more space
+	AddSpacer(fTabMainLeft, 1, 10);
+
 	// Buttons at bottom left
 	TGVerticalFrame *fTabMainLeftBottom = new TGVerticalFrame(fTabMainLeft);
 	TGTextButton *bShowIndiv = AddButton(fTabMainLeftBottom, "Show Individual", kLHintsTop| kLHintsExpandX);
 	TGTextButton *bSaveCanvas = AddButton(fTabMainLeftBottom, "Save Canvas", kLHintsTop| kLHintsExpandX);	
-	fTabMainLeft->AddFrame(fTabMainLeftBottom, new TGLayoutHints(kLHintsCenterX | kLHintsBottom| kLHintsExpandX, 2,2,2,2));
+	fTabMainLeft->AddFrame(fTabMainLeftBottom, new TGLayoutHints(kLHintsCenterX | kLHintsTop| kLHintsExpandX, 2,2,2,2));
+
+	// Add some more space
+	AddSpacer(fTabMainLeft, 1, 10);
+	
+	AddLabel(fTabMainLeft, "Server:"    ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
+	lServer    = AddLabel(fTabMainLeft, string(25, '-'),kTextRight | kLHintsExpandX);
+
+	// Add some more space at bottom
+	AddSpacer(fTabMainLeft, 1, 10, kLHintsCenterX | kLHintsCenterY | kLHintsExpandY);
 	
 	//...... Embedded canvas ......
 	char cname[256];
