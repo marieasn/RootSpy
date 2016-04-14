@@ -23,6 +23,10 @@ int VERBOSE = 1;
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 string CMSG_NAME = "<not set here. see below>";
 
+string ELOG_NAME   = "HDMONITOR";
+string ELOG_EMAIL  = "mstaib@jlab.org,nsj@cmu.edu";
+bool   ELOG_NOTIFY = true;
+
 string CONFIG_FILENAME = "";
 string INPUT_ROOT_FILENAME = "";
 string PLUGINS_STR = "";
@@ -180,6 +184,25 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 					PLUGINS_STR = argv[i+1];
 				}
 				break;
+			case 'L':
+				if(i>=(narg-1)){
+					cerr<<"-L option requires an argument"<<endl;
+					Usage();
+				}else{
+					ELOG_NAME = argv[i+1];
+				}
+				break;
+			case 'E':
+				if(i>=(narg-1)){
+					cerr<<"-E option requires an argument"<<endl;
+					Usage();
+				}else{
+					ELOG_EMAIL = argv[i+1];
+				}
+				break;
+			case 'N':
+				ELOG_NOTIFY = false;
+				break;
 		}
 	}
 }
@@ -208,6 +231,11 @@ void Usage(void)
 	cout<<"   -f file     ROOT file to attach. NOTE: if this option is given then" << endl;
 	cout<<"               RootSpy will not attch to the cMsg server and only histos" << endl;
 	cout<<"               and trees found in the file will be available" << endl;
+	cout<<"   -L elog     comma separated list of logbooks to make entries in" << endl;
+	cout<<"   -E email    comma separated list of e-mail addresses to send copy of " << endl;
+	cout<<"               elog entry to" << endl;
+	cout<<"   -N          do NOT send email notification of elog entry" << endl;
+	
 	//cout<<""; // multimode
 	cout<<endl;
 

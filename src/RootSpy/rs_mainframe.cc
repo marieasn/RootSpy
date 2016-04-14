@@ -59,7 +59,9 @@ using namespace std;
 extern string ROOTSPY_UDL;
 extern string CMSG_NAME;
 
-
+extern string ELOG_NAME;
+extern string ELOG_EMAIL;
+extern bool   ELOG_NOTIFY;
 
 
 // information for menu bar
@@ -1249,7 +1251,15 @@ void rs_mainframe::DoELog(void)
 	// TTimer did NOT work as advertised. We have to piggyback
 	// off of the existing DoTimer timer. 
 
-	cout << "Generating e-log entry ..." << endl;
+	cout << "--------------------------------" << endl;
+	cout << "Generating e-log entry:" << endl;
+	cout << endl;
+	cout << "              e-logs: " << ELOG_NAME << endl;
+	cout << "Notification e-mails: " << (ELOG_NOTIFY ? ELOG_EMAIL:"<disabled>") << endl;
+	cout << "--------------------------------" << endl;
+	cout << endl;
+	cout << "attempting to generate " << current_tab->hnamepaths.size() << " plots ..." << endl;
+	cout << endl;	
 
 	current_tab->currently_displayed = 0;
 	current_tab->DoUpdateWithFollowUp();
@@ -1292,8 +1302,8 @@ void rs_mainframe::DoELogPage(void)
 			stringstream cmd;
 			cmd << "/site/ace/certified/apps/bin/logentry";
 			cmd << " --html -b " << fname;
-			cmd << " -l HDMONITOR";
-			cmd << " -n mstaib@jlab.org";
+			cmd << " -l " << ELOG_NAME;
+			if(ELOG_NOTIFY) cmd << " -n " << ELOG_EMAIL;
 			cmd << " -t \"Hall-D Occupancy Plots\"";
 			
 			// attach all plots
@@ -1314,7 +1324,10 @@ void rs_mainframe::DoELogPage(void)
 			system(cmd.str().c_str());
 		}
 		
-		cout << "Done" << endl;
+		cout << endl;
+		cout << "Finished making e-log entry" << endl;
+		cout << "--------------------------------" << endl;
+
 	}
 }
 
