@@ -42,6 +42,7 @@ env.Replace(INSTALLDIR    = installdir,
 				LIBDIR        = lib,
 				PLUGINSDIR    = plugins,
 				ALL_SOURCES   = [],        # used so we can add generated sources
+				MISC_OBJS     = [],        # used so we can add explicit static libraries
             SHOWBUILD     = SHOWBUILD,
 				OPTIMIZATION  = OPTIMIZATION,
 				DEBUG         = DEBUG,

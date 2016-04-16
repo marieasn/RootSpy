@@ -84,11 +84,12 @@ def executable(env, exename=''):
 	# Push commonly used libraries to end of list
 	ReorderCommonLibraries(env)
 
-	sources = env['ALL_SOURCES']
+	sources  = env['ALL_SOURCES']
+	miscobjs = env['MISC_OBJS'  ]
 
 	# Build program from all source
 	myobjs = env.Object(sources)
-	myexe = env.Program(target = exename, source = myobjs)
+	myexe = env.Program(target = exename, source = myobjs+miscobjs)
 
 	# Cleaning and installation are restricted to the directory
 	# scons was launched from or its descendents
@@ -530,6 +531,29 @@ def AddCERNLIB(env):
 	env.AppendUnique(LINKFLAGS = ['-rdynamic'])
 	env.AppendUnique(LIBS      = ['gfortran', 'geant321', 'pawlib', 'lapack3', 'blas', 'graflib', 'grafX11', 'packlib', 'mathlib', 'kernlib', 'X11', 'nsl', 'crypt', 'dl'])
 	env.SetOption('warn', 'no-fortran-cxx-mix')  # supress warnings about linking fortran with c++
+
+
+##################################
+# EPICS (ezca)
+##################################
+def AddEPICS(env):
+	epicsroot = os.getenv('EPICS')
+	if epicsroot != None:
+		env.AppendUnique(CPPPATH=['%s/base/include' % epicsroot])
+		env.AppendUnique(CPPPATH=['%s/base/include/os/Linux' % epicsroot])
+		env.AppendUnique(CPPPATH=['%s/extensions/include' % epicsroot])
+		env.AppendUnique(LINKFLAGS='-pthread')
+		env.AppendUnique(LIBS=['rt', 'dl','readline'])
+
+		# In Hall-D the LD_LIBRARY_PATH only includes the
+		# 32bit libraries (choice made by and enforced vigorously
+		# by the controls group). Thus, we add the 64bit static
+		# libraries explicitly. Note that compiling with the '-static'
+		# flag didn't seem to work since it tried to make everything
+		# static and failed to find some dependencies.
+		env.AppendUnique(MISC_OBJS=['%s/extensions/lib/linux-x86_64/libezca.a' % epicsroot])
+		env.AppendUnique(MISC_OBJS=['%s/base/lib/linux-x86_64/libca.a' % epicsroot])
+		env.AppendUnique(MISC_OBJS=['%s/base/lib/linux-x86_64/libCom.a' % epicsroot])
 
 
 ##################################
