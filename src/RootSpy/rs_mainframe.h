@@ -155,6 +155,8 @@ class rs_mainframe:public TGMainFrame {
 		// info for comparing with archived histograms
 		//bool overlay_mode; // maybe don't need this?
 		TFile *archive_file;
+		
+		long epics_run_number;
 
 	private:
 	

@@ -54,6 +54,11 @@
 #include <thread>
 using namespace std;
 
+#ifdef EZCA
+#include <tsDefs.h> 
+#include <cadef.h> 
+#include <ezca.h>
+#endif // EZCA
 
 
 extern string ROOTSPY_UDL;
@@ -138,6 +143,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	elog_timer = NULL;
 	Npages_elog = 0;
 	ipage_elog  = 0;
+	epics_run_number = 0;
 
 	//overlay_mode = true;
 	//archive_file = new TFile("/u/home/sdobbs/test_archives/run1_output.root");
@@ -1251,11 +1257,19 @@ void rs_mainframe::DoELog(void)
 	// TTimer did NOT work as advertised. We have to piggyback
 	// off of the existing DoTimer timer. 
 
+	
+#ifdef EZCA
+	string epics_var_name = "HD:coda:daq:run_number";
+	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
+#endif // EZCA
+
+
 	cout << "--------------------------------" << endl;
 	cout << "Generating e-log entry:" << endl;
 	cout << endl;
 	cout << "              e-logs: " << ELOG_NAME << endl;
 	cout << "Notification e-mails: " << (ELOG_NOTIFY ? ELOG_EMAIL:"<disabled>") << endl;
+	cout << "  Run Number (EPICS): " << epics_run_number << endl;
 	cout << "--------------------------------" << endl;
 	cout << endl;
 	cout << "attempting to generate " << current_tab->hnamepaths.size() << " plots ..." << endl;
@@ -1304,8 +1318,13 @@ void rs_mainframe::DoELogPage(void)
 			cmd << " --html -b " << fname;
 			cmd << " -l " << ELOG_NAME;
 			if(ELOG_NOTIFY) cmd << " -n " << ELOG_EMAIL;
-			cmd << " -t \"Hall-D Occupancy Plots\"";
-			
+
+			if(epics_run_number>0){
+				cmd << " -t \"Hall-D Occupancy Plots Run " << epics_run_number << "\"";
+			}else{
+				cmd << " -t \"Hall-D Occupancy Plots\"";
+			}
+
 			// attach all plots
 			for(unsigned int i=1; i<=Npages_elog; i++){
 				char str[256];
