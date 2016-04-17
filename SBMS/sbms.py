@@ -539,6 +539,7 @@ def AddCERNLIB(env):
 def AddEPICS(env):
 	epicsroot = os.getenv('EPICS')
 	if epicsroot != None:
+		env.AppendUnique(CXXFLAGS=['-DEZCA'])
 		env.AppendUnique(CPPPATH=['%s/base/include' % epicsroot])
 		env.AppendUnique(CPPPATH=['%s/base/include/os/Linux' % epicsroot])
 		env.AppendUnique(CPPPATH=['%s/extensions/include' % epicsroot])

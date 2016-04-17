@@ -1280,7 +1280,7 @@ void rs_mainframe::DoELog(void)
 
 	Npages_elog = current_tab->hnamepaths.size();
 	ipage_elog  = 0;
-	elog_next_action = RS_CMSG->GetTime() + 1.0;
+	elog_next_action = RS_CMSG->GetTime() + 2.0;
 }
 
 //-------------------
@@ -1288,9 +1288,19 @@ void rs_mainframe::DoELog(void)
 //-------------------
 void rs_mainframe::DoELogPage(void)
 {
-	current_tab->DoUpdateWithFollowUp();
 	if(  RS_CMSG->GetTime() < elog_next_action ) return;
 	elog_next_action = RS_CMSG->GetTime() + 2.0;
+	
+	// Check if the hnamepath we're trying to write is displayed
+	// yet. If not, resend update and wait another second
+	list<string>::iterator iter = current_tab->hnamepaths.begin();
+	advance(iter, current_tab->currently_displayed);
+	if(current_tab->currently_displayed_hnamepath != *iter){
+		cout << "waiting for " << *iter << " to displayed (" << current_tab->currently_displayed_hnamepath << " is still there)" << endl;
+		current_tab->DoUpdateWithFollowUp();
+		return;
+	}
+	
 	ipage_elog++;
 
 	const char *dir = "/home/hdops/tmp";
@@ -1300,9 +1310,12 @@ void rs_mainframe::DoELogPage(void)
 	current_tab->canvas->SaveAs(str, "");
 	
 	/// Setup timer for next page if needed
+_DBG_<<"ipage_elog="<<ipage_elog<<" Npages_elog="<<Npages_elog<<endl;
 	if( ipage_elog < Npages_elog ){
+_DBG__;
 		current_tab->DoNext();
 	}else{
+_DBG__;
 		// This was the last page. Generate entry.
 		
 		char fname[256];
