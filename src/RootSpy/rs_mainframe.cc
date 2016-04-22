@@ -890,7 +890,7 @@ void rs_mainframe::DoTimer(void) {
 				if( tdiff >= (double)delay_time ){
 				
 					// Lock ROOT
-					pthread_rwlock_wrlock(ROOT_MUTEX);
+//					pthread_rwlock_wrlock(ROOT_MUTEX);
 				
 					if(bAutoAdvance->GetState()==kButtonDown){
 						current_tab->DoNext();
@@ -899,7 +899,7 @@ void rs_mainframe::DoTimer(void) {
 					}
 
 					// Unlock ROOT
-					pthread_rwlock_unlock(ROOT_MUTEX);
+//					pthread_rwlock_unlock(ROOT_MUTEX);
 				}
 			}
 		}
