@@ -21,9 +21,9 @@
 #include <TGProgressBar.h>
 //#include<TGWindow.h>
 
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 #include "rs_info.h"
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 
 #include "hinfo_t.h"
 
@@ -57,9 +57,9 @@ class Dialog_SaveHists:public TGMainFrame{
 
 	protected:
 	
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 		rs_info::viewStyle_t viewStyle;
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 		
 		void ParseFullPath(string &path, vector<string> &dirs);
 		void UpdateListTree(vector<hid_t> hids);

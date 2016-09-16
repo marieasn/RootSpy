@@ -1451,7 +1451,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	// pre-loading histograms that will be needed for display.
 	if(hdef->macro_hnamepaths.size() != Nprev_macro_hnamepaths){
 _DBG_<<"seeding ... hdef->macro_hnamepaths.size()="<<hdef->macro_hnamepaths.size()<<" Nprev_macro_hnamepaths="<<Nprev_macro_hnamepaths<<endl;
-		thread t(&rs_cmsg::SeedHnamepathsSet, this, hdef->macro_hnamepaths, true, false);
+		thread t(&rs_cmsg::SeedHnamepathsSet, this, (void*)&hdef->macro_hnamepaths, true, false);
 		t.detach();
 	}
 
@@ -1532,8 +1532,10 @@ void rs_cmsg::RegisterFinalHistogram(string server, cMsgMessage *msg) {
 //---------------------------------
 // SeedHnamepathsSet
 //---------------------------------
-void rs_cmsg::SeedHnamepathsSet(set<string> &hnamepaths, bool request_histo, bool request_macro)
+void rs_cmsg::SeedHnamepathsSet(void *vhnamepaths, bool request_histo, bool request_macro)
 {
+	set<string> &hnamepaths = *(set<string>*)vhnamepaths;
+
 	/// This is just a wrapper for the "list" version below.
 	list<string> lhnamepaths;
 	set<string>::iterator iter = hnamepaths.begin();

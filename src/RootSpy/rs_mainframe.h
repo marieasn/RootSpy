@@ -53,7 +53,7 @@ class rs_mainframe:public TGMainFrame {
 			kViewByServer_rs
 		};
 		
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 		typedef struct {
 				string type;
 				vector<string> tokens;
@@ -67,7 +67,7 @@ class rs_mainframe:public TGMainFrame {
 		}tab_config_t;
 
 		bool TokenizeFile(string fname, map<string, vector<config_item_t> > &config_items);
-#endif // __CINT__
+#endif //__CINT__  __CLING__
 
 
 

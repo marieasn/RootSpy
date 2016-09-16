@@ -443,6 +443,8 @@ void* DRootSpy::DebugSampler(void)
 	return NULL;
 }
 
+void JUNK(cMsgMessage &response, string hnamepath, uint32_t addr32, uint16_t port){}
+
 //---------------------------------
 // callback
 //---------------------------------
@@ -545,7 +547,9 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 					_DBG_ << "request has UDP info: " << ip_dotted << " : " << port << endl;
 				}
 				if(VERBOSE>1) _DBG_ << "responding via UDP to \"get hist\" for " << hnamepath << " ..." << endl;
-				thread t(&DRootSpy::getHistUDP, this, *response, hnamepath, addr, port);
+//				thread t(&DRootSpy::getHistUDP, this, *response, hnamepath, addr, port);
+				thread t(&DRootSpy::getHistUDP, this, (void*)response, hnamepath, addr, port);
+//				thread t(&JUNK, *response, hnamepath, addr, port);
 				t.detach();
 			}catch(...){
 				if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
@@ -744,7 +748,8 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 // getHistUDP
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::getHistUDP(cMsgMessage &response, string hnamepath, uint32_t addr32, uint16_t port)
+void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, uint16_t port)
+// void DRootSpy::getHistUDP(cMsgMessage &response, string hnamepath, uint32_t addr32, uint16_t port)
 {
 	/// This method will be run in a separate thread.
 	/// It will pack up the histogram and send it to 
@@ -752,6 +757,8 @@ void DRootSpy::getHistUDP(cMsgMessage &response, string hnamepath, uint32_t addr
 	/// Once complete, the thread will exit.
 	/// This is an alternative to getHist method which
 	/// sends the histograms via cMsg.
+	
+	cMsgMessage &response = *(cMsgMessage*)vresponse;
 	
 	// Not sure if this will work for C++11 threads. Perhaps
 	// yes on systems using posix threads underneath (?....)

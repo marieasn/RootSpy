@@ -14,9 +14,9 @@
 #include <map>
 #include <TGFileDialog.h>
 
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 #include "rs_info.h"
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 
 #include "hinfo_t.h"
 #include "tree_info_t.h"
@@ -35,9 +35,9 @@ class Dialog_SelectTree:public TGMainFrame{
 
 	protected:
 
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 		rs_info::viewStyle_t viewStyle;
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 
 		void ParseFullPath(string &path, vector<string> &dirs);
 		void updateListTree(vector<vector<tree_info_t> > &tree_ids);

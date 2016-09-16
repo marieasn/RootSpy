@@ -19,9 +19,9 @@
 #include <map>
 #include <TGFileDialog.h>
 
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 #include "rs_info.h"
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 
 #include "hinfo_t.h"
 

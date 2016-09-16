@@ -103,7 +103,7 @@ class rs_cmsg:public cMsgCallback{
                 void BuildRequestTree(cMsgMessage &msg, string servername, string tree_name, string tree_path, int64_t num_entries);
 		void BuildRequestMacroList(cMsgMessage &msg, string servername);
 		void BuildRequestMacro(cMsgMessage &msg, string servername, string hnamepath);
-		void SeedHnamepathsSet(set<string> &hnamepaths, bool request_histo, bool request_macro);
+		void SeedHnamepathsSet(void *vhnamepaths, bool request_histo, bool request_macro);
 		void SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool request_macro);
 
 		void DirectUDPServerThread(void);

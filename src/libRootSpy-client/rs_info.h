@@ -46,7 +46,7 @@ class rs_info{
 
 // ROOT's cint doesn't like pthread_mutex_t so we mask it off here.
 // The only thing it needs to know about is the viewStyle_t enum
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 
 		void Lock(void){pthread_mutex_lock(&mutex);}
 		void Unlock(void){pthread_mutex_unlock(&mutex);}
@@ -91,7 +91,7 @@ class rs_info{
 
 		//#else
 		//Class//Def(rs_info,1)
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 };
 
 #endif // _rs_info_

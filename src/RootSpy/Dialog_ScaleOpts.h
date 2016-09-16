@@ -21,9 +21,9 @@
 #include <TGButton.h>
 #include <TGButtonGroup.h>
 
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 #include "rs_info.h"
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 using namespace std;
 
 class Dialog_ScaleOpts:public TGMainFrame{
@@ -57,12 +57,12 @@ class Dialog_ScaleOpts:public TGMainFrame{
 		ClassDef(Dialog_ScaleOpts,1)
 
 
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 		// CINT doesn't need to know about the innerds of the class, just the GUI elements
 		map<string,hdef_t>::iterator current_hdef_iter;
 		int selected_mode;
 		    
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 
 };
 

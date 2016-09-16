@@ -21,9 +21,9 @@
 #include <list>
 #include <TGFileDialog.h>
 
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 #include "rs_info.h"
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 
 #include "hinfo_t.h"
 #include "RSTab.h"
@@ -56,11 +56,11 @@ class Dialog_SelectHists:public TGMainFrame{
 
 	protected:
 	
-#ifndef __CINT__
+#if !defined(__CINT__) && !defined(__CLING__)
 		RSTab *rstab;
 		list<string> *hnamepaths; // Where to store results (list things to display only)
 		rs_info::viewStyle_t viewStyle;
-#endif //__CINT__
+#endif //__CINT__  __CLING__
 		
 		void ParseFullPath(string &path, vector<string> &dirs);
 		void UpdateListTree(vector<hid_t> hids);
