@@ -40,7 +40,9 @@ bool USE_RS_CMSG=false;
 bool PING_SERVERS = false;
 bool RESPOND_TO_PINGS = true;
 int REQUESTS_SENT=0;
+int REQUESTED_HISTOGRAMS=0;
 int REQUESTS_SATISFIED=0;
+int RECEIVED_HISTOGRAMS=0;
 double START_TIME = 0;
 map<hid_t, double> LAST_REQUEST_TIME;
 
@@ -150,16 +152,18 @@ void RedrawScreen(vector<string> &lines, uint32_t Nhdefs, uint32_t Nhinfos, uint
 		case MODE_MESS_SIZES:  mode_str="MESSAGE SIZES";    break;
 	}
 
-	MOVETO( 3, 4); cout << " Number of histograms published: " << Nhdefs;
-	MOVETO( 3, 5); cout << "Number of histograms downloaded: " << Nhinfos;
-	MOVETO( 3, 6); cout << "      Number of trees published: " << Ntdefs;
-	MOVETO(41, 4); cout << "Number of requests   issued: " << REQUESTS_SENT;
-	MOVETO(41, 5); cout << "Number of requests received: " << REQUESTS_SATISFIED;
-	MOVETO(41, 6); cout << "MODE: " << mode_str;
-	PRINTAT(1, 7, string(Ncols,'.'));
+	MOVETO( 3, 4); cout << "MODE: " << mode_str;
+	MOVETO( 3, 5); cout << " Number of histograms published: " << Nhdefs;
+	MOVETO( 3, 6); cout << "Number of histograms downloaded: " << Nhinfos;
+	MOVETO( 3, 7); cout << "      Number of trees published: " << Ntdefs;
+	MOVETO(41, 4); cout << "Number of  hists  requested: " << REQUESTED_HISTOGRAMS;
+	MOVETO(41, 5); cout << "Number of  hists   received: " << RECEIVED_HISTOGRAMS;
+	MOVETO(41, 6); cout << "Number of requests   issued: " << REQUESTS_SENT;
+	MOVETO(41, 7); cout << "Number of requests received: " << REQUESTS_SATISFIED;
+	PRINTAT(1, 8, string(Ncols,'.'));
 
 	for(unsigned int i=0; i<lines.size(); i++){
-		int row = i+10;
+		int row = i+11;
 		MOVETO(1, row);
 		if(row == (Nrows-1)){ cout << " ..."; break; }
 		string &line = lines[i];
@@ -374,9 +378,10 @@ void UpdateHistoRequests(double now)
 		string server = hbs_iter->first;
 		vector<string> &hnamepaths = hbs_iter->second;
 		RS_CMSG->RequestHistograms(server, hnamepaths);
+		REQUESTS_SENT++;
 		for(uint32_t i=0; i<hnamepaths.size(); i++){
 			LAST_REQUEST_TIME[hid_t(server, hnamepaths[i])] = now;
-			REQUESTS_SENT++;
+			REQUESTED_HISTOGRAMS++;
 		}
 	}
 
