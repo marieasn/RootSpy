@@ -12,9 +12,10 @@
 
 #include <iostream>
 #include <iomanip>
-#include<sstream>
+#include <sstream>
 #include <cmath>
 #include <thread>
+#include <memory>
 using namespace std;
 
 #include <TROOT.h>
@@ -549,8 +550,8 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 				if(VERBOSE>1) _DBG_ << "responding via UDP to \"get hist\" for " << hnamepath << " ..." << endl;
 //				thread t(&DRootSpy::getHistUDP, this, *response, hnamepath, addr, port);
 				thread t(&DRootSpy::getHistUDP, this, (void*)response, hnamepath, addr, port);
-//				thread t(&JUNK, *response, hnamepath, addr, port);
 				t.detach();
+				response = NULL; // thread owns response now
 			}catch(...){
 				if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
 				getHist(*response, hnamepath);
@@ -562,7 +563,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	} else 	if(cmd == "get hists") {
 		// Get name of requested histograms
 		vector<string> *hnamepaths = msg->getStringVector("hnamepaths");
-		if(VERBOSE>1) _DBG_ << "responding to \"get hists\" for " << hnamepaths->size() << "hnamepaths ..." << endl;
+		if(VERBOSE>1) _DBG_ << "responding to \"get hists\" for " << hnamepaths->size() << " hnamepaths ..." << endl;
 		getHists(*response, *hnamepaths);
 		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	} else 	if(cmd == "get tree") {
@@ -616,7 +617,7 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	    if(VERBOSE>1) _DBG_ << "flushing queues!" << endl;
 	    cMsgSys->flush();
 	}else{
-		 delete response;
+		 if(response) delete response;
 	}
 
 	delete msg;
@@ -704,6 +705,9 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 	string hname = hnamepath.substr(pos+1, hnamepath.length()-1);
 	string path = hnamepath.substr(0, pos);
 	if(path[path.length()-1]==':')path += "/";
+	
+	// Looks like ROOT6 has like leading " :"
+	if(path.find(": ") == 0) path.erase(0,2);
 
 	// Lock access to ROOT global while we access it
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
@@ -717,6 +721,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 	// If object not found, release lock on ROOT global and return
 	if(!obj){
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		_DBG_ << "Could not find \"" << hname << "\" in path\"" << path <<"\"!" << endl;
 		in_get_hist = false;
 		return;
 	}
@@ -758,8 +763,11 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 	/// This is an alternative to getHist method which
 	/// sends the histograms via cMsg.
 	
-	cMsgMessage &response = *(cMsgMessage*)vresponse;
-	
+	// We should now own the response message object and
+	// need to make sure it is freed before returning. Thus,
+	// use a unique_ptr to wrap it.
+	unique_ptr<cMsgMessage> response((cMsgMessage*)vresponse);
+
 	// Not sure if this will work for C++11 threads. Perhaps
 	// yes on systems using posix threads underneath (?....)
 	struct sched_param sp = {16}; // thread priority
@@ -804,9 +812,9 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 	if(len>65000){
 		
 		// Send as cMsg
-		response.setText("histogram");
-		response.add("hnamepath", hnamepath);
-		response.add("TMessage", buff, len);
+		response->setText("histogram");
+		response->add("hnamepath", hnamepath);
+		response->add("TMessage", buff, len);
 
 		// Finished with TMessage object. Free it and release lock on ROOT global
 		delete tm;
@@ -814,14 +822,14 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 		
 		if(VERBOSE>2) _DBG_ << "Message size too big for UDP (" << len << ">65000) sending as cMsg ..." << endl;
 		uint64_t tsending = (uint64_t)time(NULL);
-		response.add("time_sent",  tsending);
-		cMsgSys->send(&response);
+		response->add("time_sent",  tsending);
+		cMsgSys->send(*response);
 		
 	}else{
 	
 		// Send as UDP packet
 
-		string sender = response.getType();
+		string sender = response->getType();
 	
 		// Allocate buffer for UDP packet and fill it
 		// (- sizeof(uint32_t) is to remove buff_start)
@@ -835,8 +843,8 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 		memset(rsudp->sender, 0, 256);
 		strcpy((char*)rsudp->sender, myname.c_str());
 		rsudp->time_sent = (uint64_t)time(NULL);
-		rsudp->time_requester = response.getUint64("time_requester");
-		rsudp->time_received  = response.getUint64("time_received");
+		rsudp->time_requester = response->getUint64("time_requester");
+		rsudp->time_received  = response->getUint64("time_received");
 		rsudp->buff_len = len;
 		memcpy((uint8_t*)&rsudp->buff_start, buff, len);
 
@@ -1199,6 +1207,7 @@ void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 
 	TList *list = dir->GetList();
 	TIter next(list);
+
 	while(TObject *obj = next()) {
 		// Make hinfo_t objects out of the individual histogram information.
 		// For now, we only report objects inheriting from TH1.
