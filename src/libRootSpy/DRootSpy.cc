@@ -1220,7 +1220,13 @@ void DRootSpy::addRootObjectsToList(TDirectory *dir, vector<hinfo_t> &hinfos) {
 			hi.path = path;
 			hi.title = hHist->GetTitle();
 			if(hi.title.length() == 0) hi.title = "-"; // cMsg gives "clientThread: error reading message" if title is empty string (??)
-			hinfos.push_back(hi);
+			
+			// user may specify simple patterns for hist names
+			// to exclude from list
+			bool exclude = false;
+			for(auto s : filter_patterns) if(hi.name.find(s)!=s.npos) exclude = true;
+			
+			if(!exclude) hinfos.push_back(hi);
 		}
 
 		// If this happens to be a directory, recall ourself to find objects starting from it.

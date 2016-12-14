@@ -112,9 +112,7 @@ bool IsGoodTFile(TFile *the_file)
 //-----------
 void signal_stop_handler(int signum)
 {
-    // do as little as possible in signal handler
-    //cerr << "received signal " << signum << "..." << endl;
-    //cerr << "cleaning up and exiting..." << endl;
+    cerr << "received signal " << signum << "..." << endl;
 
     // let main loop know that it's time to stop
     DONE = true;

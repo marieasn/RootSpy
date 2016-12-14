@@ -707,6 +707,8 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	if(cmd=="list hists"   ) handled_message = true;
 	if(cmd=="list macros"  ) handled_message = true;
 	if(cmd=="get tree info") handled_message = true;
+	if(cmd=="get macro"    ) handled_message = true;
+	if(cmd=="get hists"    ) handled_message = true;
 	//===========================================================
 	if(!handled_message){
 		_DBG_<<"Received unknown message --  Subject:"<<msg->getSubject()<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
@@ -1211,7 +1213,9 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     // Cast this as a histogram pointer
     TH1 *h = dynamic_cast<TH1*>(namedObj);
     if(!h){
-	_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TH1 type"<<endl;
+	if(namedObj){
+		_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TH1 type"<<endl;
+	}
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
 	if(delete_msg) delete msg;

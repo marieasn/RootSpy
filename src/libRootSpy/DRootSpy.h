@@ -21,7 +21,9 @@
 
 
 #include <vector>
+#include <set>
 #include <string>
+#include <iostream>
 
 #include "macro_info_t.h"
 
@@ -46,6 +48,14 @@ class DRootSpy:public cMsgCallback{
 	 void ConnectToCMSG(void);
 	 void* WatchConnection(void);
 	 void* DebugSampler(void);
+	 
+	 void AddNameFilter(string s){ filter_patterns.insert(s); }
+	 set<string>& GetNameFilters(void){ return filter_patterns; }
+	 void PrintNameFilters(void){
+	 	std::cout <<"-- ROOTSpy Name Filter Patterns --" << std::endl;
+	 	for(auto s : filter_patterns) std::cout << "  s" << std::endl;
+	 	std::cout <<"----------------------------------" << std::endl;
+	}
     
     class hinfo_t{
     public:
@@ -133,6 +143,7 @@ class DRootSpy:public cMsgCallback{
 	 string myudl;
     std::vector<void*> subscription_handles;
     vector<string> *finalhists;
+	 set<string> filter_patterns;
     pthread_t mythread;
     pthread_t mywatcherthread;
     pthread_t mydebugthread;
