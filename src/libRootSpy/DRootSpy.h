@@ -53,7 +53,7 @@ class DRootSpy:public cMsgCallback{
 	 set<string>& GetNameFilters(void){ return filter_patterns; }
 	 void PrintNameFilters(void){
 	 	std::cout <<"-- ROOTSpy Name Filter Patterns --" << std::endl;
-	 	for(auto s : filter_patterns) std::cout << "  s" << std::endl;
+	 	for(auto s : filter_patterns) std::cout << "  " << s << std::endl;
 	 	std::cout <<"----------------------------------" << std::endl;
 	}
     
