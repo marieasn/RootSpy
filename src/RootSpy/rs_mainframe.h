@@ -179,6 +179,8 @@ class rs_mainframe:public TGMainFrame {
 		unsigned int Npages_elog;
 		unsigned int ipage_elog;
 		double elog_next_action;
+		int elog_tab_restore;
+		int elog_plot_restore;
 	
 		void CreateGUI(void);
 

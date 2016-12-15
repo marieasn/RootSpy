@@ -1263,6 +1263,15 @@ void rs_mainframe::DoELog(void)
 	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
 #endif // EZCA
 
+	// Record which tab and plot are currently
+	// selected so they can be restored at the end.
+	elog_tab_restore = fMainTab->GetCurrent();
+	elog_plot_restore = current_tab->currently_displayed;
+	uint32_t Nplots = 0;
+	for(auto t : rstabs) {
+		t->currently_displayed = 0;
+		Nplots += t->hnamepaths.size();
+	}
 
 	cout << "--------------------------------" << endl;
 	cout << "Generating e-log entry:" << endl;
@@ -1272,15 +1281,15 @@ void rs_mainframe::DoELog(void)
 	cout << "  Run Number (EPICS): " << epics_run_number << endl;
 	cout << "--------------------------------" << endl;
 	cout << endl;
-	cout << "attempting to generate " << current_tab->hnamepaths.size() << " plots ..." << endl;
+	cout << "attempting to generate " << Nplots << " plots ..." << endl;
 	cout << endl;	
 
-	current_tab->currently_displayed = 0;
-	current_tab->DoUpdateWithFollowUp();
+	fMainTab->SetTab(0);
+	(*rstabs.begin())->DoUpdateWithFollowUp();
 
-	Npages_elog = current_tab->hnamepaths.size();
+	Npages_elog = Nplots;
 	ipage_elog  = 0;
-	elog_next_action = RS_CMSG->GetTime() + 2.0;
+	elog_next_action = RS_CMSG->GetTime() + 3.0;
 }
 
 //-------------------
@@ -1289,7 +1298,7 @@ void rs_mainframe::DoELog(void)
 void rs_mainframe::DoELogPage(void)
 {
 	if(  RS_CMSG->GetTime() < elog_next_action ) return;
-	elog_next_action = RS_CMSG->GetTime() + 2.0;
+	elog_next_action = RS_CMSG->GetTime() + 3.0;
 	
 	// Check if the hnamepath we're trying to write is displayed
 	// yet. If not, resend update and wait another second
@@ -1312,18 +1321,25 @@ void rs_mainframe::DoELogPage(void)
 	/// Setup timer for next page if needed
 _DBG_<<"ipage_elog="<<ipage_elog<<" Npages_elog="<<Npages_elog<<endl;
 	if( ipage_elog < Npages_elog ){
-_DBG__;
-		current_tab->DoNext();
+		if( (current_tab->currently_displayed+1) == (int)current_tab->hnamepaths.size() ){
+			// Currently displaying last plot for this tab.
+			// Advance to first plot of next tab.
+			fMainTab->SetTab(fMainTab->GetCurrent()+1);
+			auto it = rstabs.begin();
+			advance(it, fMainTab->GetCurrent());
+			(*it)->DoUpdateWithFollowUp();
+		}else{
+			current_tab->DoNext();
+		}
 	}else{
-_DBG__;
 		// This was the last page. Generate entry.
 		
 		char fname[256];
-		sprintf(fname, "%s/elog_occupancy.html", dir);
+		sprintf(fname, "%s/elog_monitoring.html", dir);
 		ofstream ofs(fname);
 		if(ofs.is_open()){
 			time_t t = time(NULL);
-			ofs << "Hall-D Occupancy Plots for " << ctime(&t);
+			ofs << "Hall-D Monitoring Plots for " << ctime(&t);
 			ofs.close();
 			
 			stringstream cmd;
@@ -1333,9 +1349,9 @@ _DBG__;
 			if(ELOG_NOTIFY) cmd << " -n " << ELOG_EMAIL;
 
 			if(epics_run_number>0){
-				cmd << " -t \"Hall-D Occupancy Plots Run " << epics_run_number << "\"";
+				cmd << " -t \"Hall-D Monitoring Plots Run " << epics_run_number << "\"";
 			}else{
-				cmd << " -t \"Hall-D Occupancy Plots\"";
+				cmd << " -t \"Hall-D Monitoring Plots\"";
 			}
 
 			// attach all plots
@@ -1360,6 +1376,12 @@ _DBG__;
 		cout << "Finished making e-log entry" << endl;
 		cout << "--------------------------------" << endl;
 
+		// Restore tab and plot
+		fMainTab->SetTab(elog_tab_restore);
+		auto it = rstabs.begin();
+		advance(it, elog_tab_restore);
+		(*it)->currently_displayed = elog_plot_restore;
+		(*it)->DoUpdateWithFollowUp();
 	}
 }
 
