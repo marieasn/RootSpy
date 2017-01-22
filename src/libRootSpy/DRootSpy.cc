@@ -16,6 +16,7 @@
 #include <cmath>
 #include <thread>
 #include <memory>
+#include <atomic>
 using namespace std;
 
 #include <TROOT.h>
@@ -57,7 +58,8 @@ typedef struct{
 // --------- GLOBALS ----------------
 string gROOTSPY_PROGRAM_NAME = "rootspy-server";
 DRootSpy *gROOTSPY = NULL;
-sem_t RootSpy_final_sem;
+//sem_t RootSpy_final_sem;
+atomic<bool> process_finals(false);
 pthread_rwlock_t *gROOTSPY_RW_LOCK = NULL;
 vector<RS_QUEUED_MACRO_t> QUEUED_MACROS;
 
@@ -183,7 +185,7 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 
 
 	// semaphore for handling sending final histograms
-	int err = sem_init(&RootSpy_final_sem, 0, 1);
+	//int err = sem_init(&RootSpy_final_sem, 0, 1);
 	
 	finalhists = NULL;
 
@@ -194,11 +196,11 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	// This is always the case for Mac OS X which does not support
 	// unnamed semaphores, but does define the sem_init function
 	// such that it always returns -1.
-	if(err == 0){
+//	if(err == 0){
 		pthread_create(&mythread, NULL, ReturnFinalsC, this);
-	}else{
-		cout << "Unable to create semephore. Final Histograms feature disabled." << endl;
-	}
+//	}else{
+//		cout << "Unable to create semephore. Final Histograms feature disabled." << endl;
+//	}
 	
 	// Register any macros that were queued up before the DRootSpy object was created
 	for(unsigned int i=0; i<QUEUED_MACROS.size(); i++){
@@ -274,7 +276,7 @@ DRootSpy::~DRootSpy()
 	cMsgSys->stop();
 	cMsgSys->disconnect();
 
-	sem_destroy(&RootSpy_final_sem);
+//	sem_destroy(&RootSpy_final_sem);
 	
 	// If writing DEBUG stats, then finish that off
 	if(debug_file){
@@ -605,7 +607,8 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 	} else 	if(cmd == "provide final") {
 		finalhists = msg->getStringVector("hnamepaths");
 		finalsender = msg->getType();
-		sem_post(&RootSpy_final_sem);
+//		sem_post(&RootSpy_final_sem);
+		process_finals = true;
 		if(VERBOSE>1) cerr<<"got finalhists"<<endl;
 		delete msg;
 		in_callback = false;
@@ -1342,12 +1345,15 @@ void DRootSpy::ReturnFinals(void) {
 	_DBG_<<"starting final histogram loop"<<endl;
 
 	// make sure that final histograms are filled
-	sem_wait(&RootSpy_final_sem);
+	while( !process_finals ) usleep(100000);
+	//sem_wait(&RootSpy_final_sem);
 
 	_DBG_<<"Got semaphore signal"<<endl;
 
-	if(!finalhists) // sanity check
-	    continue;
+	if(!finalhists){ // sanity check
+		process_finals = false;
+		continue;
+	}
 
 	_DBG_<<"building final histograms"<<endl;
 	_DBG_<<"saving " << finalhists->size() << " histograms..." << endl;

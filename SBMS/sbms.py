@@ -1,4 +1,8 @@
-
+#
+# $Id: sbms.py 21211 2016-08-16 12:45:01Z davidl $
+# $HeadURL: https://halldsvn.jlab.org/repos/trunk/online/packages/SBMS/sbms.py $
+#
+#
 import os
 import subprocess
 import SCons
@@ -84,12 +88,11 @@ def executable(env, exename=''):
 	# Push commonly used libraries to end of list
 	ReorderCommonLibraries(env)
 
-	sources  = env['ALL_SOURCES']
-	miscobjs = env['MISC_OBJS'  ]
+	sources = env['ALL_SOURCES']
 
 	# Build program from all source
 	myobjs = env.Object(sources)
-	myexe = env.Program(target = exename, source = myobjs+miscobjs)
+	myexe = env.Program(target = exename, source = myobjs)
 
 	# Cleaning and installation are restricted to the directory
 	# scons was launched from or its descendents
@@ -221,7 +224,7 @@ def plugin(env, pluginname=''):
 ##################################
 # script
 ##################################
-def script(env, scriptname):
+def script(env, scriptname, installname=None):
 
 	# Only thing to do for script is to install it.
 
@@ -240,8 +243,12 @@ def script(env, scriptname):
 		gbindir = '%s/bin' % ginstalldir
 
 		# Install targets 
-		env.Install(bindir, scriptname)
-		env.Install(gbindir, scriptname)
+		if installname==None:
+			env.Install(bindir, scriptname)
+			env.Install(gbindir, scriptname)
+		else:
+			env.InstallAs(bindir+'/'+installname, scriptname)
+			env.InstallAs(gbindir+'/'+installname, scriptname)
 
 
 
@@ -260,15 +267,22 @@ def AddCompileFlags(env, allflags):
 	# the 2 lists: ccflags, cpppath
 
 	ccflags = []
+	cxxflags = []
 	cpppath = []
 	for f in allflags.split():
 		if f.startswith('-I'):
 			cpppath.append(f[2:])
 		else:
-			ccflags.append(f)
+			if f.startswith('-std=c++'):
+				cxxflags.append(f)
+			else:
+				ccflags.append(f)
 	
 	if len(ccflags)>0 :
 		env.AppendUnique(CCFLAGS=ccflags)
+
+	if len(cxxflags)>0 :
+		env.AppendUnique(CXXFLAGS=cxxflags)
 
 	if len(cpppath)>0 :
 		env.AppendUnique(CPPPATH=cpppath)
@@ -421,22 +435,34 @@ def AddHDDS(env):
 ##################################
 def AddHDDM(env):
 	env.AppendUnique(LIBS = 'HDDM')
+	Add_xstream(env)
 
 
 ##################################
 # DANA
 ##################################
 def AddDANA(env):
+	halld_my = os.getenv('HALLD_MY')
+	halld_home = os.getenv('HALLD_HOME')
+	if halld_my != None:
+		env.AppendUnique(CPPPATH=['%s/%s/include' % (halld_my  , env['OSNAME'])])
+		env.AppendUnique(LIBPATH=['%s/%s/lib' % (halld_my  , env['OSNAME'])])
+	if halld_home != None:
+		env.AppendUnique(CPPPATH=['%s/%s/include' % (halld_home, env['OSNAME'])])
+		env.AppendUnique(LIBPATH=['%s/%s/lib' % (halld_home, env['OSNAME'])])
 	AddHDDM(env)
 	AddROOT(env)
 	AddJANA(env)
 	AddCCDB(env)
 	AddHDDS(env)
 	AddXERCES(env)
-	Add_xstream(env)
+	AddEVIO(env)
+	AddET(env)
+	AddCODAChannels(env)
 	DANA_LIBS  = "DANA ANALYSIS PID TAGGER TRACKING START_COUNTER"
-	DANA_LIBS += " CERE RICH CDC TRIGGER"
-	DANA_LIBS += " FDC TOF BCAL FCAL CCAL HDGEOMETRY JANA"
+	DANA_LIBS += " CERE DIRC CDC TRIGGER PAIR_SPECTROMETER RF"
+	DANA_LIBS += " FDC TOF BCAL FCAL CCAL FMWPC TPOL"
+	DANA_LIBS += " EVENTSTORE HDGEOMETRY TTAB DAQ KINFITTER JANA"
 	env.PrependUnique(LIBS = DANA_LIBS.split())
 
 ##################################
@@ -465,11 +491,13 @@ def AddCCDB(env):
 # EVIO
 ##################################
 def AddEVIO(env):
-	evioroot = os.getenv('EVIOROOT', 'evio')
-	env.AppendUnique(CPPPATH = ['%s/include' % evioroot])
-	env.AppendUnique(LIBPATH = ['%s/lib' % evioroot])
-	env.AppendUnique(LIBS=['evioxx', 'evio'])
-	AddET(env)
+	evioroot = os.getenv('EVIOROOT')
+	if(evioroot != None) :
+		env.AppendUnique(CXXFLAGS = ['-DHAVE_EVIO'])
+		env.AppendUnique(CPPPATH = ['%s/include' % evioroot])
+		env.AppendUnique(LIBPATH = ['%s/lib' % evioroot])
+		env.AppendUnique(LIBS=['evioxx', 'evio', 'expat', 'dl'])
+		AddET(env)
 
 
 ##################################
@@ -478,12 +506,42 @@ def AddEVIO(env):
 def AddET(env):
 
 	# Only add ET if ETROOT is set
-	etroot = os.getenv('ETROOT', 'none')
-	if(etroot != 'none') :
+	etroot = os.getenv('ETROOT')
+	if(etroot != None) :
 		env.AppendUnique(CXXFLAGS = ['-DHAVE_ET'])
 		env.AppendUnique(CPPPATH = ['%s/include' % etroot])
 		env.AppendUnique(LIBPATH = ['%s/lib' % etroot])
-		env.AppendUnique(LIBS=['et_remote', 'et'])
+		env.AppendUnique(LIBS=['et', 'et_remote', 'dl'])
+		if os.getenv('OSTYPE', 'none') != 'darwin': AddLinkFlags(env,'-lrt')
+
+
+##################################
+# CodaChannels
+##################################
+def AddCODAChannels(env):
+
+	# Only add codaChannels library if CODA is set
+	coda = os.getenv('CODA')
+	arch = os.getenv('ARCH')
+	if(coda != None) :
+		env.AppendUnique(CXXFLAGS = ['-DHAVE_CODACHANNELS'])
+		env.AppendUnique(CPPPATH = ['%s/%s/include' % (coda,arch)])
+		env.AppendUnique(LIBPATH = ['%s/%s/lib' % (coda,arch)])
+		env.AppendUnique(LIBS=['codaChannels'])
+
+
+##################################
+# CodaObjects
+##################################
+def AddCODAObjects(env):
+
+	# Only add codaObject library if CODA is set
+	codaobject = os.getenv('CODAOBJECTROOT')
+	if(codaobject != None) :
+		env.AppendUnique(CXXFLAGS = ['-DHAVE_CODAOBJECTS'])
+		env.AppendUnique(CPPPATH = ['%s/include' % codaobject])
+		env.AppendUnique(LIBPATH = ['%s/lib' % codaobject])
+		env.AppendUnique(LIBS=['codaObject'])
 
 
 ##################################
@@ -492,12 +550,13 @@ def AddET(env):
 def AddCMSG(env):
 
 	# Only add cMsg if CMSGROOT is set
-	cmsgroot = os.getenv('CMSGROOT', 'none')
-	if(cmsgroot != 'none') :
+	cmsgroot = os.getenv('CMSGROOT')
+	if(cmsgroot != None) :
 		env.AppendUnique(CXXFLAGS = ['-DHAVE_CMSG'])
 		env.AppendUnique(CPPPATH = ['%s/include' % cmsgroot])
 		env.AppendUnique(LIBPATH = ['%s/lib' % cmsgroot])
-		env.AppendUnique(LIBS=['cmsgxx', 'cmsg', 'cmsgRegex'])
+		env.AppendUnique(LIBS=['cmsgxx', 'cmsg', 'cmsgRegex', 'dl', 'pthread'])
+		if os.getenv('OSTYPE', 'none') != 'darwin': AddLinkFlags(env,'-lrt')
 
 
 ##################################
@@ -534,37 +593,13 @@ def AddCERNLIB(env):
 
 
 ##################################
-# EPICS (ezca)
-##################################
-def AddEPICS(env):
-	epicsroot = os.getenv('EPICS')
-	if epicsroot != None:
-		env.AppendUnique(CXXFLAGS=['-DEZCA'])
-		env.AppendUnique(CPPPATH=['%s/base/include' % epicsroot])
-		env.AppendUnique(CPPPATH=['%s/base/include/os/Linux' % epicsroot])
-		env.AppendUnique(CPPPATH=['%s/extensions/include' % epicsroot])
-		env.AppendUnique(LINKFLAGS='-pthread')
-		env.AppendUnique(LIBS=['rt', 'dl','readline'])
-
-		# In Hall-D the LD_LIBRARY_PATH only includes the
-		# 32bit libraries (choice made by and enforced vigorously
-		# by the controls group). Thus, we add the 64bit static
-		# libraries explicitly. Note that compiling with the '-static'
-		# flag didn't seem to work since it tried to make everything
-		# static and failed to find some dependencies.
-		env.AppendUnique(MISC_OBJS=['%s/extensions/lib/linux-x86_64/libezca.a' % epicsroot])
-		env.AppendUnique(MISC_OBJS=['%s/base/lib/linux-x86_64/libca.a' % epicsroot])
-		env.AppendUnique(MISC_OBJS=['%s/base/lib/linux-x86_64/libCom.a' % epicsroot])
-
-
-##################################
 # ROOT
 ##################################
 def AddROOT(env):
 	#
 	# Here we use the root-config program to give us the compiler
 	# and linker options needed for ROOT. We use the AddCompileFlags()
-	# and AddLinkFlags() routines (defined below) to split the arguments
+	# and AddLinkFlags() routines (defined above) to split the arguments
 	# into the categories scons wants. E.g. scons wants to know the
 	# search path and basenames for libraries rather than just giving it
 	# the full compiler options like "-L/path/to/lib -lmylib".
@@ -572,30 +607,56 @@ def AddROOT(env):
 	# We also create a builder for ROOT dictionaries and add targets to
 	# build dictionaries for any headers with "ClassDef" in them.
 
-	ROOT_CFLAGS = subprocess.Popen(["root-config", "--cflags"], stdout=subprocess.PIPE).communicate()[0]
-	ROOT_LINKFLAGS = subprocess.Popen(["root-config", "--glibs"], stdout=subprocess.PIPE).communicate()[0]
-	AddCompileFlags(env, ROOT_CFLAGS)
-	AddLinkFlags(env, ROOT_LINKFLAGS)
-	env.AppendUnique(LIBS = "Geom")
+	rootsys = os.getenv('ROOTSYS', '/usr/local/root/PRO')
+	if not os.path.isdir(rootsys):
+		print 'ROOTSYS not defined or points to a non-existant directory!'
+		sys.exit(-1)
 
-	# Define (DY)LD_LIBRARY_PATH env. var. name
-	LDLPV='LD_LIBRARY_PATH'
-	if os.getenv('DYLD_LIBRARY_PATH', 'unset') != 'unset': LDLPV='DYLD_LIBRARY_PATH'
+	# Only root-config the first time through
+	if "ROOT_CFLAGS" not in AddROOT.__dict__:
+		AddROOT.ROOT_CFLAGS    = subprocess.Popen(["%s/bin/root-config" % rootsys, "--cflags"], stdout=subprocess.PIPE).communicate()[0]
+		AddROOT.ROOT_LINKFLAGS = subprocess.Popen(["%s/bin/root-config" % rootsys, "--glibs" ], stdout=subprocess.PIPE).communicate()[0]
+
+	AddCompileFlags(env, AddROOT.ROOT_CFLAGS)
+	AddLinkFlags(env, AddROOT.ROOT_LINKFLAGS)
+	env.AppendUnique(LIBS = "Geom")
+	if os.getenv('LD_LIBRARY_PATH'  ) != None : env.Append(LD_LIBRARY_PATH   = os.environ['LD_LIBRARY_PATH'  ])
+	if os.getenv('DYLD_LIBRARY_PATH') != None : env.Append(DYLD_LIBRARY_PATH = os.environ['DYLD_LIBRARY_PATH'])
+
+	# NOTE on (DY)LD_LIBRARY_PATH :
+	# Linux (and most unixes) use LD_LIBRARY_PATH while Mac OS X uses
+	# DYLD_LIBRARY_PATH. Unfortunately, the "thisroot.csh" script distributed
+	# with ROOT sets both of these so we can't use the presence of the
+	# DYLD_LIBRARY_PATH environment variable to decide which of these to 
+	# work with. Thus, we just append to whichever are set, which may be both.
+
+	# If additional include dirctories need to be added to the search path
+	# when generating a dictionary, they can be via the ROOT_DICT_INCLUDE_PATH
+	# variable
+	inc_path = ''
+	if 'ROOT_DICT_INCLUDE_PATH' in env.Dictionary().keys():
+		for p in env['ROOT_DICT_INCLUDE_PATH']: inc_path += '-I'+p+' '
 
 	# Create Builder that can convert .h file into _Dict.cc file
-	rootsys = os.getenv('ROOTSYS', '/usr/local/root/PRO')
-	env.AppendENVPath(LDLPV, '%s/lib' % rootsys )
-	incdirs = '-I%s -I%s' % (env.Dir('#src/libRootSpy'), env.Dir('#src/libRootSpy-client'))
+	if os.getenv('LD_LIBRARY_PATH'  ) != None : env.AppendENVPath('LD_LIBRARY_PATH'  , '%s/lib' % rootsys )
+	if os.getenv('DYLD_LIBRARY_PATH') != None : env.AppendENVPath('DYLD_LIBRARY_PATH', '%s/lib' % rootsys )
+	rootcintpath  = "%s/bin/rootcint" % (rootsys)
+	rootclingpath = "%s/bin/rootcling" % (rootsys)
 	if env['SHOWBUILD']==0:
-		rootcintaction = SCons.Script.Action("%s/bin/rootcint -f $TARGET -c %s $SOURCE" % (rootsys, incdirs), 'ROOTCINT   [$SOURCE]')
+		rootcintaction  = SCons.Script.Action("%s %s-f $TARGET -c $SOURCE" % (rootcintpath,  inc_path) , 'ROOTCINT   [$SOURCE]')
+		rootclingaction = SCons.Script.Action("%s %s-f $TARGET -c $SOURCE" % (rootclingpath, inc_path), 'ROOTCLING  [$SOURCE]')
 	else:
-		rootcintaction = SCons.Script.Action("%s/bin/rootcint -f $TARGET -c %s $SOURCE" % (rootsys, incdirs))
-	bld = SCons.Script.Builder(action = rootcintaction, suffix='_Dict.cc', src_suffix='.h')
+		rootcintaction  = SCons.Script.Action("%s %s-f $TARGET -c $SOURCE" % (rootcintpath,  inc_path) )
+		rootclingaction = SCons.Script.Action("%s %s-f $TARGET -c $SOURCE" % (rootclingpath, inc_path))
+	if os.path.exists(rootclingpath) :
+		bld = SCons.Script.Builder(action = rootclingaction, suffix='_Dict.cc', src_suffix='.h')
+	elif os.path.exists(rootcintpath):
+		bld = SCons.Script.Builder(action = rootcintaction, suffix='_Dict.cc', src_suffix='.h')
+	else:
+		print 'Neither rootcint nor rootcling exists. Unable to create ROOT dictionaries if any encountered.'
+		return
+
 	env.Append(BUILDERS = {'ROOTDict' : bld})
-	if LDLPV=='LD_LIBRARY_PATH':
-		env.Append(LD_LIBRARY_PATH = os.environ[LDLPV])
-	else:
-		env.Append(DYLD_LIBRARY_PATH = os.environ[LDLPV])
 
 	# Generate ROOT dictionary file targets for each header
 	# containing "ClassDef"
@@ -617,5 +678,157 @@ def AddROOT(env):
 			if(int(env['SHOWBUILD'])>1):
 				print "       ROOT dictionary for %s" % f
 	os.chdir(curpath)
+
+
+
+##################################
+# ROOTSPY
+##################################
+def AddROOTSpy(env):
+	rootspy = os.getenv('ROOTSPY')
+	if(rootspy != None) :
+		env.AppendUnique(CXXFLAGS = ['-DHAVE_ROOTSPY'])
+		env.AppendUnique(CPPPATH = ['%s/include' % rootspy, '%s/include/libRootSpy' % rootspy])
+		env.AppendUnique(LIBPATH = ['%s/lib' % rootspy])
+		env.AppendUnique(LIBS=['RootSpy'])
+		AddROOT(env)
+
+
+##################################
+# ROOTSPY Macro build function
+##################################
+def RootSpyMacroCodeGen(target, source, env):
+	# Used by AddROOTSpyMacros below. See comments there for details
+	t = '%s' % target[0]
+	s = '%s' % source[0]
+
+	base = os.path.basename(s[:-2])
+	class_name = '%s_rootspy_class' % base
+	fin  = open(s)
+	fout = open(t, 'w')
+
+	fout.write('#include <dlfcn.h>\n')
+	fout.write('#include <iostream>\n')
+	fout.write('#include <string>\n')
+	fout.write('using namespace std;\n')
+	fout.write('static string macro_data=""\n')
+	for line in fin:
+		line = line.replace('"', '\\\"')
+		line = line.replace('\r', '')
+		line = line.replace('\\#', '\\\#')  # used when macro actually wants a "#" in title
+		fout.write('"%s\\n"\n' % line[:-1])
+	fout.write(';\n')
+	fout.write('class %s{\n' % class_name)
+	fout.write('   public:\n')
+	fout.write('   typedef void rmfcn(string, string, string);\n')
+	fout.write('   %s(){\n' % class_name)
+	fout.write('      rmfcn* fcn = (rmfcn*)dlsym(RTLD_DEFAULT, "REGISTER_ROOTSPY_MACRO");\n')
+	fout.write('      if(fcn) (*fcn)("%s","/", macro_data);\n' % base)
+	fout.write('   }\n')
+	fout.write('};\n')
+	fout.write('static %s tmp;' % class_name)
+
+	fin.close()
+	fout.close()
+
+##################################
+# ROOTSPY Macros
+##################################
+def AddROOTSpyMacros(env):
+	#
+	# This is used to generate a C++ file for each ROOT macro file
+	# where the complete macro file is embedded as a string. A small
+	# piece of code is also inserted that allows the string to be
+	# automatically registered with the RootSpy system, if present.
+	# (Basically, if the rootspy plugin is attached.) ROOT macros
+	# are identified by a file ending with a ".C" suffix. The macro
+	# name will be the basename of the file.
+	#
+
+	# Create Builder that can convert .C file into _rootspy_macro.cc file
+	if env['SHOWBUILD']==0:
+		rootmacroaction = SCons.Script.Action(RootSpyMacroCodeGen, 'ROOTSPY    [$SOURCE]')
+	else:
+		rootmacroaction = SCons.Script.Action(RootSpyMacroCodeGen)
+	bld = SCons.Script.Builder(action = rootmacroaction, suffix='_rootspy_macro.cc', src_suffix='.C')
+	env.Append(BUILDERS = {'ROOTSpyMacro' : bld})
+
+	# Find all macro files and schedule them to be converted using the above builder
+	curpath = os.getcwd()
+	srcpath = env.Dir('.').srcnode().abspath
+	if(int(env['SHOWBUILD'])>1):
+		print "---- Looking for ROOT macro files (*.C) in: %s" % srcpath
+	os.chdir(srcpath)
+	for f in glob.glob('*.C'):
+		env.AppendUnique(ALL_SOURCES = env.ROOTSpyMacro(f))
+		if(int(env['SHOWBUILD'])>1) : print "       ROOTSpy Macro for %s" % f
+
+	os.chdir(curpath)
+
+
+##################################
+# EPICS ezca
+##################################
+def AddEPICS(env):
+	#
+	# The EZCA library is an extension of EPICS and so
+	# may be installed in the extensions folder inside
+	# EPICS_BASE. It also could be installed into 
+	# EPICS_BASE directly or not at all. To accomodate
+	# all cases, look for the libezca library in
+	# both places and only define HAVE_EZCA if it is
+	# found.
+	#
+	epics_base = os.getenv('EPICS_BASE')
+	if epics_base == None: return
+	EpicsHostArch = epics_base+'/startup/EpicsHostArch'
+	arch = subprocess.Popen([EpicsHostArch], stdout=subprocess.PIPE).communicate()[0].rstrip()
+	uname = subprocess.Popen(['uname'], stdout=subprocess.PIPE).communicate()[0].rstrip()
+
+	libdirs = [epics_base+'/lib/'+arch, epics_base+'/../extensions/lib/'+arch]
+	incdirs = [epics_base+'/include', epics_base+'/../extensions/include']
+	incdirs.append(epics_base+'/include/os/'+uname)
+	
+	# The LD_LIBRARY_PATH may be setup for 32-bit libraries
+	# even when running on a 64-bit machine. This is how it is done
+	# on the gluon machines, but is likely not done that way everywhere.
+	# To make this robust against run time environments, only compile
+	# against the static ezca library. Other EPICS libraries are also
+	# needed so we do a search for static versions of each of them 
+	# in all directories in libdirs
+	libs = ['ezca', 'ca', 'Com']
+	libpaths = {}
+	for libdir in libdirs:
+		for lib in libs:
+			libpath = libdir+'/lib'+lib+'.a'
+			if os.path.exists(libpath): libpaths[lib] = libpath
+	
+	# Add static libraries as scons "File" objects so they are handled properly
+	if len(libpaths) == len(libs):
+		for lib,libpath in libpaths.iteritems(): env.AppendUnique(LIBS=[env.File(libpath)])
+		env.AppendUnique(CXXFLAGS = ['-DHAVE_EZCA'])
+		env.AppendUnique(CPPPATH = incdirs)
+		env.AppendUnique(LIBS=['readline'])
+	else:
+		print 'Unable to find all libs! EPICS ezca support disabled'
+		print 'looking for:'
+		print libs
+		print 'found:'
+		print libpaths
+
+
+##################################
+# MYSQL
+##################################
+def AddMYSQL(env):
+	try:
+		MYSQL_CFLAGS = subprocess.Popen(["mysql_config", "--cflags"], stdout=subprocess.PIPE).communicate()[0]
+		MYSQL_LIBS   = subprocess.Popen(["mysql_config", "--libs"], stdout=subprocess.PIPE).communicate()[0]
+		env.AppendUnique(CXXFLAGS = ['-DHAVE_MYSQL'])
+		AddCompileFlags(env, MYSQL_CFLAGS)
+		AddLinkFlags(env, MYSQL_LIBS)
+	except:
+		print '=== Failed to run mysql-config. MYSQL support disabled. ==='
+		
 
 

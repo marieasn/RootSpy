@@ -42,8 +42,8 @@
 #include "RSTab.h"
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
-#include "hinfo_t.h"
-#include "hdef_t.h"
+#include "../libRootSpy-client/hinfo_t.h"
+#include "../libRootSpy-client/hdef_t.h"
 
 class rs_mainframe:public TGMainFrame {
 

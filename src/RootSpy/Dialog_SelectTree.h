@@ -18,8 +18,8 @@
 #include "rs_info.h"
 #endif //__CINT__  __CLING__
 
-#include "hinfo_t.h"
-#include "tree_info_t.h"
+#include "../libRootSpy-client/hinfo_t.h"
+#include "../libRootSpy-client/tree_info_t.h"
 
 using namespace std;
 

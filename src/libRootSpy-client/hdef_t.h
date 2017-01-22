@@ -20,7 +20,7 @@ using namespace std;
 
 #include <pthread.h>
 
-#include <hinfo_t.h>
+#include "hinfo_t.h"
 
 class server_info_t;
 class hinfo_t;
