@@ -33,7 +33,8 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	fTab = rsmf->fMainTab;
 
 	// Create new tab
-	TGCompositeFrame *f = fTab->AddTab(title.c_str());
+	string title_padded = title + string(title.length()/2, ' ');
+	TGCompositeFrame *f = fTab->AddTab(title_padded.c_str());
 	this->title = title;
 	
 	// Hoizontal frame (controls to left, canvas to the right)
@@ -73,7 +74,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	AddSpacer(fTabMainLeft, 1, 10); // y-space between prev/next and refresh
 
 	// Display Type
-	TGGroupFrame *fDisplayOptions = new TGGroupFrame(fTabMainLeft, "Display Options", kVerticalFrame);
+	TGGroupFrame *fDisplayOptions = new TGGroupFrame(fTabMainLeft, "Display Options     ", kVerticalFrame);
 	fTabMainLeft->AddFrame(fDisplayOptions, new TGLayoutHints(kLHintsExpandX | kLHintsCenterY, 2,2,2,2));
 	TGTextButton *bSelect = AddButton(fDisplayOptions, "Select", kLHintsExpandX);
 	AddSpacer(fDisplayOptions, 1, 5);
@@ -280,8 +281,7 @@ void RSTab::DoPrev(void)
 //-------------------
 void RSTab::DoShowIndiv(void)
 {
-	string hnamepath = lHistogram->GetText()->GetString();
-	new Dialog_IndivHists(hnamepath, gClient->GetRoot(), 10, 10);
+	new Dialog_IndivHists(currently_displayed_hnamepath, gClient->GetRoot(), 10, 10);
 }
 
 //----------
@@ -349,13 +349,15 @@ void RSTab::DoUpdate(void)
 	TH1* sum_hist = RS_INFO->GetSumHist(hnamepath, &type, &sum_hist_modified, &servers_str);
 	
 	// Update labels
+	string hnamepath_padded = hnamepath;
+	if(hnamepath.length()<80) hnamepath_padded += string(80-hnamepath.length(), ' ');
 	time_t t = (unsigned long)floor(sum_hist_modified+rs_cmsg::start_time); // seconds since 1970
 	string tstr = ctime(&t);
 	tstr[tstr.length()-1] = 0; // chop off last "\n"
 	lServer->SetText(TString(servers_str));
 	lReceived->SetText(TString(tstr));
-	lHistogram->SetText(TString(hnamepath));
-	lType->SetText(type==hdef_t::macro ? "Macro:":"Histogram:");
+	lHistogram->SetText(TString(hnamepath_padded));
+	lType->SetText(type==hdef_t::macro ? "Macro:        ":"Histogram:   ");
 	bViewMacro->SetEnabled(type==hdef_t::macro);
 	lReceived->Resize();
 	fTabMainLeft->Resize();

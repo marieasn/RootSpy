@@ -568,16 +568,16 @@ _DBG__;
 		TGListTreeItem *server_item=NULL;
 		TGListTreeItem *hist_item=NULL;
 		bool server_checkbox=true;
-		bool hist_checkbox=true;
+		//bool hist_checkbox=true;
 		
 		// If hnamepaths list passed to us is empty, assume it is new and 
 		// check it only if is marked as active. Otherwise, turn off all hists
 		// no appearing in the hnamepaths list
 		if(!hnamepaths->empty()){
 			list<string>::iterator it = find(hnamepaths->begin(), hnamepaths->end(), hnamepath);
-			hist_checkbox = (it != hnamepaths->end());
+			//hist_checkbox = (it != hnamepaths->end());
 		} else {
-			hist_checkbox = hdef->active;
+			//hist_checkbox = hdef->active;
 		}
 
 		if(viewStyle==rs_info::kViewByObject){
@@ -630,9 +630,9 @@ void Dialog_SelectHists::CreateGUI(void)
 	TGMainFrame *fMainFrame984 = this;
 
 	TGFont *ufont;         // will reflect user font changes
-	TGFont *ufont_bold;         // will reflect user font changes
+	//TGFont *ufont_bold;         // will reflect user font changes
 	ufont = gClient->GetFont("-*-helvetica-medium-r-*-*-12-*-*-*-*-*-iso8859-1");
-	ufont_bold = gClient->GetFont("-*-helvetica-bold-r-*-*-12-*-*-*-*-*-iso8859-1");
+	//ufont_bold = gClient->GetFont("-*-helvetica-bold-r-*-*-12-*-*-*-*-*-iso8859-1");
 
 	TGGC   *uGC;           // will reflect user GC changes
 	// graphics context changes

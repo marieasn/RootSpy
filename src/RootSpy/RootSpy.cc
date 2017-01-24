@@ -229,9 +229,10 @@ void Usage(void)
 	cout<<"               (def. "<<CMSG_NAME<<")"<<endl;
 	cout<<"   -p plugins  comma separated list of plugins to attach for macros" << endl;
 	cout<<"   -f file     ROOT file to attach. NOTE: if this option is given then" << endl;
-	cout<<"               RootSpy will not attch to the cMsg server and only histos" << endl;
+	cout<<"               RootSpy will not attach to the cMsg server and only histos" << endl;
 	cout<<"               and trees found in the file will be available" << endl;
 	cout<<"   -L elog     comma separated list of logbooks to make entries in" << endl;
+	cout<<"               specify TLOG for testing (you'll probably also want -N)" << endl;
 	cout<<"   -E email    comma separated list of e-mail addresses to send copy of " << endl;
 	cout<<"               elog entry to" << endl;
 	cout<<"   -N          do NOT send email notification of elog entry" << endl;

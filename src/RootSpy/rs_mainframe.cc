@@ -41,6 +41,7 @@
 #include <TFileMergeInfo.h>
 #include <TGInputDialog.h>
 #include <TGMsgBox.h>
+#include <TGPasswdDialog.h>
 
 #include <KeySymbols.h>
 
@@ -134,6 +135,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	
 	dialog_configmacros = NULL;
 	dialog_scaleopts = NULL;
+	dialog_referenceplot = NULL;
 	delete_dialog_configmacros = false;
 
 	//overlay_mode = false;
@@ -908,6 +910,13 @@ void rs_mainframe::DoTimer(void) {
 	
 	// If making an e-log entry, advance to next stage
 	if( ipage_elog<Npages_elog ) DoELogPage();
+	
+	// If reference window is up, then update it
+	if(dialog_referenceplot){
+		if(dialog_referenceplot->IsMapped()){
+			((Dialog_ReferencePlot*)dialog_referenceplot)->DoTimer();
+		}
+	}
 
 	last_called = now;
 }
@@ -1282,7 +1291,15 @@ void rs_mainframe::DoELog(void)
 	cout << "--------------------------------" << endl;
 	cout << endl;
 	cout << "attempting to generate " << Nplots << " plots ..." << endl;
-	cout << endl;	
+	cout << endl;
+	
+	// Send requests for all hnamepaths now so histograms may
+	// show up by the time we want to plot them
+	for(auto t : rstabs) {
+		for( auto h : t->hnamepaths){
+			RS_INFO->RequestHistograms(h);
+		}
+	}
 
 	fMainTab->SetTab(0);
 	(*rstabs.begin())->DoUpdateWithFollowUp();
@@ -1298,7 +1315,7 @@ void rs_mainframe::DoELog(void)
 void rs_mainframe::DoELogPage(void)
 {
 	if(  RS_CMSG->GetTime() < elog_next_action ) return;
-	elog_next_action = RS_CMSG->GetTime() + 3.0;
+	elog_next_action = RS_CMSG->GetTime() + 2.0;
 	
 	// Check if the hnamepath we're trying to write is displayed
 	// yet. If not, resend update and wait another second
@@ -1309,6 +1326,23 @@ void rs_mainframe::DoELogPage(void)
 		current_tab->DoUpdateWithFollowUp();
 		return;
 	}
+
+current_tab->canvas->Update();
+	
+	// Find total number of hists displayed
+	Int_t Ndisplayed = 0;
+	for(int ipad=0; ipad<100; ipad++){
+		TVirtualPad *pad = current_tab->canvas->GetPad(ipad);
+		if(!pad) break;
+		Ndisplayed+=pad->GetListOfPrimitives()->GetSize();
+	}
+_DBG_<<"Number of primitives in TCanvas: " << Ndisplayed << endl;
+	if(Ndisplayed < 2){
+		current_tab->DoUpdateWithFollowUp();
+		return;
+	}
+
+	
 	
 	ipage_elog++;
 
@@ -1383,6 +1417,44 @@ _DBG_<<"ipage_elog="<<ipage_elog<<" Npages_elog="<<Npages_elog<<endl;
 		(*it)->currently_displayed = elog_plot_restore;
 		(*it)->DoUpdateWithFollowUp();
 	}
+}
+
+//-------------------
+// DoReferencePlot
+//-------------------
+void rs_mainframe::DoReferencePlot(void)
+{
+	if(!dialog_referenceplot){
+		dialog_referenceplot = new Dialog_ReferencePlot(gClient->GetRoot(), 10, 10);
+	}else{
+		dialog_referenceplot->MapWindow();
+		dialog_referenceplot->RaiseWindow();
+		dialog_referenceplot->RequestFocus();
+	}
+}
+
+//-------------------
+// DoMakeReferencePlot
+//-------------------
+void rs_mainframe::DoMakeReferencePlot(void)
+{
+	/// Save current canvas as a .png file in the appropriate directory
+	/// so that it may be shown as the reference plot when displaying
+	/// this hnamepath. It is assumed that the canvas is all updated and
+	/// the user is an expert authorized to make this the new reference.
+
+	char prompt[512];
+	char pwdbuff[256] = "password";
+	sprintf(prompt, "Please enter the password for setting the reference plot for \"%s\"", current_tab->currently_displayed_hnamepath.c_str());
+	//TGPasswdDialog d(prompt, pwdbuff, 256);
+	
+	if( string(pwdbuff) != "password" ){
+		cout << "Invalid reference plot password." << endl;
+		return;
+	}
+
+	string fname = Dialog_ReferencePlot::MakeReferenceFilename(current_tab->currently_displayed_hnamepath);
+	current_tab->canvas->SaveAs(fname.c_str(), "");
 }
 
 //-------------------
@@ -1577,8 +1649,11 @@ void rs_mainframe::CreateGUI(void)
 
 	//....... Bottom Frame .......
 	AddSpacer(fMainBot, 50, 1, kLHintsRight);
-	TGTextButton *bElog = AddButton(fMainBot, "Make e-log Entry", kLHintsLeft);
-	TGTextButton *bQuit = AddButton(fMainBot, "Quit", kLHintsRight);
+	TGTextButton *bElog = AddButton(fMainBot, "Make e-log Entry        ", kLHintsLeft);
+	TGTextButton *bRefs = AddButton(fMainBot, "Reference Histograms       ", kLHintsLeft);
+	AddSpacer(fMainBot, 50, 1, kLHintsLeft);
+	TGTextButton *bMakeRef = AddButton(fMainBot, "Make current Reference       ", kLHintsLeft);
+	TGTextButton *bQuit = AddButton(fMainBot, "Quit  ", kLHintsRight);
 
 	fMain->MapSubwindows();
 	fMain->MapWindow();
@@ -1586,6 +1661,8 @@ void rs_mainframe::CreateGUI(void)
 	//==================== Connect GUI elements to methods ====================
 	bQuit->Connect("Clicked()","rs_mainframe", this, "DoQuit()");
 	bElog->Connect("Clicked()","rs_mainframe", this, "DoELog()");
+	bRefs->Connect("Clicked()","rs_mainframe", this, "DoReferencePlot()");
+	bMakeRef->Connect("Clicked()","rs_mainframe", this, "DoMakeReferencePlot()");
 	fMainTab->Connect("Selected(Int_t)", "rs_mainframe", this, "DoTabSelected(Int_t)");
 	bSetArchive->Connect("Clicked()","rs_mainframe", this, "DoSetArchiveFile()");
 	fDelay->Connect("Selected(Int_t)","rs_mainframe", this, "DoSelectDelay(Int_t)");

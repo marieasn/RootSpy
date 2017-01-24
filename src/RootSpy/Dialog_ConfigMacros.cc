@@ -234,9 +234,9 @@ void Dialog_ConfigMacros::CreateGUI(void)
    fHorizontalFrame1154->SetName("fHorizontalFrame1154");
 
    TGFont *ufont;         // will reflect user font changes
-   TGFont *ufont_bold;         // will reflect user font changes
+   //TGFont *ufont_bold;         // will reflect user font changes
    ufont = gClient->GetFont("-*-helvetica-medium-r-*-*-12-*-*-*-*-*-iso8859-1");
-   ufont_bold = gClient->GetFont("-*-helvetica-bold-r-*-*-12-*-*-*-*-*-iso8859-1");
+   //ufont_bold = gClient->GetFont("-*-helvetica-bold-r-*-*-12-*-*-*-*-*-iso8859-1");
 
 
    // vertical frame

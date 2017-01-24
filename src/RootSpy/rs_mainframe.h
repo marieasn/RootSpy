@@ -42,6 +42,7 @@
 #include "RSTab.h"
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
+#include "Dialog_ReferencePlot.h"
 #include "../libRootSpy-client/hinfo_t.h"
 #include "../libRootSpy-client/hdef_t.h"
 
@@ -109,6 +110,8 @@ class rs_mainframe:public TGMainFrame {
 		void DoOnline(void);
 		void DoELog(void);
 		void DoELogPage(void);
+		void DoReferencePlot(void);
+		void DoMakeReferencePlot(void);
 
 		// Helper methods for building GUI
 		TGLabel*          AddLabel(TGCompositeFrame* frame, string text, Int_t mode=kTextLeft, ULong_t hints=kLHintsLeft | kLHintsTop);
@@ -130,6 +133,7 @@ class rs_mainframe:public TGMainFrame {
 		TGMainFrame *dialog_selecttree;
 		TGMainFrame *dialog_configmacros;
 		TGMainFrame *dialog_scaleopts;
+		TGMainFrame *dialog_referenceplot;
 
 		TGDockableFrame    *fMenuDock;
 		TGMenuBar  *fMenuBar;
