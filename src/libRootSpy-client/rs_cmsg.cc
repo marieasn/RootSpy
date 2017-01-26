@@ -20,6 +20,7 @@
 #include <cmath>
 #include <algorithm>
 #include <set>
+#include <mutex>
 using namespace std;
 
 #include <TDirectoryFile.h>
@@ -28,6 +29,11 @@ using namespace std;
 #include <TTree.h>
 #include <TMemFile.h>
 #include <TKey.h>
+
+mutex REGISTRATION_MUTEX;
+map<void*, string> HISTOS_TO_REGISTER;
+map<void*, string> MACROS_TO_REGISTER;
+
 
 double rs_cmsg::start_time=0.0; // overwritten on fist call to rs_cmsg::GetTime()
 
@@ -422,124 +428,6 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 	}
 }
 
-
-
-//---------------------------------
-// RequestHistogramSync
-//  Note: Do not lock RS_INFO before calling this function
-//---------------------------------
-void rs_cmsg::RequestHistsSync(string servername, timespec_t &myTimeout)
-{
-	if(!is_online) return;
-
-    cMsgMessage requestHist;
-    BuildRequestHists(requestHist, servername);
-    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
-    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
-
-    string sender = response->getType();
-    RegisterHistList(sender, response);
-}
-
-//---------------------------------
-// RequestHistogramSync
-//  Note: Do not lock RS_INFO before calling this function
-//---------------------------------
-void rs_cmsg::RequestHistogramSync(string servername, string hnamepath, timespec_t &myTimeout)
-{
-	if(!is_online) return;
-
-    cMsgMessage requestHist;
-    BuildRequestHistogram(requestHist, servername, hnamepath);
-    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
-    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
-
-    string sender = response->getType();
-    RegisterHistogram(sender, response);
-}
-
-//---------------------------------
-// RequestTreeInfoSync
-//  Note: Do not lock RS_INFO before calling this function
-//---------------------------------
-void rs_cmsg::RequestTreeInfoSync(string servername, timespec_t &myTimeout)
-{
-	if(!is_online) return;
-
-    cMsgMessage treeinfo;
-    BuildRequestTreeInfo(treeinfo, servername);
-
-    //_DBG_ << " Sending getTreeInfo message..." << endl;
-    if(verbose>3) _DBG_ << "Sending \"" << treeinfo.getText() << endl;
-    cMsgMessage *response = cMsgSys->sendAndGet(treeinfo, &myTimeout);  // check for exception?
-    //_DBG_ <<"Received message --  Subject:"<<response->getSubject()
-	 // <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
-
-    string sender = response->getType();
-    RegisterTreeInfoSync(sender, response);
-}
-
-//---------------------------------
-// RequestTreeSync
-//  Note: Do not lock RS_INFO before calling this function
-//---------------------------------
-void rs_cmsg::RequestTreeSync(string servername, string tree_name, string tree_path, timespec_t &myTimeout, int64_t num_entries = -1)
-{
-	if(!is_online) return;
-
-    //_DBG_ << "In rs_cmsg::RequestTreeSync()..." << endl;
-
-    cMsgMessage requestTree;
-    BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
-
-    //_DBG_ << " Sending getTree message..." << endl;
-    if(verbose>3) _DBG_ << "Sending \"" << requestTree.getText() << endl;
-    cMsgMessage *response = cMsgSys->sendAndGet(requestTree, &myTimeout);  // check for exception?
-    //_DBG_ <<"Received message --  Subject:"<<response->getSubject()
-	 // <<" Type:"<<response->getType()<<" Text:"<<response->getText()<<endl;
-    
-    string sender = response->getType();
-    //_DBG_ << " received response from  " << sender << endl;
-    RegisterTree(sender, response);
-}
-
-//---------------------------------
-// RequestMacroListSync
-//  Note: Do not lock RS_INFO before calling this function
-//---------------------------------
-void rs_cmsg::RequestMacroListSync(string servername, timespec_t &myTimeout)
-{
-	if(!is_online) return;
-
-    cMsgMessage requestHist;
-    BuildRequestMacroList(requestHist, servername);
-    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
-    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
-
-    string sender = response->getType();
-    RegisterMacroList(sender, response);
-}
-
-//---------------------------------
-// RequestMacroSync
-//  Note: Do not lock RS_INFO before calling this function
-//---------------------------------
-void rs_cmsg::RequestMacroSync(string servername, string hnamepath, timespec_t &myTimeout)
-{
-	if(!is_online) return;
-
-    cMsgMessage requestHist;
-    BuildRequestMacro(requestHist, servername, hnamepath);
-    if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << endl;
-    cMsgMessage *response = cMsgSys->sendAndGet(requestHist, &myTimeout);  // check for exception?
-
-    string sender = response->getType();
-    RegisterMacro(sender, response);
-}
-
-
-
-
 //---------------------------------
 // FinalHistogram
 //---------------------------------
@@ -666,9 +554,14 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		handled_message = true;
 	}
 	//===========================================================
-	if(cmd=="histogram"){	
-		RegisterHistogram(sender, msg);
+	if(cmd=="histogram"){
+		// add to global variable so main ROOT thread can actually do registration
+		REGISTRATION_MUTEX.lock();
+		HISTOS_TO_REGISTER[msg] = sender;
+		REGISTRATION_MUTEX.unlock();
+		//RegisterHistogram(sender, msg);
 		handled_message = true;
+		msg = NULL; // don't delete message here
 	}
 	//===========================================================
 	if(cmd=="histograms"){	
@@ -692,8 +585,13 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	}
 	//===========================================================
 	if(cmd == "macro") {
-		RegisterMacro(sender, msg);
+		// add to global variable so main ROOT thread can actually do registration
+		REGISTRATION_MUTEX.lock();
+		MACROS_TO_REGISTER[msg] = sender;
+		REGISTRATION_MUTEX.unlock();
+		//RegisterMacro(sender, msg);
 		handled_message = true;
+		msg = NULL; // don't delete message here
 	}
 	//===========================================================
 	if(cmd=="final hists"){  // save histograms
@@ -713,7 +611,7 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	if(!handled_message){
 		_DBG_<<"Received unknown message --  Subject:"<<msg->getSubject()<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
 	}
-	delete msg;
+	if(msg) delete msg;
 }
 
 //---------------------------------
@@ -792,9 +690,11 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		// Look for entry in RS_INFO
 		RS_INFO -> Lock();
 		if(RS_INFO->histdefs.find(hdef.hnamepath)==RS_INFO->histdefs.end()){
+			if(verbose>3) _DBG_ << "Adding hdef with hnamepath=" << hdef.hnamepath << endl;
 			RS_INFO->histdefs[hdef.hnamepath]=hdef;
 		}else{
-			// Need code to verify hdefs ae same!!
+			if(verbose>3) _DBG_ << "Skipping adding of hdef with hnamepath=" << hdef.hnamepath << " since it already exists" << endl;
+			// Need code to verify hdefs are same!!
 		}
 		
 		// Make sure this server is in list of this hdef's servers
@@ -1145,6 +1045,9 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     
     // Get hnamepath from message
     string hnamepath = msg->getString("hnamepath");
+	 
+	 
+	 if(hnamepath.find(": ") == 0 ) hnamepath.erase(0,2);
 
 	  if(verbose>=3) _DBG_ << "Registering histogram " << hnamepath << endl;
 
@@ -1318,9 +1221,12 @@ void rs_cmsg::RegisterHistograms(string server, cMsgMessage *msg)
 	for(uint32_t i=0; i<cmsgs->size(); i++){
 		cMsgMessage *cmsg = (*cmsgs)[i];
 		
-		RegisterHistogram(server, cmsg);
-		
-		delete cmsg;
+		REGISTRATION_MUTEX.lock();
+		HISTOS_TO_REGISTER[cmsg] = server; // defer to main ROOT thread
+		REGISTRATION_MUTEX.unlock();
+
+		//RegisterHistogram(server, cmsg);		
+		//delete cmsg;
 	}
 	delete cmsgs;
 }
@@ -1328,9 +1234,23 @@ void rs_cmsg::RegisterHistograms(string server, cMsgMessage *msg)
 //---------------------------------
 // RegisterMacro
 //---------------------------------
-//TODO: documentation comment.
 void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg) 
 {
+	/// This will unpack a cMsg containing a macro and 
+	/// register it in the system. The macro will need
+	/// have been declared previously via a RegisterMacroList
+	/// call so the corresponding hdef_t can be accessed.
+	///
+	/// Note that this is not called by the cMsg thread itself
+	/// but rather from the rs_mainframe::DoTimer() method.
+	/// This is to prevent crashes due to the main ROOT event
+	/// loop clashing with this thread (the main ROOT event
+	/// loop is not halted by the rw_lock so the only way
+	/// to get exclusive access to the ROOT global memory is
+	/// to have that thread do it). This makes for the more
+	/// complex system of registering the message into a 
+	/// queue for later processing.
+
 	if(verbose>=4) _DBG_ << "In rs_cmsg::RegisterMacro()..." << endl;
     
     // Get hnamepath from message
@@ -1482,6 +1402,8 @@ _DBG_<<"seeding ... hdef->macro_hnamepaths.size()="<<hdef->macro_hnamepaths.size
     // Unlock mutexes
     pthread_rwlock_unlock(ROOT_MUTEX);
     RS_INFO->Unlock();
+	 
+	 delete msg;
 }
 
 
@@ -1584,6 +1506,15 @@ void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool 
 		vector<string> shnamepaths;
 		list<string>::iterator iter = hnamepaths.begin();
 		for(; iter!=hnamepaths.end(); iter++)shnamepaths.push_back(*iter);
+
+// 		// Send a request for all histogram definitions.
+// 		// This is to avoid the "No hdef_t" errors if the
+// 		// histogram comes back before the definition.
+// 		if(verbose>0) _DBG_ << "Requesting all histogram definitions" << endl;
+// 		RequestHists("rootspy");
+// 		
+// 		// Sleep for 1 second to give servers a chance to respond.
+// 		usleep(1000000);
 		
 		if(verbose>0) _DBG_ << "SeedHnamepaths: requesting " << shnamepaths.size() << " histos" << endl;
 		RequestHistograms("rootspy", shnamepaths);
@@ -1705,9 +1636,13 @@ void rs_cmsg::DirectUDPServerThread(void)
 		cmsg->add("time_requester", rsudp->time_requester);
 		cmsg->add("time_received", rsudp->time_received);
 
+		REGISTRATION_MUTEX.lock();
+		HISTOS_TO_REGISTER[cmsg] = sender; // defer to main ROOT thread
+		REGISTRATION_MUTEX.unlock();
+
 		// Launch separate thread to handle this
-		thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
-		t.detach();
+		//thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
+		//t.detach();
 		
 	}
 	

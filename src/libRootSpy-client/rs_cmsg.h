@@ -44,16 +44,6 @@ class rs_cmsg:public cMsgCallback{
 		void RequestMacroList(string servername);
 		void RequestMacro(string servername, string hnamepath);
 
-		// synchronous requests
-		void RequestHistsSync(string servername, timespec_t &myTimeout);
-		void RequestHistogramSync(string servername, string hnamepath, timespec_t &myTimeout);
-		//void FinalHistogramSync(string servername, vector<string> hnamepath);  // do we want this?
-		void RequestTreeInfoSync(string servername, timespec_t &myTimeout);
-		void RequestTreeSync(string servername, string tree_name, string tree_path, 
-				     timespec_t &myTimeout, int64_t num_entries);
-		void RequestMacroListSync(string servername, timespec_t &myTimeout);
-		void RequestMacroSync(string servername, string hnamepath, timespec_t &myTimeout);
-
 		bool   IsOnline(void)   { return is_online; }
 		cMsg*  GetcMsgPtr(void) { return cMsgSys;   }
 		string GetMyName(void)  { return myname;    }

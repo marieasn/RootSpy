@@ -324,57 +324,61 @@ TH1* rsGet(const char *hnamepath)
 }
 
 
-//--------------------
-// rsGetTree
-//--------------------
-TTree*  rsGetTree(const char *name_c, const char *path_c, unsigned long Nentries, const char *server_c)
-{
-	if(!RS_CMSG) return NULL;
-	RS_CMSG->PingServers();
-
-	map<string,server_info_t> &servers = RS_INFO->servers;
-	map<string,server_info_t>::iterator iter;
-	
-	string name(name_c);
-	string path(path_c);
-	string server(server_c);
-
-	if(server.length() == 0){
-		// if server is not specified, use first in list that
-		// has this tree.
-		for(iter=servers.begin(); iter!=servers.end(); iter++){
-			vector<tree_info_t> &trees = iter->second.trees;
-			for(unsigned int i=0; i<trees.size(); i++){
-				if( (trees[i].name==name) && (trees[i].path==path) ){
-					server = iter->first;
-					break;
-				}
-			}
-			if(server.length()!=0) break;
-		}
-	}
-	
-	if(server.length() == 0){
-		cout << "-- No servers have the specified name and path --" << endl;
-		return NULL;
-	}
-	
-	cout << "Requesting tree name:" << name << " path:" << path << " from " << server << endl;
-	timespec_t timeout = {5, 0L};
-	RS_CMSG->RequestTreeSync(server, name, path, timeout, Nentries);
-	
-	// Look through server/tree list again to get pointer to tree
-	for(iter=servers.begin(); iter!=servers.end(); iter++){
-		if(iter->first != server) continue;
-		vector<tree_info_t> &trees = iter->second.trees;
-		for(unsigned int i=0; i<trees.size(); i++){
-			if( (trees[i].name==name) && (trees[i].path==path) ){
-				return trees[i].tree;
-			}
-		}
-	}
-
-	cout << "-- No TTree returned! --" << endl;
-	return NULL;
-}
+//
+// The following was commented out since it uses the deprecated RequestTreeSync
+// method of rs_cmsg
+//
+// //--------------------
+// // rsGetTree
+// //--------------------
+// TTree*  rsGetTree(const char *name_c, const char *path_c, unsigned long Nentries, const char *server_c)
+// {
+// 	if(!RS_CMSG) return NULL;
+// 	RS_CMSG->PingServers();
+// 
+// 	map<string,server_info_t> &servers = RS_INFO->servers;
+// 	map<string,server_info_t>::iterator iter;
+// 	
+// 	string name(name_c);
+// 	string path(path_c);
+// 	string server(server_c);
+// 
+// 	if(server.length() == 0){
+// 		// if server is not specified, use first in list that
+// 		// has this tree.
+// 		for(iter=servers.begin(); iter!=servers.end(); iter++){
+// 			vector<tree_info_t> &trees = iter->second.trees;
+// 			for(unsigned int i=0; i<trees.size(); i++){
+// 				if( (trees[i].name==name) && (trees[i].path==path) ){
+// 					server = iter->first;
+// 					break;
+// 				}
+// 			}
+// 			if(server.length()!=0) break;
+// 		}
+// 	}
+// 	
+// 	if(server.length() == 0){
+// 		cout << "-- No servers have the specified name and path --" << endl;
+// 		return NULL;
+// 	}
+// 	
+// 	cout << "Requesting tree name:" << name << " path:" << path << " from " << server << endl;
+// 	timespec_t timeout = {5, 0L};
+// 	RS_CMSG->RequestTreeSync(server, name, path, timeout, Nentries);
+// 	
+// 	// Look through server/tree list again to get pointer to tree
+// 	for(iter=servers.begin(); iter!=servers.end(); iter++){
+// 		if(iter->first != server) continue;
+// 		vector<tree_info_t> &trees = iter->second.trees;
+// 		for(unsigned int i=0; i<trees.size(); i++){
+// 			if( (trees[i].name==name) && (trees[i].path==path) ){
+// 				return trees[i].tree;
+// 			}
+// 		}
+// 	}
+// 
+// 	cout << "-- No TTree returned! --" << endl;
+// 	return NULL;
+// }
 

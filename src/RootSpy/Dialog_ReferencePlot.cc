@@ -243,7 +243,7 @@ void Dialog_ReferencePlot::DoTimer(void)
 			
 				struct stat mystat;
 				stat(image_filename.c_str(), &mystat);
-				auto ftime = localtime(&mystat.st_mtimespec.tv_sec);
+				auto ftime = localtime(&mystat.st_mtime);
 				char tmbuf[256];
 				strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", ftime);
 				image_mod_time = tmbuf;

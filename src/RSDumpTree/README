@@ -1,0 +1,11 @@
+
+Jan 26, 2017
+
+RSDumpTree was removed from the standard build because
+it is not being used and we currently don't send any
+trees. It also used the "Sync" versions in rs_cmsg and
+those were removed to reduce and simplify the code some.
+
+This is left here in case someone decides to resurrect
+it in the future.
+

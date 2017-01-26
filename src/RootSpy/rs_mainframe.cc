@@ -54,6 +54,7 @@
 #include <cmath>
 #include <fstream>
 #include <thread>
+#include <mutex>
 using namespace std;
 
 #ifdef EZCA
@@ -69,6 +70,11 @@ extern string CMSG_NAME;
 extern string ELOG_NAME;
 extern string ELOG_EMAIL;
 extern bool   ELOG_NOTIFY;
+
+// These defined in rs_cmsg.cc
+extern mutex REGISTRATION_MUTEX;
+extern map<void*, string> HISTOS_TO_REGISTER;
+extern map<void*, string> MACROS_TO_REGISTER;
 
 
 // information for menu bar
@@ -912,6 +918,26 @@ void rs_mainframe::DoTimer(void) {
 	
 	// If making an e-log entry, advance to next stage
 	if( ipage_elog<Npages_elog ) DoELogPage();
+
+	// Register any histograms waiting in the queue
+	if( ! HISTOS_TO_REGISTER.empty() ){
+		REGISTRATION_MUTEX.lock();
+		for(auto h : HISTOS_TO_REGISTER){
+			RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
+		}
+		HISTOS_TO_REGISTER.clear();
+		REGISTRATION_MUTEX.unlock();
+	}
+	
+	// Register any macros waiting in the queue
+	if( ! MACROS_TO_REGISTER.empty() ){
+		REGISTRATION_MUTEX.lock();
+		for(auto m : MACROS_TO_REGISTER){
+			RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
+		}
+		MACROS_TO_REGISTER.clear();
+		REGISTRATION_MUTEX.unlock();
+	}
 	
 	// If reference window is up, then update it
 	if(dialog_referenceplot){

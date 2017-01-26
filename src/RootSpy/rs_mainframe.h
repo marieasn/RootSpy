@@ -55,6 +55,7 @@ class rs_mainframe:public TGMainFrame {
 		};
 		
 #if !defined(__CINT__) && !defined(__CLING__)
+
 		typedef struct {
 				string type;
 				vector<string> tokens;
@@ -112,6 +113,8 @@ class rs_mainframe:public TGMainFrame {
 		void DoELogPage(void);
 		void DoReferencePlot(void);
 		void DoMakeReferencePlot(void);
+		
+		//void QueueMacroForRegistration(string name. string path, int version, 
 
 		// Helper methods for building GUI
 		TGLabel*          AddLabel(TGCompositeFrame* frame, string text, Int_t mode=kTextLeft, ULong_t hints=kLHintsLeft | kLHintsTop);
@@ -144,7 +147,7 @@ class rs_mainframe:public TGMainFrame {
 		bool delete_dialog_savehists;
 		bool delete_dialog_configmacros;
 		bool delete_dialog_scaleopts;
-
+		
 		string config_filename;
 		map<string,string> macro_files;
 		list<RSTab*> rstabs;
