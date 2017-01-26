@@ -4,6 +4,8 @@
 // Creator: sdobbs
 //
 
+#include <sys/stat.h>
+
 #include <algorithm>
 #include <iostream>
 using namespace std;
@@ -119,11 +121,14 @@ void Dialog_ReferencePlot::CreateGUI(void)
 	
 	AddLabel(fLabelsLeft, "Currently displayed:       ", kTextRight, kLHintsRight| kLHintsExpandX); 
 	AddLabel(fLabelsLeft, "Image file:    ", kTextRight, kLHintsRight| kLHintsExpandX);
+	AddLabel(fLabelsLeft, "Modified:    ", kTextRight, kLHintsRight| kLHintsExpandX);
 	
 	hnamepath      = "-----------------------------------------------------------------------------";
 	image_filename = "-----------------------------------------------------------------------------";
-	lab_hnamepath = AddLabel(fLabelsRight, hnamepath.c_str(), kTextLeft, kLHintsLeft); 
+	image_mod_time = "-----------------------------------------------------------------------------";
+	lab_hnamepath      = AddLabel(fLabelsRight, hnamepath.c_str(), kTextLeft, kLHintsLeft); 
 	lab_image_filename = AddLabel(fLabelsRight, image_filename.c_str(), kTextLeft, kLHintsLeft);
+	lab_image_modtime  = AddLabel(fLabelsRight, image_mod_time.c_str(), kTextLeft, kLHintsLeft);
 
 	//...... Embedded canvas ......
 	TRootEmbeddedCanvas *embeddedcanvas = new TRootEmbeddedCanvas(0,fMain,600,400);	
@@ -179,6 +184,21 @@ string Dialog_ReferencePlot::MakeReferenceFilename(string &hnamepath)
 }
 
 //---------------------------------
+// GetReferenceArchiveDir
+//---------------------------------
+string Dialog_ReferencePlot::GetReferenceArchiveDir(void)
+{
+	/// This will return a string containing the full path to the
+	/// directory used to hold old reference plot image files. It
+	/// is here so we can access the REF_PLOTS_DIR global just like
+	/// above, even though it will be called from rs_mainframe
+	/// DoMakeReferencePlot().
+	string dirname = REF_PLOTS_DIR + "/ARCHIVE";
+	
+	return dirname;
+}
+
+//---------------------------------
 // DoClose
 //---------------------------------
 void Dialog_ReferencePlot::DoClose(void)
@@ -220,9 +240,20 @@ void Dialog_ReferencePlot::DoTimer(void)
 			
 			canvas->cd();
 			if(file_exists){
+			
+				struct stat mystat;
+				stat(image_filename.c_str(), &mystat);
+				auto ftime = localtime(&mystat.st_mtimespec.tv_sec);
+				char tmbuf[256];
+				strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", ftime);
+				image_mod_time = tmbuf;
+				string image_mod_time_padded = image_mod_time;
+				image_mod_time_padded += string(image_mod_time.length()/2, ' ');
+				lab_image_modtime->SetText(TString(image_mod_time_padded));
+
 				cout << "Loading reference image: " << fname << endl;
 				timage->ReadImage(fname.c_str());
-				timage->Scale(canvas->GetWw(), canvas->GetWh());
+				//timage->Scale(canvas->GetWw(), canvas->GetWh());
 				timage->Draw();
 			}else{
 				canvas->Clear();

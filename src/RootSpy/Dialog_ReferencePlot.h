@@ -36,6 +36,7 @@ class Dialog_ReferencePlot:public TGMainFrame{
 		virtual ~Dialog_ReferencePlot();
 
 		static string MakeReferenceFilename(string &hnamepath);
+		static string GetReferenceArchiveDir(void);
 
 		void DoClose(void);
 		void DoTimer(void);
@@ -44,11 +45,13 @@ class Dialog_ReferencePlot:public TGMainFrame{
 		TCanvas *canvas;
 		string hnamepath;
 		string image_filename;
-		
+		string image_mod_time;
+
 		TImage *timage;
-		
+
 		TGLabel *lab_hnamepath;
 		TGLabel *lab_image_filename;
+		TGLabel *lab_image_modtime;
 
 	private:
 

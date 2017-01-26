@@ -46,6 +46,7 @@
 #include <KeySymbols.h>
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include <iostream>
 #include <iomanip>
@@ -1444,17 +1445,46 @@ void rs_mainframe::DoMakeReferencePlot(void)
 	/// this hnamepath. It is assumed that the canvas is all updated and
 	/// the user is an expert authorized to make this the new reference.
 
-	char prompt[512];
-	char pwdbuff[256] = "password";
-	sprintf(prompt, "Please enter the password for setting the reference plot for \"%s\"", current_tab->currently_displayed_hnamepath.c_str());
+	// The password dialog caused an immediate crash while testing on
+	// Linux. Disable it for now.
+	//char prompt[512];
+	//char pwdbuff[256] = "password";
+	//sprintf(prompt, "Please enter the password for setting the reference plot for \"%s\"", current_tab->currently_displayed_hnamepath.c_str());
 	//TGPasswdDialog d(prompt, pwdbuff, 256);
 	
-	if( string(pwdbuff) != "password" ){
-		cout << "Invalid reference plot password." << endl;
-		return;
-	}
+	//if( string(pwdbuff) != "password" ){
+	//	cout << "Invalid reference plot password." << endl;
+	//	return;
+	//}
 
 	string fname = Dialog_ReferencePlot::MakeReferenceFilename(current_tab->currently_displayed_hnamepath);
+
+	// If a reference plot already exists, then move it into the archive directory
+	// with the current time prefixing the name.
+	bool file_exists = (access(fname.c_str(), F_OK) != -1);
+	if(file_exists){
+	
+		// Get archive directory name and make sure it exists
+		string dirname = Dialog_ReferencePlot::GetReferenceArchiveDir();
+		mkdir(dirname.c_str(), 0777); // make directory if it doesn't exist
+
+		// Generate filename based on current time
+		time_t now = time(NULL);
+		auto nowlt = localtime(&now);
+		char tmbuf[256];
+		strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d_%H:%M:%S", nowlt);
+		string time_prefix(tmbuf);
+		
+		// Strip path off of image filename
+		size_t pos = fname.find_last_of('/');
+		if(pos != string::npos){
+			string archivename = dirname + "/" + time_prefix + fname.substr(pos+1);
+			cout << "Archiving old reference:" << endl;
+			cout << "    " << fname << " -> " << archivename << endl;
+			rename(fname.c_str(), archivename.c_str());
+		}
+	}
+
 	current_tab->canvas->SaveAs(fname.c_str(), "");
 }
 
@@ -1651,9 +1681,9 @@ void rs_mainframe::CreateGUI(void)
 	//....... Bottom Frame .......
 	AddSpacer(fMainBot, 50, 1, kLHintsRight);
 	TGTextButton *bElog = AddButton(fMainBot, "Make e-log Entry        ", kLHintsLeft);
-	TGTextButton *bRefs = AddButton(fMainBot, "Reference Histograms       ", kLHintsLeft);
+	TGTextButton *bRefs = AddButton(fMainBot, "Show Reference Plot       ", kLHintsLeft);
 	AddSpacer(fMainBot, 50, 1, kLHintsLeft);
-	TGTextButton *bMakeRef = AddButton(fMainBot, "Make current Reference       ", kLHintsLeft);
+	TGTextButton *bMakeRef = AddButton(fMainBot, "Make this new Reference Plot       ", kLHintsLeft);
 	TGTextButton *bQuit = AddButton(fMainBot, "Quit  ", kLHintsRight);
 
 	fMain->MapSubwindows();
