@@ -75,11 +75,11 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 
 	// Display Type
 	TGGroupFrame *fDisplayOptions = new TGGroupFrame(fTabMainLeft, "Display Options     ", kVerticalFrame);
-	fTabMainLeft->AddFrame(fDisplayOptions, new TGLayoutHints(kLHintsExpandX | kLHintsCenterY, 2,2,2,2));
 	TGTextButton *bSelect = AddButton(fDisplayOptions, "Select", kLHintsExpandX);
 	AddSpacer(fDisplayOptions, 1, 5);
 	TGTextButton *bReset = AddButton(fDisplayOptions, "Reset", kLHintsExpandX);
 	TGTextButton *bRestore = AddButton(fDisplayOptions, "Restore", kLHintsExpandX);
+	fTabMainLeft->AddFrame(fDisplayOptions, new TGLayoutHints(kLHintsCenterX | kLHintsTop| kLHintsExpandX, 2,2,2,2));
 	
 	// Add some more space
 	AddSpacer(fTabMainLeft, 1, 10);

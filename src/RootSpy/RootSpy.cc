@@ -82,8 +82,8 @@ int main(int narg, char *argv[])
 	// Hand control to the ROOT "event" loop
 	app->Run(kTRUE);
 	
-	delete RS_CMSG;
-	delete RSMF;
+	if(RS_CMSG) delete RS_CMSG;
+	if(RSMF) delete RSMF;
 
 	// I recall spending some time tearing my hair out over
 	// this in the past. Currently though, it will seg. fault
@@ -104,6 +104,8 @@ int main(int narg, char *argv[])
 	// platforms unless it is fully tested on the counting house 
 	// system too!
 	//delete app;
+
+	_exit(0);  // Skip ROOT's installed cleanups and thereby end of program seg. faults.
 
 	return 0;
 }
