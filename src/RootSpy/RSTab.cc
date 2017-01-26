@@ -47,18 +47,19 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	
 	
 	// Info. on what's currently displayed
-	TGVerticalFrame *fTabMainLeftInfo = new TGVerticalFrame(fTabMainLeft);	
-	fTabMainLeft->AddFrame(fTabMainLeftInfo, new TGLayoutHints(kLHintsCenterX | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
+	//TGVerticalFrame *fTabMainLeftInfo = new TGVerticalFrame(fTabMainLeft);	
+	//fTabMainLeft->AddFrame(fTabMainLeftInfo, new TGLayoutHints(kLHintsCenterX | kLHintsTop | kLHintsExpandX | kLHintsExpandY,2,2,2,2));
 	
-	TGHorizontalFrame *fTabMainLeftInfoHistLabel = new TGHorizontalFrame(fTabMainLeftInfo);
-	fTabMainLeftInfo->AddFrame(fTabMainLeftInfoHistLabel, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX  ,2,2,2,2));
-	lType      = AddLabel(fTabMainLeftInfoHistLabel, "Histogram:" ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX );
-	bViewMacro = AddButton(fTabMainLeftInfoHistLabel, "view", kLHintsTop| kLHintsExpandX);
-	lHistogram = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
-	AddSpacer(fTabMainLeftInfo, 1, 5);
-	AddLabel(fTabMainLeftInfo, "Received:"  ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
-	lReceived  = AddLabel(fTabMainLeftInfo, string(25, '-'),kTextRight | kLHintsExpandX);
-	AddSpacer(fTabMainLeftInfo, 1, 5);
+	TGHorizontalFrame *fTabMainLeftInfoHistLabel = new TGHorizontalFrame(fTabMainLeft);
+	fTabMainLeftInfoHistLabel->SetHeight(50);
+	fTabMainLeft->AddFrame(fTabMainLeftInfoHistLabel, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
+	lType      = AddLabel(fTabMainLeftInfoHistLabel, "Histogram:" ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY );
+	bViewMacro = AddButton(fTabMainLeftInfoHistLabel, "view", kLHintsTop| kLHintsExpandX | kLHintsExpandY);
+	lHistogram = AddLabel(fTabMainLeft, string(25, '-'), kTextLeft, kLHintsLeft | kLHintsTop);
+	AddSpacer(fTabMainLeft, 1, 5);
+	AddLabel(fTabMainLeft, "Received:"  ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
+	lReceived  = AddLabel(fTabMainLeft, string(25, '-'), kTextLeft, kLHintsLeft | kLHintsExpandX);
+	AddSpacer(fTabMainLeft, 1, 5);
 
 	// Add some space between labels and controls
 	AddSpacer(fTabMainLeft, 1, 10);
@@ -94,7 +95,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	AddSpacer(fTabMainLeft, 1, 10);
 	
 	AddLabel(fTabMainLeft, "Server:"    ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
-	lServer    = AddLabel(fTabMainLeft, string(25, '-'),kTextRight | kLHintsExpandX);
+	lServer    = AddLabel(fTabMainLeft, string(25, '-'),kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
 
 	// Add some more space at bottom
 	AddSpacer(fTabMainLeft, 1, 10, kLHintsCenterX | kLHintsCenterY | kLHintsExpandY);
@@ -347,6 +348,7 @@ void RSTab::DoUpdate(void)
 	double sum_hist_modified = 0.0;
 	string servers_str;
 	TH1* sum_hist = RS_INFO->GetSumHist(hnamepath, &type, &sum_hist_modified, &servers_str);
+	string servers_str_padded = servers_str;
 	
 	// Update labels
 	string hnamepath_padded = hnamepath;
@@ -354,13 +356,16 @@ void RSTab::DoUpdate(void)
 	time_t t = (unsigned long)floor(sum_hist_modified+rs_cmsg::start_time); // seconds since 1970
 	string tstr = ctime(&t);
 	tstr[tstr.length()-1] = 0; // chop off last "\n"
-	lServer->SetText(TString(servers_str));
-	lReceived->SetText(TString(tstr));
+	string tstr_padded = string(tstr) + string(6, ' ');
+	lServer->SetText(TString(servers_str_padded));
+	lReceived->SetText(TString(tstr_padded));
+	lReceived->SetWidth(500);
 	lHistogram->SetText(TString(hnamepath_padded));
+	lHistogram->SetWidth(500);
 	lType->SetText(type==hdef_t::macro ? "Macro:        ":"Histogram:   ");
 	bViewMacro->SetEnabled(type==hdef_t::macro);
-	lReceived->Resize();
-	fTabMainLeft->Resize();
+	//lReceived->Resize();
+	//fTabMainLeft->Resize();
 
 	// Draw the histogram/macro
 	map<string,hdef_t>::iterator hdef_it;

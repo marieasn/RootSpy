@@ -1666,27 +1666,27 @@ void rs_mainframe::CreateGUI(void)
 	fMainTopRight->AddFrame(fMainTopRightOptions, new TGLayoutHints(kLHintsLeft | kLHintsTop ,2,2,2,2));
 
 	// UDL Label
-	string udl_label = "UDL = "+ROOTSPY_UDL;
+	string udl_label = "UDL = "+ROOTSPY_UDL + string(20, ' ');
 	lUDL = AddLabel(fMainTopLeft, udl_label);
 
 	// Buttons
 	TGHorizontalFrame *fMainTopLeftButtons = new TGHorizontalFrame(fMainTopLeft);
 	fMainTopLeft->AddFrame(fMainTopLeftButtons, new TGLayoutHints(kLHintsLeft | kLHintsTop,2,2,2,2));
 
-	TGTextButton *bSetArchive = AddButton(fMainTopLeftButtons, "Set Archive");
-	bShowOverlays = AddCheckButton(fMainTopLeftButtons, "Show Archived Hists");
+	TGTextButton *bSetArchive = AddButton(fMainTopLeftButtons, "Set Archive   ");
+	bShowOverlays = AddCheckButton(fMainTopLeftButtons, "Show Archived Hists       ");
 
 	// label for archive file name display
 	lArchiveFile = AddLabel(fMainTopLeft, "No Archive Loaded", kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
 
 	// Update options
-	bAutoRefresh = AddCheckButton(fMainTopRightOptions, "Auto-refresh");
-	bAutoAdvance = AddCheckButton(fMainTopRightOptions, "Auto-advance");
+	bAutoRefresh = AddCheckButton(fMainTopRightOptions, "Auto-refresh     ");
+	bAutoAdvance = AddCheckButton(fMainTopRightOptions, "Auto-advance     ");
 	bAutoRefresh->SetState(kButtonDown);
 
    // Delay
    TGHorizontalFrame *fMainTopRightDelay = new TGHorizontalFrame(fMainTopRight);
-   AddLabel(fMainTopRightDelay, "delay:");
+   AddLabel(fMainTopRightDelay, "delay:    ");
    fDelay = new TGComboBox(fMainTopRightDelay,"-",-1,kHorizontalFrame | kSunkenFrame | kDoubleBorder | kOwnBackground);
    fDelay->AddEntry("0s",0);
    fDelay->AddEntry("1s",1);
@@ -1709,7 +1709,7 @@ void rs_mainframe::CreateGUI(void)
 	TGTextButton *bElog = AddButton(fMainBot, "Make e-log Entry        ", kLHintsLeft);
 	TGTextButton *bRefs = AddButton(fMainBot, "Show Reference Plot       ", kLHintsLeft);
 	AddSpacer(fMainBot, 50, 1, kLHintsLeft);
-	TGTextButton *bMakeRef = AddButton(fMainBot, "Make this new Reference Plot       ", kLHintsLeft);
+	TGTextButton *bMakeRef = AddButton(fMainBot, "Make this new Reference Plot           ", kLHintsLeft);
 	TGTextButton *bQuit = AddButton(fMainBot, "Quit  ", kLHintsRight);
 
 	fMain->MapSubwindows();

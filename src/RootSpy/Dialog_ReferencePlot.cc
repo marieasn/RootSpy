@@ -148,7 +148,7 @@ void Dialog_ReferencePlot::CreateGUI(void)
 	// Bottom frame
 	TGHorizontalFrame *fMainBot = new TGHorizontalFrame(fMain);
 	fMain->AddFrame(fMainBot, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
-	TGTextButton *bClose = AddButton(fMainBot, "Close", kLHintsRight);
+	TGTextButton *bClose = AddButton(fMainBot, "Close  ", kLHintsRight);
 	bClose->Connect("Clicked()","Dialog_ReferencePlot", this, "DoClose()");
 	
 	MapSubwindows();

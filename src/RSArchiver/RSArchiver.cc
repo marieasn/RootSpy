@@ -22,6 +22,8 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <mutex>
+using namespace std;
 
 #include "RSArchiver.h"
 #include "HTMLOutputGenerator.h"
@@ -38,6 +40,12 @@
 rs_cmsg *RS_CMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
+
+// These defined in rs_cmsg.cc
+extern mutex REGISTRATION_MUTEX;
+extern map<void*, string> HISTOS_TO_REGISTER;
+extern map<void*, string> MACROS_TO_REGISTER;
+
 
 // classes to generate optional output formats
 HTMLOutputGenerator *html_generator = NULL;
@@ -144,7 +152,9 @@ int main(int narg, char *argv[])
     EndRunProcessing();   // request and collect all current histograms
 
     delete RS_CMSG;
-    
+
+	_exit(0);  // Skip ROOT's installed cleanups and thereby end of program seg. faults.
+
     return 0;
 }
 
@@ -333,6 +343,51 @@ void GetAllHists(uint32_t Twait)
 	// Give servers Twait seconds to respond with histograms
 	if(VERBOSE>1) cout << "Waiting "<<Twait<<" seconds for servers to send histograms" << endl;
 	sleep(Twait);
+	// Register any histograms waiting in the queue
+	if( ! HISTOS_TO_REGISTER.empty() ){
+		REGISTRATION_MUTEX.lock();
+		for(auto h : HISTOS_TO_REGISTER){
+			RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
+		}
+		HISTOS_TO_REGISTER.clear();
+		REGISTRATION_MUTEX.unlock();
+	}
+	
+	// Register any macros waiting in the queue
+	if( ! MACROS_TO_REGISTER.empty() ){
+		REGISTRATION_MUTEX.lock();
+		for(auto m : MACROS_TO_REGISTER){
+			RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
+		}
+		MACROS_TO_REGISTER.clear();
+		REGISTRATION_MUTEX.unlock();
+	}
+
+	// The RootSpy GUI requires all macros and histograms be
+	// processed in the main ROOT GUI thread to avoid crashes.
+	// Thus, when messages with histgrams come in they are
+	// stored in global variables until later when that thread
+	// can process them. Here, we process them.
+	
+	// Register any histograms waiting in the queue
+	if( ! HISTOS_TO_REGISTER.empty() ){
+		REGISTRATION_MUTEX.lock();
+		for(auto h : HISTOS_TO_REGISTER){
+			RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
+		}
+		HISTOS_TO_REGISTER.clear();
+		REGISTRATION_MUTEX.unlock();
+	}
+	
+	// Register any macros waiting in the queue
+	if( ! MACROS_TO_REGISTER.empty() ){
+		REGISTRATION_MUTEX.lock();
+		for(auto m : MACROS_TO_REGISTER){
+			RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
+		}
+		MACROS_TO_REGISTER.clear();
+		REGISTRATION_MUTEX.unlock();
+	}
     
 	// Lock mutexes
 	RS_INFO->Lock();
