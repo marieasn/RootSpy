@@ -254,6 +254,7 @@ void Dialog_ReferencePlot::DoTimer(void)
 				cout << "Loading reference image: " << fname << endl;
 				timage->ReadImage(fname.c_str());
 				//timage->Scale(canvas->GetWw(), canvas->GetWh());
+				canvas->Clear();
 				timage->Draw();
 			}else{
 				canvas->Clear();
