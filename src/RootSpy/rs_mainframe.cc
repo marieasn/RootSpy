@@ -41,7 +41,6 @@
 #include <TFileMergeInfo.h>
 #include <TGInputDialog.h>
 #include <TGMsgBox.h>
-#include <TGPasswdDialog.h>
 
 #include <KeySymbols.h>
 
@@ -143,6 +142,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	dialog_configmacros = NULL;
 	dialog_scaleopts = NULL;
 	dialog_referenceplot = NULL;
+	dialog_newreference = NULL;
 	delete_dialog_configmacros = false;
 
 	//overlay_mode = false;
@@ -1468,50 +1468,66 @@ void rs_mainframe::DoMakeReferencePlot(void)
 {
 	/// Save current canvas as a .png file in the appropriate directory
 	/// so that it may be shown as the reference plot when displaying
-	/// this hnamepath. It is assumed that the canvas is all updated and
-	/// the user is an expert authorized to make this the new reference.
-
-	// The password dialog caused an immediate crash while testing on
-	// Linux. Disable it for now.
-	//char prompt[512];
-	//char pwdbuff[256] = "password";
-	//sprintf(prompt, "Please enter the password for setting the reference plot for \"%s\"", current_tab->currently_displayed_hnamepath.c_str());
-	//TGPasswdDialog d(prompt, pwdbuff, 256);
+	/// this hnamepath. Prior to making this the new reference, a dialog
+	/// is presented to the user so they may authenticate themselves
+	/// and confirm that they really want to do this. The heavy lifting
+	/// for all of this is done in the Dialog_NewReference class.
 	
-	//if( string(pwdbuff) != "password" ){
-	//	cout << "Invalid reference plot password." << endl;
-	//	return;
-	//}
-
-	string fname = Dialog_ReferencePlot::MakeReferenceFilename(current_tab->currently_displayed_hnamepath);
-
-	// If a reference plot already exists, then move it into the archive directory
-	// with the current time prefixing the name.
-	bool file_exists = (access(fname.c_str(), F_OK) != -1);
-	if(file_exists){
+	// We make the temporary reference plot here first since it's possible
+	// the user has "auto-advance" turned on and the canvas will change soon.
+	// This will at least not make use wait for instantiation of the
+	// Dialog_NewReference so perhaps we win the race slightly more often.
+	string &hnamepath = current_tab->currently_displayed_hnamepath;
+	string tmp_hnamepath = string("tmp") + hnamepath;
+	string tmp_fname = Dialog_ReferencePlot::MakeReferenceFilename(tmp_hnamepath);
+	current_tab->canvas->SaveAs(tmp_fname.c_str(), "");
 	
-		// Get archive directory name and make sure it exists
-		string dirname = Dialog_ReferencePlot::GetReferenceArchiveDir();
-		mkdir(dirname.c_str(), 0777); // make directory if it doesn't exist
+	// Create the new dialog. It will handle moving the files as necesary
+	// upon destruction. 
+	dialog_newreference = new Dialog_NewReference(gClient->GetRoot(), 1000, 800, hnamepath, tmp_fname);
+	
 
-		// Generate filename based on current time
-		time_t now = time(NULL);
-		auto nowlt = localtime(&now);
-		char tmbuf[256];
-		strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d_%H:%M:%S", nowlt);
-		string time_prefix(tmbuf);
-		
-		// Strip path off of image filename
-		size_t pos = fname.find_last_of('/');
-		if(pos != string::npos){
-			string archivename = dirname + "/" + time_prefix + fname.substr(pos+1);
-			cout << "Archiving old reference:" << endl;
-			cout << "    " << fname << " -> " << archivename << endl;
-			rename(fname.c_str(), archivename.c_str());
-		}
-	}
-
-	current_tab->canvas->SaveAs(fname.c_str(), "");
+//	// The password dialog caused an immediate crash while testing on
+//	// Linux. Disable it for now.
+//	char prompt[512];
+//	char pwdbuff[256] = "password";
+//	sprintf(prompt, "Please enter the password for setting the reference plot for \"%s\"", current_tab->currently_displayed_hnamepath.c_str());
+//	RSPasswdDialog d(prompt, pwdbuff, 256);
+//	
+//	if( string(pwdbuff) != "password" ){
+//		cout << "Invalid reference plot password." << endl;
+//		return;
+//	}
+//
+//	string fname = Dialog_ReferencePlot::MakeReferenceFilename(current_tab->currently_displayed_hnamepath);
+//
+//	// If a reference plot already exists, then move it into the archive directory
+//	// with the current time prefixing the name.
+//	bool file_exists = (access(fname.c_str(), F_OK) != -1);
+//	if(file_exists){
+//	
+//		// Get archive directory name and make sure it exists
+//		string dirname = Dialog_ReferencePlot::GetReferenceArchiveDir();
+//		mkdir(dirname.c_str(), 0777); // make directory if it doesn't exist
+//
+//		// Generate filename based on current time
+//		time_t now = time(NULL);
+//		auto nowlt = localtime(&now);
+//		char tmbuf[256];
+//		strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d_%H:%M:%S", nowlt);
+//		string time_prefix(tmbuf);
+//		
+//		// Strip path off of image filename
+//		size_t pos = fname.find_last_of('/');
+//		if(pos != string::npos){
+//			string archivename = dirname + "/" + time_prefix + fname.substr(pos+1);
+//			cout << "Archiving old reference:" << endl;
+//			cout << "    " << fname << " -> " << archivename << endl;
+//			rename(fname.c_str(), archivename.c_str());
+//		}
+//	}
+//
+//	current_tab->canvas->SaveAs(fname.c_str(), "");
 }
 
 //-------------------

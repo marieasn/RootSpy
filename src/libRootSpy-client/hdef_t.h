@@ -120,6 +120,7 @@ class hdef_t{
 		bool save_active;
 		
 		set<string> macro_hnamepaths;
+		set<string> macro_emails;
 
 		hdisplay_info_t display_info;    // various options that modify how the histogram is displayed
 };

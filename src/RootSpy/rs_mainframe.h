@@ -43,6 +43,7 @@
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
 #include "Dialog_ReferencePlot.h"
+#include "Dialog_NewReference.h"
 #include "../libRootSpy-client/hinfo_t.h"
 #include "../libRootSpy-client/hdef_t.h"
 
@@ -137,6 +138,7 @@ class rs_mainframe:public TGMainFrame {
 		TGMainFrame *dialog_configmacros;
 		TGMainFrame *dialog_scaleopts;
 		TGMainFrame *dialog_referenceplot;
+		TGMainFrame *dialog_newreference;
 
 		TGDockableFrame    *fMenuDock;
 		TGMenuBar  *fMenuBar;

@@ -1360,11 +1360,17 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	uint32_t Nprev_macro_hnamepaths = hdef->macro_hnamepaths.size();
 	hdef->macro_hnamepaths.clear();
 	while(getline(ss, line)){
-		if(line.find("// hnamepath")==0){
-			string myhnamepath = line.substr(12);
+		if(line.find("// hnamepath:")==0){
+			string myhnamepath = line.substr(13);
 			myhnamepath.erase(myhnamepath.find_last_not_of(" \n\r\t")+1);
 			hdef->macro_hnamepaths.insert(myhnamepath);
 			if(verbose>1) _DBG_<<"Added " <<  myhnamepath << " to macro: " << hnamepath << endl;
+		}
+		if(line.find("// e-mail:")==0 || line.find("// email:")==0){
+			string myemail = line.substr(10);
+			myemail.erase(myemail.find_last_not_of(" \n\r\t")+1);
+			hdef->macro_emails.insert(myemail);
+			if(verbose>1) _DBG_<<"Added notification e-mail " <<  myemail << " to macro: " << hnamepath << endl;
 		}
 	}
 
