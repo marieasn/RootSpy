@@ -20,6 +20,7 @@
 #include <TVirtualStreamerInfo.h>
 #include <vector>
 #include <map>
+#include <set>
 #include <TGFileDialog.h>
 
 #if !defined(__CINT__) && !defined(__CLING__)
@@ -45,13 +46,17 @@ class Dialog_NewReference:public TGMainFrame{
 		string hnamepath;
 		string image_filename_new;
 		string image_filename_old;
+		set<string> emails;
+		string fname;
+		string tmp_fname;
 
+		TGCheckButton *cbagree;
 
 	private:
 
 		TGLabel* AddLabel(TGCompositeFrame* frame, string text, Int_t mode, ULong_t hints);
 		TGTextButton* AddButton(TGCompositeFrame* frame, string text, ULong_t hints);
-		void CreateGUI(void);
+		TGCheckButton* AddCheckButton(TGCompositeFrame* frame, string text, ULong_t hints);
 
 
 		ClassDef(Dialog_NewReference,1)

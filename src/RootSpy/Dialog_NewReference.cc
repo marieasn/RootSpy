@@ -46,8 +46,9 @@ Dialog_NewReference::Dialog_NewReference(const TGWindow *p, UInt_t w, UInt_t h, 
 	/// of the change.
 	
 	this->hnamepath = hnamepath;
+	this->tmp_fname = tmp_fname;
 
-	string fname = Dialog_ReferencePlot::MakeReferenceFilename(hnamepath);
+	fname = Dialog_ReferencePlot::MakeReferenceFilename(hnamepath);
 	bool old_ref_exists = (access(fname.c_str(), F_OK) != -1);
 
 	// --------------- Create the GUI 
@@ -105,7 +106,7 @@ Dialog_NewReference::Dialog_NewReference(const TGWindow *p, UInt_t w, UInt_t h, 
 		// Read in old reference image and draw to canvas
 		TImage *timage = TImage::Create();
 		timage->ReadImage(fname.c_str());
-_DBG_<<"Loading: " << fname << endl;
+		_DBG_<<"Loading: " << fname << endl;
 		timage->Scale(canvas->GetWw(), canvas->GetWh());
 		timage->Draw();
 		canvas->Update();
@@ -147,14 +148,13 @@ _DBG_<<"Loading: " << fname << endl;
 		// Read in old reference image and draw to canvas
 		TImage *timage = TImage::Create();
 		timage->ReadImage(tmp_fname.c_str());
-_DBG_<<"Loading: " << tmp_fname << endl;
+		_DBG_<<"Loading: " << tmp_fname << endl;
 		timage->Scale(canvas->GetWw(), canvas->GetWh());
 		timage->Draw();
 		canvas->Update();
 	}
 
 	// Write message regarding notification e-mails
-	set<string> emails;
 	auto it = RS_INFO->histdefs.find(hnamepath);
 	if(it != RS_INFO->histdefs.end()) emails = it->second.macro_emails;
 	
@@ -165,7 +165,10 @@ _DBG_<<"Loading: " << tmp_fname << endl;
 		email_mess << "n.b. a notification will be sent to the following e-mail addresses: " << endl;
 		for(string s : emails) email_mess << endl << s;
 	}
-	AddLabel(fMain, email_mess.str() , kTextRight, kLHintsRight| kLHintsExpandX); 
+	AddLabel(fMain, email_mess.str() , kTextRight, kLHintsRight| kLHintsExpandX);
+	
+	// Checkbox indicating agreement
+	cbagree = AddCheckButton(fMain, "I AGREE to the above stated terms and conditions (i.e. \"yeah go ahead and do it\")", kLHintsRight | kLHintsTop | kLHintsExpandX);
 	
 	// Bottom frame
 	TGHorizontalFrame *fMainBot = new TGHorizontalFrame(fMain);
@@ -185,7 +188,7 @@ _DBG_<<"Loading: " << tmp_fname << endl;
 //---------------------------------
 Dialog_NewReference::~Dialog_NewReference()
 {
-	cout<<"Dialog_NewReference destructor"<<endl;
+
 }
 
 //---------------------------------
@@ -229,6 +232,20 @@ TGTextButton* Dialog_NewReference::AddButton(TGCompositeFrame* frame, string tex
 	return b;
 }
 
+//-------------------
+// AddCheckButton
+//-------------------
+TGCheckButton* Dialog_NewReference::AddCheckButton(TGCompositeFrame* frame, string text, ULong_t hints)
+{
+	TGCheckButton *b = new TGCheckButton(frame, text.c_str());
+	b->SetTextJustify(kTextRight);
+	b->SetMargins(0,0,0,0);
+	b->SetWrapLength(-1);
+	frame->AddFrame(b, new TGLayoutHints(hints,2,2,2,2));
+
+	return b;
+}
+
 //---------------------------------
 // DoCancel
 //---------------------------------
@@ -242,8 +259,70 @@ void Dialog_NewReference::DoCancel(void)
 //---------------------------------
 void Dialog_NewReference::DoOK(void)
 {
-	string dirname = Dialog_ReferencePlot::GetReferenceArchiveDir();
-	string fname = Dialog_ReferencePlot::MakeReferenceFilename(hnamepath);
+	if( ! cbagree->IsOn() ){
+		cerr << "YOU MUST CHECK THE I AGREE BOX OR CANCEL!!" << endl;
+		return;
+	}
+
+	bool old_ref_exists = (access(fname.c_str(), F_OK) != -1);
+
+	// Create command to send e-mail (excluding the e-mail address)
+	stringstream cmd;
+	cmd<<"(echo \"Reference histogram changed for "<<hnamepath<<":\"; ";
+	cmd<<"echo \" \"; echo \" \"; ";
+	
+	if(old_ref_exists){
+		cmd<<"echo \"PREVIOUS REFERENCE PLOT:\"; ";
+		cmd<<"uuencode "<<fname<<" previous.png; ";
+	}
+
+	cmd<<"echo \"NEW REFERENCE PLOT:\"; ";
+	cmd<<"uuencode "<<tmp_fname<<" new.png; ";
+
+	cmd<<") | mail -s \"New Reference Plot for " << hnamepath << "\" ";
+	
+	// Loop over e-mail addresses, sending the message to each one
+	for(auto s : emails){
+		stringstream my_cmd;
+		my_cmd<<cmd.str()<<s;
+		cout<<my_cmd.str()<<endl;
+
+#if __APPLE__
+		_DBG_ << "mail command not run for Mac OS X since this will almost certainly" << endl;
+		_DBG_ << "just put this on a queue where no mail agent will ever pick it up and" << endl;
+		_DBG_ << "send it. For all other OSes (e.g. Linux) it will attempt to mail." << endl;
+#else
+		int res = system(my_cmd.str().c_str());
+		if(res!=0) cerr << "Error executing \""<<my_cmd.str()<<"\"" << endl;
+#endif
+	}
+
+	// Archive the old reference
+	if(old_ref_exists){
+	
+		// Get archive directory name and make sure it exists
+		string dirname = Dialog_ReferencePlot::GetReferenceArchiveDir();
+		mkdir(dirname.c_str(), 0777); // make directory if it doesn't exist
+
+		// Generate filename based on current time
+		time_t now = time(NULL);
+		auto nowlt = localtime(&now);
+		char tmbuf[256];
+		strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d_%H:%M:%S", nowlt);
+		string time_prefix(tmbuf);
+		
+		// Strip path off of image filename
+		size_t pos = fname.find_last_of('/');
+		if(pos != string::npos){
+			string archivename = dirname + "/" + time_prefix + fname.substr(pos+1);
+			cout << "Archiving old reference:" << endl;
+			cout << "    " << fname << " -> " << archivename << endl;
+			rename(fname.c_str(), archivename.c_str());
+		}
+	}
+	
+	// Rename temporary filename to permanent one
+	rename(tmp_fname.c_str(), fname.c_str()); 
 
 	CloseWindow();
 }
