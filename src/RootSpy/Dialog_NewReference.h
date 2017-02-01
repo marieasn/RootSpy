@@ -49,6 +49,7 @@ class Dialog_NewReference:public TGMainFrame{
 		set<string> emails;
 		string fname;
 		string tmp_fname;
+		string image_mod_time;
 
 		TGCheckButton *cbagree;
 
@@ -57,6 +58,8 @@ class Dialog_NewReference:public TGMainFrame{
 		TGLabel* AddLabel(TGCompositeFrame* frame, string text, Int_t mode, ULong_t hints);
 		TGTextButton* AddButton(TGCompositeFrame* frame, string text, ULong_t hints);
 		TGCheckButton* AddCheckButton(TGCompositeFrame* frame, string text, ULong_t hints);
+
+		void Base64Encode(string filename, stringstream &ss);
 
 
 		ClassDef(Dialog_NewReference,1)

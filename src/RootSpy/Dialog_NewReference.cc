@@ -80,7 +80,7 @@ Dialog_NewReference::Dialog_NewReference(const TGWindow *p, UInt_t w, UInt_t h, 
 		auto ftime = localtime(&mystat.st_mtime);
 		char tmbuf[256];
 		strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", ftime);
-		string image_mod_time = tmbuf;
+		image_mod_time = tmbuf;
 		string image_mod_time_padded = image_mod_time;
 		image_mod_time_padded += string(image_mod_time.length()/2, ' ');
 
@@ -160,9 +160,9 @@ Dialog_NewReference::Dialog_NewReference(const TGWindow *p, UInt_t w, UInt_t h, 
 	
 	stringstream email_mess;
 	if(emails.empty()){
-		email_mess << "n.b. no email addresses specified for this macro so no notification will be sent";
+		email_mess << "n.b. no email addresses specified for this macro so no notification will be sent                         ";
 	}else{
-		email_mess << "n.b. a notification will be sent to the following e-mail addresses: " << endl;
+		email_mess << "n.b. a notification will be sent to the following e-mail addresses:          " << endl;
 		for(string s : emails) email_mess << endl << s;
 	}
 	AddLabel(fMain, email_mess.str() , kTextRight, kLHintsRight| kLHintsExpandX);
@@ -266,38 +266,8 @@ void Dialog_NewReference::DoOK(void)
 
 	bool old_ref_exists = (access(fname.c_str(), F_OK) != -1);
 
-	// Create command to send e-mail (excluding the e-mail address)
-	stringstream cmd;
-	cmd<<"(echo \"Reference histogram changed for "<<hnamepath<<":\"; ";
-	cmd<<"echo \" \"; echo \" \"; ";
-	
-	if(old_ref_exists){
-		cmd<<"echo \"PREVIOUS REFERENCE PLOT:\"; ";
-		cmd<<"uuencode "<<fname<<" previous.png; ";
-	}
-
-	cmd<<"echo \"NEW REFERENCE PLOT:\"; ";
-	cmd<<"uuencode "<<tmp_fname<<" new.png; ";
-
-	cmd<<") | mail -s \"New Reference Plot for " << hnamepath << "\" ";
-	
-	// Loop over e-mail addresses, sending the message to each one
-	for(auto s : emails){
-		stringstream my_cmd;
-		my_cmd<<cmd.str()<<s;
-		cout<<my_cmd.str()<<endl;
-
-#if __APPLE__
-		_DBG_ << "mail command not run for Mac OS X since this will almost certainly" << endl;
-		_DBG_ << "just put this on a queue where no mail agent will ever pick it up and" << endl;
-		_DBG_ << "send it. For all other OSes (e.g. Linux) it will attempt to mail." << endl;
-#else
-		int res = system(my_cmd.str().c_str());
-		if(res!=0) cerr << "Error executing \""<<my_cmd.str()<<"\"" << endl;
-#endif
-	}
-
-	// Archive the old reference
+	// Generate archive file name
+	string archivename = "";
 	if(old_ref_exists){
 	
 		// Get archive directory name and make sure it exists
@@ -314,18 +284,137 @@ void Dialog_NewReference::DoOK(void)
 		// Strip path off of image filename
 		size_t pos = fname.find_last_of('/');
 		if(pos != string::npos){
-			string archivename = dirname + "/" + time_prefix + fname.substr(pos+1);
-			cout << "Archiving old reference:" << endl;
-			cout << "    " << fname << " -> " << archivename << endl;
-			rename(fname.c_str(), archivename.c_str());
+			archivename = dirname + "/" + time_prefix + fname.substr(pos+1);
 		}
+	}
+
+	// Archive the old reference
+	if(archivename != ""){
+		cout << "Archiving old reference:" << endl;
+		cout << "    " << fname << " -> " << archivename << endl;
+		rename(fname.c_str(), archivename.c_str());
 	}
 	
 	// Rename temporary filename to permanent one
 	rename(tmp_fname.c_str(), fname.c_str()); 
 
+	// Create command to send e-mail (excluding the e-mail address)
+	stringstream cmd;
+	cmd<<"(echo \"Reference histogram changed for "<<hnamepath<<":\"; ";
+	cmd<<"echo \" \"; echo \" \"; ";
+	cmd<<"echo \"This e-mail auto-generated from RootSpy. If you do not\"; ";
+	cmd<<"echo \"wish to receive these notifications then please modify\"; ";
+	cmd<<"echo \"the appropriate macro or contact davidl@jlab.org .\"; ";
+	cmd<<"echo \" \"; echo \" \"; ";
+	
+	// Add host and user
+	const char *host = getenv("HOST");
+	const char *user = getenv("USER");
+	cmd<<"echo \"Host: " << (host ? host:"unknown") << "\"; ";
+	cmd<<"echo \"User: " << (user ? user:"unknown") << "\"; ";
+	cmd<<"echo \" \"; echo \" \"; ";
+	
+	// Add current run if non-zero
+	if(RSMF->epics_run_number > 0){
+		cmd<<"echo \"Current run number from EPICS: " << RSMF->epics_run_number << "\"; ";
+		cmd<<"echo \"(n.b. this may NOT actually be the run from which the new reference was dervied!)\"; ";
+		cmd<<"echo \" \"; echo \" \"; ";
+	}
+	
+	if(old_ref_exists){
+		cmd<<"echo \"PREVIOUS REFERENCE PLOT from "<<image_mod_time<<"\"; ";
+		cmd<<"echo \"(archived to: " << archivename << ")\"; ";
+		//cmd<<"uuencode --base64 "<<fname<<" previous.png; ";
+	}
+
+	cmd<<"echo \" \"; echo \" \"; ";
+	cmd<<"echo \"NEW REFERENCE PLOT:\"; ";
+	cmd<<"echo \"(installed as: " << fname << ")\"; ";
+	//cmd<<"uuencode "<<tmp_fname<<" new.png; ";
+
+	cmd<<") | mail -s \"New Reference Plot for " << hnamepath << "\" ";
+	if(old_ref_exists) cmd << " -a " << archivename;
+	cmd << " -a " << fname;
+	
+	
+	// Make list of all addresses
+	stringstream sstr;
+	for(auto s : emails) sstr << s << ",";
+	string addresses(sstr.str());
+	addresses.pop_back();
+	
+	// Make and execute full shell command
+	stringstream my_cmd;
+	my_cmd << cmd.str() << addresses;
+	cout << my_cmd.str() << endl;
+	
+#if __APPLE__
+	_DBG_ << "mail command not run for Mac OS X since this will almost certainly" << endl;
+	_DBG_ << "just put this on a queue where no mail agent will ever pick it up and" << endl;
+	_DBG_ << "send it. For all other OSes (e.g. Linux) it will attempt to mail." << endl;
+#else
+	int res = system(my_cmd.str().c_str());
+	if(res!=0) cerr << "Error executing \""<<my_cmd.str()<<"\"" << endl;
+#endif
+	
+// 	// Loop over e-mail addresses, sending the message to each one
+// 	for(auto s : emails){
+// 		stringstream my_cmd;
+// 		my_cmd<<cmd.str()<<s;
+// 		cout<<my_cmd.str()<<endl;
+// 
+// 	}
+
 	CloseWindow();
 }
 
+// //---------------------------------
+// // Base64Encode
+// //---------------------------------
+// void Dialog_NewReference::Base64Encode(string filename, stringstream &ss)
+// {
+// 
+// 	// Read in input file
+// 	ifstream ifs(filename.c_str());
+// 	if(!ifs.is_open()){
+// 		_DBG_<<"Unable to open file \""<< filename << "\" for base64 encoding!" << endl;
+// 		return;
+// 	}
+// 	ifs.seekg(0, ifs.end);
+// 	size_t fsize = ifs.tellg();
+// 	ifs.seekg(0, ifs.beg);
+// 	
+// 	char *buff = new char[fsize];
+// 	ifs.read(buff, fsize);
+// 
+// 	char encoding_table[] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+//                              'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+//                              'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+//                              'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+//                              'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+//                              'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+//                              'w', 'x', 'y', 'z', '0', '1', '2', '3',
+//                              '4', '5', '6', '7', '8', '9', '+', '/'};
+// 
+// 	for (int i = 0, j = 0; i < fsize;) {
+// 
+// 		uint32_t octet_a = i < fsize ? (unsigned char)data[i++] : 0;
+// 		uint32_t octet_b = i < fsize ? (unsigned char)data[i++] : 0;
+// 		uint32_t octet_c = i < fsize ? (unsigned char)data[i++] : 0;
+// 
+// 		uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+// 
+// 		ss << encoding_table[(triple >> 3 * 6) & 0x3F];
+// 		ss << encoding_table[(triple >> 2 * 6) & 0x3F];
+// 		ss << encoding_table[(triple >> 1 * 6) & 0x3F];
+// 		ss << encoding_table[(triple >> 0 * 6) & 0x3F];
+// 	}
+// 
+// 	if( (fsize%3) == 1 ) ss << "==";
+// 	if( (fsize%3) == 2 ) ss << "=";
+// 
+// 	// Free file buffer
+// 	delete[] buff;
+// }
 
 

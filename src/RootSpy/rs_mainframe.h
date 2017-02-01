@@ -37,6 +37,7 @@
 #include <TMemFile.h>
 #include <TDirectory.h>
 #include <TGTab.h>
+#include <TLatex.h>
 
 
 #include "RSTab.h"
@@ -132,6 +133,7 @@ class rs_mainframe:public TGMainFrame {
 		TGCheckButton *bAutoAdvance;
 		TGComboBox *fDelay;
 		TGCheckButton *bShowOverlays;
+		TLatex *run_number_label;
 		
 		TGMainFrame *dialog_savehists;
 		TGMainFrame *dialog_selecttree;
@@ -155,11 +157,10 @@ class rs_mainframe:public TGMainFrame {
 		list<RSTab*> rstabs;
 		RSTab *current_tab;
 
-
-			viewStyle_t_rs viewStyle_rs;
-			void ExecuteMacro(TDirectory* f, string macro);
-			void DrawMacro(TCanvas*the_canvas, hinfo_t &the_hinfo);
-			void DrawMacro(TCanvas*the_canvas, hdef_t &the_hdef);
+		viewStyle_t_rs viewStyle_rs;
+		void ExecuteMacro(TDirectory* f, string macro);
+		void DrawMacro(TCanvas*the_canvas, hinfo_t &the_hinfo);
+		void DrawMacro(TCanvas*the_canvas, hdef_t &the_hdef);
 
 		// info for comparing with archived histograms
 		//bool overlay_mode; // maybe don't need this?

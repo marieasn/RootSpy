@@ -56,11 +56,11 @@
 #include <mutex>
 using namespace std;
 
-#ifdef EZCA
+#ifdef HAVE_EZCA
 #include <tsDefs.h> 
 #include <cadef.h> 
 #include <ezca.h>
-#endif // EZCA
+#endif // HAVE_EZCA
 
 
 extern string ROOTSPY_UDL;
@@ -110,10 +110,11 @@ static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist);
 rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gui, string startup_config_filename=""):TGMainFrame(p,w,h, kMainFrame | kVerticalFrame),config_filename(startup_config_filename)
 {
 	current_tab = NULL;
+	run_number_label = NULL;
 	//config_filename = "";
 
 	//Define all of the -graphics objects. 
-        if(build_gui) {
+	if(build_gui) {
 	    CreateGUI();
 		
 		ReadPreferences();
@@ -170,6 +171,12 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	// Setup interpretor so macros don't have to include these things.
 	gROOT->ProcessLine("#include <iostream>");
 	gROOT->ProcessLine("using namespace std;");
+
+#ifdef HAVE_EZCA
+	// Optionally try and get run number
+	string epics_var_name = "HD:coda:daq:run_number";
+	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
+#endif // HAVE_EZCA
 }
 
 //-------------------
@@ -177,7 +184,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 //-------------------
 rs_mainframe::~rs_mainframe(void)
 {
-
+	if(run_number_label) delete run_number_label;
 }
 
 //-------------------
@@ -1295,10 +1302,10 @@ void rs_mainframe::DoELog(void)
 	// off of the existing DoTimer timer. 
 
 	
-#ifdef EZCA
+#ifdef HAVE_EZCA
 	string epics_var_name = "HD:coda:daq:run_number";
 	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
-#endif // EZCA
+#endif // HAVE_EZCA
 
 	// Record which tab and plot are currently
 	// selected so they can be restored at the end.
@@ -2073,6 +2080,37 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 			break;
 		}
 	}
+
+	// The following was commented out because the run label just
+	// won't display properly. If drawing to the canvas itself (not
+	// a subpad) the label would be mostly obscured by the subpad
+	// in the top corner. Drawing on pad 1 is not a great option since
+	// the label was scaled and often cropped. For the FDC occupancy
+	// screen, the asymmetic pads made the run label not show up
+	// at all (??). Leaving this here in case I want to resurrect
+	// it at some point in the future.
+// 	if(!run_number_label && epics_run_number>0){
+// 		char str[256];
+// 		sprintf(str, "Run: %06d", (int)epics_run_number);
+// 		run_number_label = new TLatex(0.0, 0.0, str);
+// 		run_number_label->SetTextSize(0.04);
+// 		run_number_label->SetTextColor(kRed);
+// 		run_number_label->SetTextAlign(13);
+// 	}
+// 	
+// 	// If a run number label exists, draw it on current canvas
+// 	if(run_number_label){
+// 		TVirtualPad *pad = current_tab->canvas;
+// 		if(pad->GetPad(1)) pad = pad->GetPad(1);
+// 		pad->cd();
+// 		pad->Update();
+// 		double x = pad->AbsPixeltoX(5); // 5 pixels from left
+// 		double y = pad->AbsPixeltoY(5); // 5 pixels from top
+// 		run_number_label->SetX(x);
+// 		run_number_label->SetY(y);
+// 		run_number_label->Draw();
+// 		pad->Update();
+// 	}
 
 	// restore
 	savedir->cd();
