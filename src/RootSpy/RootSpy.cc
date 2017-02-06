@@ -24,7 +24,7 @@ string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 string CMSG_NAME = "<not set here. see below>";
 
 string ELOG_NAME   = "HDMONITOR";
-string ELOG_EMAIL  = "mstaib@jlab.org,nsj@cmu.edu";
+string ELOG_EMAIL  = "nsj@cmu.edu";
 bool   ELOG_NOTIFY = true;
 
 string CONFIG_FILENAME = "";
