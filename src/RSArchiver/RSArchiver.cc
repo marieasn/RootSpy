@@ -122,6 +122,24 @@ void signal_stop_handler(int signum)
 {
     cerr << "received signal " << signum << "..." << endl;
 
+	// No more messing around. If we get any signal
+	// then immediately flush everything to the file
+	// and close it.
+    if(CURRENT_OUTFILE) {
+        pthread_rwlock_wrlock(ROOT_MUTEX);
+
+        RS_INFO->Lock();
+        // we've mapped the directory which stores the summed histograms to a file on disk already
+        // so we just need to force it to write out its current state
+        RS_INFO->sum_dir->Write("",TObject::kOverwrite);
+        RS_INFO->Unlock();
+        
+        CURRENT_OUTFILE->Close();
+		  delete CURRENT_OUTFILE;
+		  CURRENT_OUTFILE = NULL;
+        pthread_rwlock_unlock(ROOT_MUTEX);
+    }
+
     // let main loop know that it's time to stop
     DONE = true;
 }
