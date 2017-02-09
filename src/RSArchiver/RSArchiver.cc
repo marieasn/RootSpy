@@ -145,6 +145,8 @@ void signal_stop_handler(int signum)
 
     // let main loop know that it's time to stop
     DONE = true;
+
+	_exit(0);  // Skip ROOT's installed cleanups and thereby end of program seg. faults.
 }
 
 
