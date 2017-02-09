@@ -126,6 +126,7 @@ void signal_stop_handler(int signum)
 	// then immediately flush everything to the file
 	// and close it.
     if(CURRENT_OUTFILE) {
+	 	  cout << "Flushing histograms to ROOT file ..." << endl;
         pthread_rwlock_wrlock(ROOT_MUTEX);
 
         RS_INFO->Lock();
@@ -134,10 +135,12 @@ void signal_stop_handler(int signum)
         RS_INFO->sum_dir->Write("",TObject::kOverwrite);
         RS_INFO->Unlock();
         
+		  cout << "Closing ROOT file ..." << endl;
         CURRENT_OUTFILE->Close();
 		  delete CURRENT_OUTFILE;
 		  CURRENT_OUTFILE = NULL;
         pthread_rwlock_unlock(ROOT_MUTEX);
+		  cout << "ROOT file cleanly closed." << endl;
     }
 
     // let main loop know that it's time to stop
