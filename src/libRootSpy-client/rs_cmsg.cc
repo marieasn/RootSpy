@@ -823,7 +823,7 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 		RS_INFO -> Lock();
 		if(RS_INFO->histdefs.find(macrodef.hnamepath)==RS_INFO->histdefs.end()){
 			RS_INFO->histdefs[macrodef.hnamepath]=macrodef;
-			if(verbose>0)_DBG_ << "Added macro with hnamepath = " << macrodef.hnamepath << endl;
+			if(verbose>1)_DBG_ << "Added macro with hnamepath = " << macrodef.hnamepath << endl;
 			RequestMacro("rootspy", macrodef.hnamepath);
 		}else{
 			// Need code to verify hdefs ae same!!
@@ -1041,7 +1041,7 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 //TODO: documentation comment.
 void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg) 
 {
-    //cerr << "In rs_cmsg::RegisterHistogram()..." << endl;
+    if(verbose>3)_DBG_ << "In rs_cmsg::RegisterHistogram()..." << endl;
     
     // Get hnamepath from message
     string hnamepath = msg->getString("hnamepath");
@@ -1157,7 +1157,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
     
     // Add new histogram to sum and flag it as modified
-    if(verbose>=3) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
+    if(verbose>1) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
     if(hdef->sum_hist){
 		// Reset sum histo first if showing only one histo at a time
 		if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
@@ -1363,8 +1363,9 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 		if(line.find("// hnamepath:")==0){
 			string myhnamepath = line.substr(13);
 			myhnamepath.erase(myhnamepath.find_last_not_of(" \n\r\t")+1);
+			if(myhnamepath.find(" ")==0) myhnamepath = myhnamepath.substr(1);
 			hdef->macro_hnamepaths.insert(myhnamepath);
-			if(verbose>1) _DBG_<<"Added " <<  myhnamepath << " to macro: " << hnamepath << endl;
+			if(verbose>1) _DBG_<<"Added \"" <<  myhnamepath << "\" to macro: " << hnamepath << endl;
 		}
 		if(line.find("// e-mail:")==0 || line.find("// email:")==0){
 			string myemail = line.substr(10);
@@ -1380,7 +1381,7 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	// a macro is read in for the first time. This helps by 
 	// pre-loading histograms that will be needed for display.
 	if(hdef->macro_hnamepaths.size() != Nprev_macro_hnamepaths){
-_DBG_<<"seeding ... hdef->macro_hnamepaths.size()="<<hdef->macro_hnamepaths.size()<<" Nprev_macro_hnamepaths="<<Nprev_macro_hnamepaths<<endl;
+		if(verbose>1)_DBG_<<"seeding ... hdef->macro_hnamepaths.size()="<<hdef->macro_hnamepaths.size()<<" Nprev_macro_hnamepaths="<<Nprev_macro_hnamepaths<<endl;
 		thread t(&rs_cmsg::SeedHnamepathsSet, this, (void*)&hdef->macro_hnamepaths, true, false);
 		t.detach();
 	}
@@ -1522,7 +1523,8 @@ void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool 
 // 		// Sleep for 1 second to give servers a chance to respond.
 // 		usleep(1000000);
 		
-		if(verbose>0) _DBG_ << "SeedHnamepaths: requesting " << shnamepaths.size() << " histos" << endl;
+		if(verbose>1) _DBG_ << "SeedHnamepaths: requesting " << shnamepaths.size() << " histos" << endl;
+		if(verbose>2) for(auto s : shnamepaths) _DBG_ << "   --  " << s << endl;
 		RequestHistograms("rootspy", shnamepaths);
 	}
 
