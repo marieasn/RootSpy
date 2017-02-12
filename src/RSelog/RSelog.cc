@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/stat.h>
 
 #include <TROOT.h>
 #include <TCanvas.h>
@@ -24,6 +25,7 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <algorithm>
 #include <mutex>
 using namespace std;
@@ -51,9 +53,13 @@ static int VERBOSE = 1;  // Verbose output to screen - default is to print out s
 static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 static string CMSG_NAME = "<not set here. see below>";
 static set<string> HNAMEPATHS;
+static string TMPDIR = "/home/hdops/tmp";
+static string ELOG_NAME = "TLOG";
+static bool ELOG_NOTIFY = false;
+static string ELOG_EMAIL = "";
 
 bool DONE = false;
-int RUN_NUMBER = 99999;   
+int RUN_NUMBER = 0;   
 
 
 //////////////////////////////////////////////
@@ -141,6 +147,7 @@ int main(int narg, char *argv[])
 	
 	// Loop over hnamepaths, drawing each into the canvas and saving the image
 	int ipage=1;
+	vector<string> img_files;
 	for(string hnamepath : HNAMEPATHS){
 	
 		cout << endl << "--- Processing " << hnamepath << " ---" << endl;
@@ -190,16 +197,55 @@ int main(int narg, char *argv[])
 		
 		// Update canvas and save to PNG file
 		c1->Update();
-		const char *dir = ".";
 		cout << "    - Writing plot " << ipage << " of " << HNAMEPATHS.size() << endl;
 		char fname[256];
-		sprintf(fname,"%s/rs_page%02d.png", dir, ipage);
+		sprintf(fname,"%s/rs_page%02d.png", TMPDIR.c_str(), ipage);
 		c1->SaveAs(fname, "");
+		img_files.push_back(fname);
 		ipage++;
 
 		RS_INFO->Unlock();
 	}
 	
+	// ---------------- Create e-log page and submit ----------------------
+		
+	char fname[256];
+	sprintf(fname, "%s/elog_monitoring.html", TMPDIR.c_str());
+	ofstream ofs(fname);
+	if(ofs.is_open()){
+		time_t t = time(NULL);
+		ofs << "Hall-D Monitoring Plots for " << ctime(&t);
+		ofs.close();
+		
+		stringstream cmd;
+		cmd << "/site/ace/certified/apps/bin/logentry";
+		cmd << " --html -b " << fname;
+		cmd << " -l " << ELOG_NAME;
+		if(ELOG_NOTIFY) cmd << " -n " << ELOG_EMAIL;
+
+		if(RUN_NUMBER>0){
+			cmd << " -t \"Hall-D Monitoring Plots Run " << RUN_NUMBER << "\"";
+		}else{
+			cmd << " -t \"Hall-D Monitoring Plots\"";
+		}
+
+		// attach all plots
+		for( string s : img_files ) cmd << " -a " << s;
+		
+		// Save command in tmp directory for debugging
+		ofstream ofcmd((TMPDIR + "/occ_elog_cmd").c_str());
+		ofcmd << cmd.str() << endl;
+		ofcmd.close();
+		
+		cout << "Executing:" << endl;
+		cout << "   " << cmd.str() << endl;
+		
+		system(cmd.str().c_str());
+	}
+	
+	cout << endl;
+	cout << "Finished making e-log entry" << endl;
+	cout << "--------------------------------" << endl;
 	
 
 	// Clean up
@@ -453,6 +499,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 			case 'R':
 				if(optarg == NULL) Usage();
 				RUN_NUMBER = atoi(optarg);
+				break;
 			case 'u' :
 				if(optarg == NULL) Usage();
 				ROOTSPY_UDL = optarg;
@@ -480,11 +527,18 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 		Usage();
 	}
 
+	// make sure tmp directory exists
+	struct stat sb;
+    if( !(stat(TMPDIR.c_str(), &sb) == 0 && S_ISDIR(sb.st_mode)) ) TMPDIR = ".";
+
     // DUMP configuration
     cout << "-------------------------------------------------" << endl;
     cout << "Current configuration:" << endl;
-    cout << "ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
-    cout << "RUN_NUMBER = " << RUN_NUMBER << endl;
+    cout << "    ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
+    cout << "     RUN_NUMBER = " << RUN_NUMBER << endl;
+	cout << "          E-LOG = " << ELOG_NAME << endl;
+	cout << "  TMP Directory = " << TMPDIR << endl;
+	cout << "Number of plots = " << HNAMEPATHS.size() << endl;
     cout << "-------------------------------------------------" << endl;
 
 }
