@@ -62,7 +62,7 @@ int RUN_NUMBER = 99999;
 
 void signal_stop_handler(int signum);
 
-bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=5);
+bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=5, bool send_request=true);
 void RegisterQueuedItems(void);
 void ExecuteMacro(TDirectory *f, string macro);
 void ParseCommandLineArguments(int &narg, char *argv[]);
@@ -109,6 +109,7 @@ int main(int narg, char *argv[])
 	CMSG_NAME = string(str);
 	cout << "RootSpy UDL is " << ROOTSPY_UDL << endl;
 	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
+	RS_CMSG->verbose = VERBOSE;
 	
 	// Wait for RS_CMSG to launch cMsg threads and ping servers
 	sleep(2);
@@ -116,13 +117,14 @@ int main(int narg, char *argv[])
 	// Request all histogram definitions first so RootSpy will know what to do with them
 	// when the histograms come.
 	cout << endl << "------------------------------------------------------" << endl;
-	cout << "Requesting all histogram definitions ... " << endl;
+	cout << "Requesting all histogram and macro definitions ... " << endl;
 	RS_CMSG->RequestHists("rootspy");
+	RS_CMSG->RequestMacroList("rootspy");
 	usleep(500000);
 	
-	// Initial request of all hnamepaths. Most likely these are macros
-	// se we will need to send out second requests later for the actual
-	// histograms.
+	// Initial request of all hnamepaths. Most likely these are macros.
+	// When the macro arrives however, rootspy immediately sends out a
+	// request for any histograms it needs.
 	bool good = GetHists(HNAMEPATHS);
 	if( !good ){
 		cerr << "Unable to get all hnamepaths in initial set!" << endl;
@@ -132,57 +134,68 @@ int main(int narg, char *argv[])
 	// Create TCanvas, but set ROOT to batch mode so that it doesn't actually open a window.
 	gROOT->SetBatch(kTRUE);
 	TCanvas *c1 = new TCanvas("c1", "A Canvas", 1600, 1200);
+
+	// Setup interpretor so macros don't have to include these things.
+	gROOT->ProcessLine("#include <iostream>");
+	gROOT->ProcessLine("using namespace std;");
 	
 	// Loop over hnamepaths, drawing each into the canvas and saving the image
 	int ipage=1;
 	for(string hnamepath : HNAMEPATHS){
-		RS_INFO->Lock();
-		
-		for(string s : HNAMEPATHS){
-		
-			cout << endl << "--- Processing " << s << " ---" << endl;
-		
-			// Get pointer to hdef for this hnamepath
-			const hdef_t *hdef = NULL;
-			for(auto hdefpair : RS_INFO->histdefs){
-				if( s == hdefpair.second.hnamepath ) {hdef = &hdefpair.second; break;}
-			}
-			if(!hdef) {
-				cerr << "Hmmm ... could not find hdef for " << s << " but it should be here!?!? -- skipping" << endl;
-				continue;
-			}
-			
-			// Get any additional hnamepaths this may require (if it is a macro)
-			bool skip = false;
-			if( ! hdef->macro_hnamepaths.empty() ){
-				bool good = GetHists(hdef->macro_hnamepaths);
-				if( !good ){
-					cerr << "Could not find all hnamepaths needed for macro " << s << " -- skipping " << endl;
-					skip = true;
-				}
-			}
-			if(skip) continue;
-			
-			// Clear canvas
-			c1->Clear();
+	
+		cout << endl << "--- Processing " << hnamepath << " ---" << endl;
 
-			// Check if this is a macro or regular histogram
-			if(hdef->type == hdef_t::macro){
-				const hinfo_t &hinfo = hdef->hists.begin()->second; // Use first hinfo
-				ExecuteMacro(RS_INFO->sum_dir, hinfo.macroString);
-			}else{
-				if(hdef->sum_hist) hdef->sum_hist->Draw();
+	
+		// Get hdef info for this hnamepath
+		set<string> macro_hnamepaths;
+		string macroString;
+		RS_INFO->Lock();
+		const hdef_t *hdef = NULL;
+		for(auto hdefpair : RS_INFO->histdefs){
+			if( hnamepath == hdefpair.second.hnamepath ) {
+				hdef = &hdefpair.second;
+				macro_hnamepaths = hdef->macro_hnamepaths;
+				if(!hdef->hists.empty()) macroString = hdef->hists.begin()->second.macroString; // Use first hinfo
+				break;
 			}
-			
-			// Update canvas and save to PNG file
-			c1->Update();
-			const char *dir = ".";
-			cout << "    - Writing plot " << ipage << " of " << HNAMEPATHS.size() << endl;
-			char fname[256];
-			sprintf(fname,"%s/rs_page%02d.png", dir, ipage);
-			c1->SaveAs(fname, "");
-			ipage++;
 		}
+		RS_INFO->Unlock();
+		if(!hdef) {
+			cerr << "Hmmm ... could not find hdef for " << hnamepath << " but it should be here!?!? -- skipping" << endl;
+			continue;
+		}
+		
+		// Get any additional hnamepaths this may require (if it is a macro)
+		bool skip = false;
+		if( ! macro_hnamepaths.empty() ){
+			bool good = GetHists(macro_hnamepaths,5,false);
+			if( !good ){
+				cerr << "Could not find all hnamepaths needed for macro " << hnamepath << " -- skipping " << endl;
+				skip = true;
+			}
+		}
+		if(skip) continue;
+		
+		// Clear canvas
+		c1->Clear();
+
+		// Check if this is a macro or regular histogram
+		if(macroString != ""){
+			cout << "Executing macro for " << hnamepath << endl;
+			ExecuteMacro(RS_INFO->sum_dir, macroString);
+		}else{
+			// This is not entirely thread safe!
+			if(hdef->sum_hist) hdef->sum_hist->Draw();
+		}
+		
+		// Update canvas and save to PNG file
+		c1->Update();
+		const char *dir = ".";
+		cout << "    - Writing plot " << ipage << " of " << HNAMEPATHS.size() << endl;
+		char fname[256];
+		sprintf(fname,"%s/rs_page%02d.png", dir, ipage);
+		c1->SaveAs(fname, "");
+		ipage++;
 
 		RS_INFO->Unlock();
 	}
@@ -201,7 +214,7 @@ int main(int narg, char *argv[])
 //-----------
 // GetHists
 //-----------
-bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs)
+bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_request)
 {
 	// Send requests for all of the listed hnamepaths and
 	// then wait until at least one server responds with each.
@@ -228,28 +241,36 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs)
 		set<string> found_hnamepaths;
 		RS_INFO->Lock();
 		for(auto hdef : RS_INFO->histdefs){
-			for(string s : HNAMEPATHS) if( s == hdef.second.hnamepath ) found_hnamepaths.insert(s);
+			for(string s : hnamepaths) if( s == hdef.second.hnamepath ) found_hnamepaths.insert(s);
 		}
 		RS_INFO->Unlock();
 
 		// Update ticker and finish if appropriate
-		cout << "  Received " << found_hnamepaths.size() << " / " << HNAMEPATHS.size() << " definitions  \r";
+		cout << "  Received " << found_hnamepaths.size() << " / " << hnamepaths.size() << " definitions  \r";
 		cout .flush();
-		if(found_hnamepaths.size() == HNAMEPATHS.size()) break;
-		useconds_t sleep_tics = 200000;
-		usleep(sleep_tics);
-		if((Ntries++)*sleep_tics/1000 > timeout_secs*1000) {
+
+		if(found_hnamepaths.size() == hnamepaths.size()) break;
+
+		uint32_t sleep_tics = 200000;
+		uint32_t max_tries = timeout_secs*(1000000/sleep_tics); // 2 seconds
+
+		if(Ntries >= max_tries) {
 			cerr << endl << "Timed out waiting for hnamepath definitions!" << endl;
 			return false;
 		}
+
+		usleep(sleep_tics);
+		Ntries++;
 	}
 
 	// ------------- Request all hnamepaths --------------
-	// Request all hnamepaths
-	cout << "Requesting hnamepaths:" << endl;
-	for(string s : HNAMEPATHS){
-		cout << "   " << s << endl;
-		RS_CMSG->RequestHistogram("rootspy", s);
+	if(send_request){
+		cout << "Requesting hnamepaths:" << endl;
+		for(string s : hnamepaths){
+			cout << "   " << s << endl;
+			RS_CMSG->RequestHistogram("rootspy", s);
+			RS_CMSG->RequestMacro("rootspy", s);
+		}
 	}
 
 	// ------------- Wait for histograms --------------
@@ -269,7 +290,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs)
 		double youngest; // the hdef whose oldest received histogram is yougest 
 		RS_INFO->Lock();
 		for(auto hdef : RS_INFO->histdefs){
-			for(string s : HNAMEPATHS){
+			for(string s : hnamepaths){
 				if( s == hdef.second.hnamepath ){
 					if( !hdef.second.hists.empty() ){
 						found_hnamepaths.insert(s);
@@ -290,15 +311,15 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs)
 		RS_INFO->Unlock();
 
 		// Update ticker
-		cout << "  Received " << found_hnamepaths.size() << " / " << HNAMEPATHS.size() << "  (" << Nhists << " hists)  \r";
+		cout << "  Received " << found_hnamepaths.size() << " / " << hnamepaths.size() << "  (" << Nhists << " hists)  \r";
 		cout .flush();
 
 		uint32_t sleep_tics = 200000;
 		uint32_t min_tries = (2*1000000)/sleep_tics; // 2 seconds
-		uint32_t max_tries = (timeout_secs*1000000)/sleep_tics; // 2 seconds
+		uint32_t max_tries = timeout_secs*(1000000/sleep_tics); // 2 seconds
 				
 		// Check if everything is found
-		if(found_hnamepaths.size() == HNAMEPATHS.size()) {
+		if(found_hnamepaths.size() == hnamepaths.size()) {
 			if(Ntries >= min_tries)break;
 			
 			// This allows us to break earlier than the minimum time if we see that
@@ -332,7 +353,6 @@ void RegisterQueuedItems(void)
 	// That tries to funnel all ROOT operations through the main GUI thread
 	// so in order to actually create ROOT objects, we must process the queues
 	// here.
-
 
 	// Register any histograms waiting in the queue
 	if( ! HISTOS_TO_REGISTER.empty() ){
