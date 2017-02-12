@@ -487,6 +487,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 		{"run-number",     required_argument, 0,  'R' },
 		{"udl",            required_argument, 0,  'u' },
 		{"server",         required_argument, 0,  's' },
+		{"email",          required_argument, 0,  'e' },
 		{"hnamepath",      required_argument, 0,  'H' },
 		{"verbose",        no_argument,       0,  'V' },
 		{0, 0, 0, 0  }
@@ -494,7 +495,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
     
 	int opt = 0;
 	int long_index = 0;
-	while ((opt = getopt_long(narg, argv,"hR:u:s:H:v", long_options, &long_index )) != -1) {
+	while ((opt = getopt_long(narg, argv,"hR:u:s:e:H:v", long_options, &long_index )) != -1) {
 		switch (opt) {
 			case 'R':
 				if(optarg == NULL) Usage();
@@ -509,6 +510,11 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 				ROOTSPY_UDL = "cMsg://";
 				ROOTSPY_UDL += optarg;
 				ROOTSPY_UDL += "/cMsg/rootspy";
+				break;
+			case 'e' :
+				if(optarg == NULL) Usage();
+				ELOG_EMAIL = optarg;
+				ELOG_NOTIFY = true;
 				break;
 			case 'v' :
 				VERBOSE++;
@@ -534,11 +540,12 @@ void ParseCommandLineArguments(int &narg, char *argv[])
     // DUMP configuration
     cout << "-------------------------------------------------" << endl;
     cout << "Current configuration:" << endl;
-    cout << "    ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
-    cout << "     RUN_NUMBER = " << RUN_NUMBER << endl;
-	cout << "          E-LOG = " << ELOG_NAME << endl;
-	cout << "  TMP Directory = " << TMPDIR << endl;
-	cout << "Number of plots = " << HNAMEPATHS.size() << endl;
+    cout << "       ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
+    cout << "        RUN_NUMBER = " << RUN_NUMBER << endl;
+	cout << "             E-LOG = " << ELOG_NAME << endl;
+	cout << "     TMP Directory = " << TMPDIR << endl;
+	cout << "   Number of plots = " << HNAMEPATHS.size() << endl;
+	if(ELOG_NOTIFY) cout << "Notification email = " << ELOG_EMAIL << endl;
     cout << "-------------------------------------------------" << endl;
 
 }
@@ -560,6 +567,7 @@ void Usage(void)
 	cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
 	cout<<"   -R,--run-number number    The number of the current run" << endl;
 	cout<<"   -H,--hnamepath hnamepath  An hnamepath to include (can be multiple of these)" << endl;
+	cout<<"   -e,--email                Comma separated list of email addresses to notify" << endl;
 	cout<<"   -v,--verbose              Increase verbosity (can use multiple times)"<<endl;
 	cout<<endl;
 	cout<<endl;
