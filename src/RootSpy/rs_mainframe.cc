@@ -891,7 +891,8 @@ void rs_mainframe::DoTimer(void) {
 		RS_CMSG->RequestMacroList("rootspy");
 		last_hist_requested = now;
 	}
-	
+
+#if 0	
 	// If we are in the middle of making an e-log entry, then don't
 	// allow any auto advancing or refreshing.
 	if(ipage_elog==Npages_elog){
@@ -925,6 +926,7 @@ void rs_mainframe::DoTimer(void) {
 	
 	// If making an e-log entry, advance to next stage
 	if( ipage_elog<Npages_elog ) DoELogPage();
+#endif
 
 	// Register any histograms waiting in the queue
 	if( ! HISTOS_TO_REGISTER.empty() ){
@@ -1297,16 +1299,17 @@ void rs_mainframe::DoOnline(void)
 //-------------------
 void rs_mainframe::DoELog(void)
 {
-	// Unbeleivable what we have to go through for this!
-	// TTimer did NOT work as advertised. We have to piggyback
-	// off of the existing DoTimer timer. 
-
+	// Originally, this was handled in this program. It has
+	// since been broken off into the RSelog command line
+	// program. Now we just need to execute that. Because the
+	// program may take a bit to gather hists and make plots,
+	// we launch a separate thread to handle it.
 	
-#ifdef HAVE_EZCA
-	string epics_var_name = "HD:coda:daq:run_number";
-	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
-#endif // HAVE_EZCA
+	thread thr( &rs_mainframe::ELogEntryThread, this );
+	
+	thr.detach();
 
+#if 0
 	// Record which tab and plot are currently
 	// selected so they can be restored at the end.
 	elog_tab_restore = fMainTab->GetCurrent();
@@ -1342,8 +1345,43 @@ void rs_mainframe::DoELog(void)
 	Npages_elog = Nplots;
 	ipage_elog  = 0;
 	elog_next_action = RS_CMSG->GetTime() + 3.0;
+#endif
 }
 
+//-------------------
+// ELogEntryThread
+//-------------------
+void rs_mainframe::ELogEntryThread(void)
+{
+	// This thread forms the RSelog command for making
+	// the e-log entry and then executes it. It is done
+	// in a separate thread so the GUI is not held up
+	// waiting for this to finish.
+
+
+#ifdef HAVE_EZCA
+	string epics_var_name = "HD:coda:daq:run_number";
+	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
+#endif // HAVE_EZCA
+
+	// Make list of all hnamepaths for all tabs
+	vector<string> hnamepaths;
+	for(auto t : rstabs) {
+		for( auto h : t->hnamepaths ) hnamepaths.push_back(h);
+	}
+
+	// Build command
+	stringstream cmd;
+	cmd << "RSelog -L " << ELOG_NAME;
+	if(ELOG_NOTIFY) cmd << " -e " << ELOG_EMAIL;
+	if(epics_run_number>0) cmd << " -R " << epics_run_number;
+	for( string s : hnamepaths ) cmd << " -H " << s;
+	
+	// Execute command
+	system(cmd.str().c_str());
+}
+
+#if 0
 //-------------------
 // DoELogPage
 //-------------------
@@ -1453,6 +1491,7 @@ _DBG_<<"ipage_elog="<<ipage_elog<<" Npages_elog="<<Npages_elog<<endl;
 		(*it)->DoUpdateWithFollowUp();
 	}
 }
+#endif
 
 //-------------------
 // DoReferencePlot

@@ -112,10 +112,11 @@ class rs_mainframe:public TGMainFrame {
 		void DoFinal(void);
 		void DoOnline(void);
 		void DoELog(void);
-		void DoELogPage(void);
+		void ELogEntryThread(void);
+		//void DoELogPage(void);
 		void DoReferencePlot(void);
 		void DoMakeReferencePlot(void);
-		
+				
 		//void QueueMacroForRegistration(string name. string path, int version, 
 
 		// Helper methods for building GUI
