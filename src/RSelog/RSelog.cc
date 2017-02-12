@@ -280,7 +280,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 
 	// ------------- Wait for histogram definitions --------------
 	cout << "Checking for histogram definitions ..." << endl;
-	int Ntries = 0;
+	uint32_t Ntries = 0;
 	while(!DONE){
 
 		// Check received hdefs
@@ -333,7 +333,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 		// Check received hists
 		set<string> found_hnamepaths;
 		uint32_t Nhists = 0; // total histograms recieved
-		double youngest; // the hdef whose oldest received histogram is yougest 
+		double youngest=0.0; // the hdef whose oldest received histogram is yougest 
 		RS_INFO->Lock();
 		for(auto hdef : RS_INFO->histdefs){
 			for(string s : hnamepaths){
