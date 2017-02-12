@@ -485,6 +485,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	static struct option long_options[] = {
 		{"help",           no_argument,       0,  'h' },
 		{"run-number",     required_argument, 0,  'R' },
+		{"logbook",        required_argument, 0,  'L' },
 		{"udl",            required_argument, 0,  'u' },
 		{"server",         required_argument, 0,  's' },
 		{"email",          required_argument, 0,  'e' },
@@ -495,7 +496,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
     
 	int opt = 0;
 	int long_index = 0;
-	while ((opt = getopt_long(narg, argv,"hR:u:s:e:H:v", long_options, &long_index )) != -1) {
+	while ((opt = getopt_long(narg, argv,"hR:L:u:s:e:H:v", long_options, &long_index )) != -1) {
 		switch (opt) {
 			case 'R':
 				if(optarg == NULL) Usage();
@@ -510,6 +511,10 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 				ROOTSPY_UDL = "cMsg://";
 				ROOTSPY_UDL += optarg;
 				ROOTSPY_UDL += "/cMsg/rootspy";
+				break;
+			case 'L' :
+				if(optarg == NULL) Usage();
+				ELOG_NAME = optarg;
 				break;
 			case 'e' :
 				if(optarg == NULL) Usage();
@@ -564,6 +569,7 @@ void Usage(void)
 	cout<<endl;
 	cout<<"   -h,--help                 Print this message"<<endl;
 	cout<<"   -u,--udl udl              UDL of cMsg RootSpy server"<<endl;
+	cout<<"   -L,--logbook logbook      Logbook to make entry (def." << ELOG_NAME << ")" <<endl;
 	cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
 	cout<<"   -R,--run-number number    The number of the current run" << endl;
 	cout<<"   -H,--hnamepath hnamepath  An hnamepath to include (can be multiple of these)" << endl;
