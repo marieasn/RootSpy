@@ -239,7 +239,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs)
 		useconds_t sleep_tics = 200000;
 		usleep(sleep_tics);
 		if((Ntries++)*sleep_tics/1000 > timeout_secs*1000) {
-			cerr << "Timed out waiting for hnamepath definitions!" << endl;
+			cerr << endl << "Timed out waiting for hnamepath definitions!" << endl;
 			return false;
 		}
 	}
@@ -311,7 +311,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs)
 
 		// Check if past timeout
 		if(Ntries >= max_tries) {
-			cerr << "Timed out waiting for hists!" << endl;
+			cerr << endl << "Timed out waiting for hists!" << endl;
 			return false;
 		}
 
