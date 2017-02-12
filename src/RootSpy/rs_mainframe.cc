@@ -892,10 +892,9 @@ void rs_mainframe::DoTimer(void) {
 		last_hist_requested = now;
 	}
 
-#if 0	
 	// If we are in the middle of making an e-log entry, then don't
 	// allow any auto advancing or refreshing.
-	if(ipage_elog==Npages_elog){
+//	if(ipage_elog==Npages_elog){
 		//	// Request histogram update if auto button is on. If either of the
 		// "Loop over servers" or "Loop over hists" boxes are checked, we
 		// call DoNext(), otherwise call DoUpdate(). If time the auto_refresh
@@ -921,12 +920,11 @@ void rs_mainframe::DoTimer(void) {
 				}
 			}
 		}
-	}
+//	}
 	
 	
 	// If making an e-log entry, advance to next stage
-	if( ipage_elog<Npages_elog ) DoELogPage();
-#endif
+//	if( ipage_elog<Npages_elog ) DoELogPage();
 
 	// Register any histograms waiting in the queue
 	if( ! HISTOS_TO_REGISTER.empty() ){
