@@ -1361,7 +1361,8 @@ void rs_mainframe::ELogEntryThread(void)
 	ezcaSetTimeout(0.4);
 	ezcaSetRetryCount(8);
 	string epics_var_name = "HD:coda:daq:run_number";
-	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
+	int err = ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
+	if(err != EZCA_OK) epics_run_number = 0;
 #endif // HAVE_EZCA
 
 	// Make list of all hnamepaths for all tabs
