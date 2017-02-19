@@ -1358,6 +1358,8 @@ void rs_mainframe::ELogEntryThread(void)
 
 
 #ifdef HAVE_EZCA
+	ezcaSetTimeout(0.4);
+	ezcaSetRetryCount(8);
 	string epics_var_name = "HD:coda:daq:run_number";
 	ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
 #endif // HAVE_EZCA
@@ -1370,7 +1372,7 @@ void rs_mainframe::ELogEntryThread(void)
 
 	// Build command
 	stringstream cmd;
-	cmd << "RSelog -L " << ELOG_NAME;
+	cmd << "hdlog -c RSelog -L " << ELOG_NAME;
 	if(ELOG_NOTIFY) cmd << " -e " << ELOG_EMAIL;
 	if(epics_run_number>0) cmd << " -R " << epics_run_number;
 	for( string s : hnamepaths ) cmd << " -H " << s;
