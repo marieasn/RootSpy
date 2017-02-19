@@ -157,6 +157,7 @@ class rs_mainframe:public TGMainFrame {
 		map<string,string> macro_files;
 		list<RSTab*> rstabs;
 		RSTab *current_tab;
+		void GetAllDisplayedHNamepaths(set<string> &hnamepaths);
 
 		viewStyle_t_rs viewStyle_rs;
 		void ExecuteMacro(TDirectory* f, string macro);

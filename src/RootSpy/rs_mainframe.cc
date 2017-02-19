@@ -1950,6 +1950,30 @@ void rs_mainframe::CreateGUI(void)
 //    }
 //}
 
+//-------------------
+// GetAllDisplayedHNamepaths
+//-------------------
+void rs_mainframe::GetAllDisplayedHNamepaths(set<string> &hnamepaths)
+{
+	// Fill the provided container with list of all hnamepaths
+	// of all tabs. Additionally, if any hnamepaths are macros
+	// then add any hnamepaths they depend on to the list.
+	// This is called from RSTab::DoReset so that all histograms
+	// can be reset at once.
+	for(auto rstab : rstabs){
+		for(string hnamepath : rstab->hnamepaths) hnamepaths.insert(hnamepath);
+	}
+	
+	RS_INFO->Lock();
+	for(string hnamepath : hnamepaths){
+		auto it = RS_INFO->histdefs.find(hnamepath);
+		if( it == RS_INFO->histdefs.end() ) continue;
+		for(string s : it->second.macro_hnamepaths){
+			hnamepaths.insert(s);
+		}
+	}
+	RS_INFO->Unlock();
+}
 
 //-------------------
 // DrawMacro

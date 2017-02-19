@@ -603,12 +603,21 @@ void RSTab::DoSelectHists(void)
 //----------
 void RSTab::DoReset(void)
 {
+	// Originally, this called GetMacroHists()
+	// to try and automatically figure out which
+	// histograms to reset so that only the currently
+	// displayed ones were saved. User feedback though
+	// indicated that their expectation was for all
+	// histograms to be reset. Thus, we get a list 
+	// of all displayed hnamepaths for all tabs. Note 
+	// that any hnamepaths that are specified by macros
+	// are also included in this list.
+	
 	set<string> hnamepaths;
-	GetMacroHists(hnamepaths);
-	set<string>::iterator iter = hnamepaths.begin();
-	for(; iter!=hnamepaths.end(); iter++){
-		RS_INFO->ResetHisto(*iter);
-	}
+	RSMF->GetAllDisplayedHNamepaths(hnamepaths);
+	for( string hnamepath : hnamepaths ) RS_INFO->ResetHisto(hnamepath);
+	
+	DoUpdate();
 }
 
 //----------
@@ -616,12 +625,13 @@ void RSTab::DoReset(void)
 //----------
 void RSTab::DoRestore(void)
 {
+	// See comments for DoReset()
+
 	set<string> hnamepaths;
-	GetMacroHists(hnamepaths);
-	set<string>::iterator iter = hnamepaths.begin();
-	for(; iter!=hnamepaths.end(); iter++){
-		RS_INFO->RestoreHisto(*iter);
-	}
+	RSMF->GetAllDisplayedHNamepaths(hnamepaths);
+	for( string hnamepath : hnamepaths ) RS_INFO->RestoreHisto(hnamepath);
+	
+	DoUpdate();
 }
 
 //----------
@@ -670,6 +680,7 @@ void RSTab::GetMacroHists(set<string> &hnamepaths)
 
 	pthread_rwlock_rdlock(ROOT_MUTEX);
 
+	// Look for primatives in currently drawn pads
 	for(int ipad=0; ipad<100; ipad++){
 		TVirtualPad *pad = canvas->GetPad(ipad);
 		if(!pad) break;
@@ -691,7 +702,7 @@ void RSTab::GetMacroHists(set<string> &hnamepaths)
 			}			
 		}
 	}
-
+	
 	pthread_rwlock_unlock(ROOT_MUTEX);
 }
 

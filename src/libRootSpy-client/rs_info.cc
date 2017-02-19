@@ -561,7 +561,7 @@ void  rs_info::ResetHisto(const string &hnamepath)
 	
 	pthread_rwlock_wrlock(ROOT_MUTEX);
 	
-	// If reset hist already exists, add curren sum hist to it
+	// If reset hist already exists, add current sum hist to it
 	if(hdef->reset_hist){
 		hdef->reset_hist->Add(hdef->sum_hist);
 	}else{
@@ -598,7 +598,7 @@ void  rs_info::ResetHisto(const string &hnamepath)
 //---------------------------------
 void  rs_info::RestoreHisto(const string &hnamepath)
 {
-	cout << "Restoreting histo: " << hnamepath << endl;
+	cout << "Restoring histo: " << hnamepath << endl;
 
 	RS_INFO->Lock();
 
