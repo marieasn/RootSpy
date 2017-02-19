@@ -163,12 +163,14 @@ class rs_mainframe:public TGMainFrame {
 		void ExecuteMacro(TDirectory* f, string macro);
 		void DrawMacro(TCanvas*the_canvas, hinfo_t &the_hinfo);
 		void DrawMacro(TCanvas*the_canvas, hdef_t &the_hdef);
+		void DropAllHists(void);
 
 		// info for comparing with archived histograms
 		//bool overlay_mode; // maybe don't need this?
 		TFile *archive_file;
 		
 		long epics_run_number;
+		double last_epics_run_number_checked; // last time we tried getting run number from EPICS
 
 	private:
 	

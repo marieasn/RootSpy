@@ -19,6 +19,7 @@
 #include <TClass.h>
 #include <TTree.h> 
 #include <TStyle.h>
+#include <TLatex.h>
 
 #include <map>
 #include <vector>
@@ -435,6 +436,8 @@ void ExecuteMacro(TDirectory *f, string macro)
 
 	TDirectory *savedir = gDirectory;
 	f->cd();
+	
+	TVirtualPad *top_pad = gPad;
 
 	// execute script line-by-line
 	// maybe we should do some sort of sanity check first?
@@ -458,6 +461,24 @@ void ExecuteMacro(TDirectory *f, string macro)
 			cout << "\"" << s << "\"" << endl;
 			break;
 		}
+	}
+
+	// Optionally add a run number label
+	if( RUN_NUMBER > 0 ){
+		TLatex *run_number_label = new TLatex();
+		run_number_label->SetTextSize(1.0);
+		run_number_label->SetTextColor(kBlack);
+		run_number_label->SetTextAlign(22);
+
+		top_pad->cd();
+		TPad *pad = (TPad*)gDirectory->FindObjectAny("run_number_label_pad");
+		if(!pad) pad = new TPad("run_number_label_pad", "Run Number", 0.91, 0.975, 1.0, 1.0);
+		pad->Draw();
+		pad->cd();
+		char str[256];
+		sprintf(str, "Run: %d", (int)RUN_NUMBER);
+		run_number_label->DrawLatex(0.5, 0.5, str);
+		pad->Update();
 	}
 
 	// restore
