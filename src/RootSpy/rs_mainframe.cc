@@ -1358,8 +1358,8 @@ void rs_mainframe::ELogEntryThread(void)
 
 
 #ifdef HAVE_EZCA
-	ezcaSetTimeout(0.4);
-	ezcaSetRetryCount(8);
+	ezcaSetTimeout(0.2);   // default in ezca lib is 0.05
+	ezcaSetRetryCount(50); // default in ezca lib is 599
 	string epics_var_name = "HD:coda:daq:run_number";
 	int err = ezcaGet((char*)(epics_var_name.c_str()), ezcaLong, 1, &epics_run_number);
 	if(err != EZCA_OK) epics_run_number = 0;
