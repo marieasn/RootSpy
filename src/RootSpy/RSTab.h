@@ -47,6 +47,7 @@ class RSTab{
 		TGLabel *lHistogram;
 		TGLabel *lReceived;
 		TGTextButton *bViewMacro;
+		TGTextButton *bViewGuidance;
 		TCanvas *canvas;
 		
 		string title;
@@ -73,6 +74,8 @@ class RSTab{
 		void DoReset(void);
 		void DoRestore(void);
 		void DoViewMacro(void);
+		void DoViewGuidance(void);
+
 		
 		void GetMacroHists(set<string> &hnamepaths);
 		void RequestUpdatedMacroHists(set<string> &hnamepaths);

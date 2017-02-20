@@ -121,6 +121,7 @@ class hdef_t{
 		
 		set<string> macro_hnamepaths;
 		set<string> macro_emails;
+		string macro_guidance;
 
 		hdisplay_info_t display_info;    // various options that modify how the histogram is displayed
 };

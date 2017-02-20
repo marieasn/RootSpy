@@ -12,6 +12,7 @@
 #include "Dialog_IndivHists.h"
 #include "Dialog_SelectHists.h"
 #include "Dialog_ShowMacro.h"
+#include "Dialog_ShowGuidance.h"
 
 #include "TGaxis.h"
 
@@ -55,6 +56,12 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	fTabMainLeft->AddFrame(fTabMainLeftInfoHistLabel, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
 	lType      = AddLabel(fTabMainLeftInfoHistLabel, "Histogram:" ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX | kLHintsExpandY );
 	bViewMacro = AddButton(fTabMainLeftInfoHistLabel, "view", kLHintsTop| kLHintsExpandX | kLHintsExpandY);
+
+	TGHorizontalFrame *fTabMainLeftGuidance = new TGHorizontalFrame(fTabMainLeft);
+	fTabMainLeftGuidance->SetHeight(50);
+	fTabMainLeft->AddFrame(fTabMainLeftGuidance, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX ,2,2,2,2));
+	bViewGuidance = AddButton(fTabMainLeftGuidance, "Guidance", kLHintsTop| kLHintsExpandX | kLHintsExpandY);
+
 	lHistogram = AddLabel(fTabMainLeft, string(25, '-'), kTextLeft, kLHintsLeft | kLHintsTop);
 	AddSpacer(fTabMainLeft, 1, 5);
 	AddLabel(fTabMainLeft, "Received:"  ,kTextLeft, kLHintsLeft | kLHintsTop | kLHintsExpandX);
@@ -126,6 +133,7 @@ RSTab::RSTab(rs_mainframe *rsmf, string title)
 	bReset->Connect("Clicked()","RSTab", this, "DoReset()");
 	bRestore->Connect("Clicked()","RSTab", this, "DoRestore()");
 	bViewMacro->Connect("Clicked()","RSTab", this, "DoViewMacro()");
+	bViewGuidance->Connect("Clicked()","RSTab", this, "DoViewGuidance()");
 	
 	// Set some defaults
 	config = title;
@@ -662,6 +670,29 @@ void RSTab::DoViewMacro(void)
 	string title = "Macro : " + hnamepath;
 	
 	new Dialog_ShowMacro(title, macro_str);
+
+}
+
+//----------
+// DoViewGuidance
+//----------
+void RSTab::DoViewGuidance(void)
+{
+	// If the currently displayed histogram index is out of range, do nothing
+	if((uint32_t)currently_displayed >= hnamepaths.size()) return;
+
+	// Get hnamepath of currently displayed histo/macro
+	list<string>::iterator h_it = hnamepaths.begin();
+	advance(h_it, currently_displayed);
+	string hnamepath = *h_it;
+	
+	// Get hdef_t of currently displayed macro. Ignore if zero servers
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+	if(hdef_iter==RS_INFO->histdefs.end()) return;
+	if(hdef_iter->second.hists.empty()) return;
+
+	string title = "Guidance : " + hnamepath;	
+	new Dialog_ShowGuidance(title, hdef_iter->second.macro_guidance);
 
 }
 

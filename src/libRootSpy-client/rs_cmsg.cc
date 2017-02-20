@@ -624,10 +624,10 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 	bool good_response = true;
 
 	// Get pointers to STL containers that hold the histogram information
-	vector<string> *hist_names;
-	vector<string> *hist_types;
-	vector<string> *hist_paths;
-	vector<string> *hist_titles;
+	vector<string> *hist_names=NULL;
+	vector<string> *hist_types=NULL;
+	vector<string> *hist_paths=NULL;
+	vector<string> *hist_titles=NULL;
 	try {                                    //  all args are of type string
 		hist_names = msg->getStringVector("hist_names");
 		hist_types = msg->getStringVector("hist_types");
@@ -1359,7 +1359,19 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	string line;
 	uint32_t Nprev_macro_hnamepaths = hdef->macro_hnamepaths.size();
 	hdef->macro_hnamepaths.clear();
+	hdef->macro_guidance = "";
+	bool in_guidance_section = false;
 	while(getline(ss, line)){
+		if( line.find("// Guidance:")==0 )in_guidance_section = true;
+		if( in_guidance_section && (line.find("//")==0) ){
+			hdef->macro_guidance += line + "\n";
+			if( line.find("// End Guidance:")==0 )in_guidance_section = false;
+			continue; // don't consider other keywords if in guidance section
+		}
+		
+		// guidance stops if we hit non-comment line
+		in_guidance_section = false;
+
 		if(line.find("// hnamepath:")==0){
 			string myhnamepath = line.substr(13);
 			myhnamepath.erase(myhnamepath.find_last_not_of(" \n\r\t")+1);
