@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <time.h>
 
+#include <TROOT.h>
 #include <TFile.h>
 #include <TDirectory.h>
 #include <TObjArray.h>
@@ -40,6 +41,7 @@ using namespace std;
 rs_cmsg *RS_CMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
+bool MAKE_BACKUP = false;
 
 // These defined in rs_cmsg.cc
 extern mutex REGISTRATION_MUTEX;
@@ -65,7 +67,8 @@ namespace config {
     // by default we also store the final state of the histograms here
 	static string OUTPUT_FILENAME = "current_run.root";   
     // name of file to optionally store final histogram state in
-	static string ARCHIVE_FILENAME = "<nofile>";          
+	static string ARCHIVE_FILENAME = "<nofile>";         
+	static string BACKUP_FILENAME = "backup.root"; 
 	
 	static double POLL_DELAY = 60;   // time between polling runs
 	static double MIN_POLL_DELAY = 10;
@@ -97,7 +100,8 @@ void BeginRun();
 void EndRunProcessing(void);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
-void WriteArchiveFile( TDirectory *sum_dir );
+void WriteArchiveFile( string fname, TDirectory *sum_dir );
+void CopyROOTDir(TDirectory *source);
 //void SaveTrees( TDirectoryFile *the_file );
 
 void signal_stop_handler(int signum);
@@ -197,6 +201,8 @@ void BeginRun()
         CURRENT_OUTFILE = new TFile(OUTPUT_FILENAME.c_str(), "recreate"); 
         if(!IsGoodTFile(CURRENT_OUTFILE)) {
             cout << "Couldn't make output file, exiting" << endl;
+				delete CURRENT_OUTFILE;
+				CURRENT_OUTFILE = NULL;
             return;
         }
         
@@ -418,6 +424,12 @@ void GetAllHists(uint32_t Twait)
     
 	// Save current state of summed histograms to output file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
+	if(CURRENT_OUTFILE){
+		CURRENT_OUTFILE->SaveSelf(kTRUE); // force writing out of keys and header
+		if(MAKE_BACKUP){
+			WriteArchiveFile(BACKUP_FILENAME, RS_INFO->sum_dir);
+		}
+	}
     
 	// Optionally generate documents
 	if(HTML_OUTPUT)
@@ -429,6 +441,84 @@ void GetAllHists(uint32_t Twait)
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
 }
+
+//-----------
+// CopyROOTDir
+//-----------
+void CopyROOTDir(TDirectory *source)
+{
+	/// Copy the given directory and contents to the
+	/// current gDirectory. This was taken from an 
+	/// answer to a similar question on a ROOT forum
+
+   TDirectory *savedir = gDirectory;
+   TDirectory *adir = savedir->mkdir(source->GetName());
+   adir->cd();
+   //loop on all entries of this directory
+   TKey *key;
+   TIter nextkey(source->GetListOfKeys());
+   while ((key = (TKey*)nextkey())) {
+      const char *classname = key->GetClassName();
+      TClass *cl = gROOT->GetClass(classname);
+      if (!cl) continue;
+      if (cl->InheritsFrom("TDirectory")) {
+         source->cd(key->GetName());
+         TDirectory *subdir = gDirectory;
+         adir->cd();
+         CopyROOTDir(subdir);
+         adir->cd();
+      } else if (cl->InheritsFrom("TTree")) {
+         TTree *T = (TTree*)source->Get(key->GetName());
+         adir->cd();
+         TTree *newT = T->CloneTree();
+         newT->Write();
+      } else {
+         source->cd();
+         TObject *obj = key->ReadObj();
+         adir->cd();
+         obj->Write();
+         delete obj;
+     }
+  }
+  adir->SaveSelf(kTRUE);
+  savedir->cd();
+}
+
+//-----------
+// WriteArchiveFile
+//-----------
+void WriteArchiveFile( string fname, TDirectory *sum_dir )
+{
+	/// Open an output file with the given name, overwriting any
+	/// existing file, and copy the contents of the given
+	/// sum_dir to it. This will recursively walk the sum_dir
+	/// to make sure all subdirectories are processed. 
+	///
+	/// It is assumed that the ROOT and RSINFO locks are already on
+	/// when this is called so it does not attempt to obtain either 
+	/// of those. 
+
+	cout << "Writing archive file: " << fname << endl;
+
+	TDirectory *savedir = gDirectory;
+	
+	TFile *file = new TFile(fname.c_str(), "recreate"); 
+	if(file->IsZombie()) {
+		cout << "Couldn't make open output file: " << fname << endl;
+		return;
+	}
+	
+	file->cd();
+	CopyROOTDir(sum_dir);
+	savedir->cd();	
+
+	file->Write();
+	file->Close();
+	delete file;
+
+	savedir->cd();		
+}
+
 
 
 /** -- working on this --
@@ -792,6 +882,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         //{"daq-udl",        required_argument, 0,  'q' },
         {"server",         required_argument, 0,  's' },
         {"archive-file",   required_argument, 0,  'A' },
+        {"backup",         no_argument,       0,  'B' },
         {"output-file",    required_argument, 0,  'F' },
 	
         {"pdf-output",     no_argument,       0,  'P' },
@@ -805,7 +896,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
     
     int opt = 0;
     int long_index = 0;
-    while ((opt = getopt_long(narg, argv,"hR:p:u:s:A:F:PHY:v", 
+    while ((opt = getopt_long(narg, argv,"hR:p:u:s:A:BF:PHY:v", 
                               long_options, &long_index )) != -1) {
         switch (opt) {
         case 'R':
@@ -836,6 +927,9 @@ void ParseCommandLineArguments(int &narg, char *argv[])
             if(optarg == NULL) Usage();
             ARCHIVE_FILENAME = optarg;
             break;
+        case 'B' :
+		  		MAKE_BACKUP = true;
+				break;
         case 'F' :
             if(optarg == NULL) Usage();
             OUTPUT_FILENAME = optarg;
@@ -865,7 +959,13 @@ void ParseCommandLineArguments(int &narg, char *argv[])
         default: Usage(); break;
         }
     }  
-  
+
+		  
+	auto pos = OUTPUT_FILENAME.find(".root");
+	if(pos != string::npos){
+		BACKUP_FILENAME = OUTPUT_FILENAME.substr(0, pos) + "_backup.root";
+	}
+
 
     // check any values
     if(POLL_DELAY < MIN_POLL_DELAY)
@@ -874,19 +974,20 @@ void ParseCommandLineArguments(int &narg, char *argv[])
     // DUMP configuration
     cout << "-------------------------------------------------" << endl;
     cout << "Current configuration:" << endl;
-    cout << "ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
+    cout << "     ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
     //cout << "DAQ_UDL = " << DAQ_UDL << endl;
-    cout << "SESSION = " << SESSION << endl;
+    cout << "         SESSION = " << SESSION << endl;
 
-    cout << "RUN_NUMBER = " << RUN_NUMBER << endl;
-    cout << "OUTPUT_FILENAME = " << OUTPUT_FILENAME << endl;
-    cout << "ARCHIVE_FILENAME = " << ARCHIVE_FILENAME << endl;
-    cout << "POLL_DELAY = " << POLL_DELAY << endl;
-    cout << "MIN_POLL_DELAY = " << MIN_POLL_DELAY << endl;
+    cout << "      RUN_NUMBER = " << RUN_NUMBER << endl;
+    cout << " OUTPUT_FILENAME = " << OUTPUT_FILENAME << endl;
+    //cout << "ARCHIVE_FILENAME = " << ARCHIVE_FILENAME << endl;
+    if(MAKE_BACKUP) cout << "  BACKUP ARCHIVE = " << BACKUP_FILENAME << endl;
+    cout << "      POLL_DELAY = " << POLL_DELAY << endl;
+    cout << "  MIN_POLL_DELAY = " << MIN_POLL_DELAY << endl;
     
-    cout << "HTML_OUTPUT = " << HTML_OUTPUT << endl;
-    cout << "PDF_OUTPUT = " << PDF_OUTPUT << endl;
-    cout << "HTML_BASE_DIR = " << HTML_BASE_DIR << endl;
+    cout << "     HTML_OUTPUT = " << HTML_OUTPUT << endl;
+    cout << "      PDF_OUTPUT = " << PDF_OUTPUT << endl;
+    cout << "   HTML_BASE_DIR = " << HTML_BASE_DIR << endl;
 
     cout << "-------------------------------------------------" << endl;
 
@@ -914,7 +1015,8 @@ void Usage(void)
     //cout<<"   -m,--min-poll-delay time  Time"<<endl;
 
     cout<<"   -F,--output-file file     Name of ROOT file used during run" << endl;
-    cout<<"   -A,--archive-file file    Name of ROOT file used to archive the final results" << endl;
+    //cout<<"   -A,--archive-file file    Name of ROOT file used to archive the final results" << endl;
+    cout<<"   -B,--backup               Make exta backup of archive file periodically" << endl;
     cout<<"   -P,--pdf-output           Enable output of summary PDF"<<endl;
     cout<<"   -H,--html-output          Enable output of summary web pages"<<endl;
     cout<<"   -Y,--summary-dir path     Directory used to store summary files"<<endl;
