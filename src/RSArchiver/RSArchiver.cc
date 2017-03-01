@@ -196,9 +196,14 @@ void BeginRun()
 
     // ------------------- file initialization ----------------------------
     // If an output file is specified, then save histograms there instead of in memory
+	 // NOTE: At some point the role of "primary" and "backup" were switched since the 
+	 // the one being opened here would often not close correctly leaving a corrupted file.
+	 // Thus, this file is now the "backup" and the "primary" is created via the WriteArchiveFile
+	 // routine. We still check that a primary filename exists here since the backup filename
+	 // will not exist if the primary doesn't!
     if(OUTPUT_FILENAME != "<nofile>") {
         // make file to store "current" status of summed histograms
-        CURRENT_OUTFILE = new TFile(OUTPUT_FILENAME.c_str(), "recreate"); 
+        CURRENT_OUTFILE = new TFile(BACKUP_FILENAME.c_str(), "recreate"); 
         if(!IsGoodTFile(CURRENT_OUTFILE)) {
             cout << "Couldn't make output file, exiting" << endl;
 				delete CURRENT_OUTFILE;
@@ -372,25 +377,6 @@ void GetAllHists(uint32_t Twait)
 	// Give servers Twait seconds to respond with histograms
 	if(VERBOSE>1) cout << "Waiting "<<Twait<<" seconds for servers to send histograms" << endl;
 	sleep(Twait);
-	// Register any histograms waiting in the queue
-	if( ! HISTOS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto h : HISTOS_TO_REGISTER){
-			RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
-		}
-		HISTOS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
-	}
-	
-	// Register any macros waiting in the queue
-	if( ! MACROS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto m : MACROS_TO_REGISTER){
-			RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
-		}
-		MACROS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
-	}
 
 	// The RootSpy GUI requires all macros and histograms be
 	// processed in the main ROOT GUI thread to avoid crashes.
@@ -427,7 +413,7 @@ void GetAllHists(uint32_t Twait)
 	if(CURRENT_OUTFILE){
 		CURRENT_OUTFILE->SaveSelf(kTRUE); // force writing out of keys and header
 		if(MAKE_BACKUP){
-			WriteArchiveFile(BACKUP_FILENAME, RS_INFO->sum_dir);
+			WriteArchiveFile(OUTPUT_FILENAME, RS_INFO->sum_dir);
 		}
 	}
     
