@@ -39,6 +39,7 @@ class Dialog_ReferencePlot:public TGMainFrame{
 		static string GetReferenceArchiveDir(void);
 
 		void DoClose(void);
+		void DoRedraw(void);
 		void DoTimer(void);
 		void CloseWindow(void);
 		
@@ -58,7 +59,6 @@ class Dialog_ReferencePlot:public TGMainFrame{
 		TGLabel* AddLabel(TGCompositeFrame* frame, string text, Int_t mode, ULong_t hints);
 		TGTextButton* AddButton(TGCompositeFrame* frame, string text, ULong_t hints);
 		void CreateGUI(void);
-
 
 		ClassDef(Dialog_ReferencePlot,1)
 };

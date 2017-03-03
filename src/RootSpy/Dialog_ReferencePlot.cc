@@ -148,6 +148,8 @@ void Dialog_ReferencePlot::CreateGUI(void)
 	// Bottom frame
 	TGHorizontalFrame *fMainBot = new TGHorizontalFrame(fMain);
 	fMain->AddFrame(fMainBot, new TGLayoutHints(kLHintsLeft | kLHintsTop | kLHintsExpandX,2,2,2,2));
+	TGTextButton *bRedraw = AddButton(fMainBot, "Redraw  ", kLHintsLeft);
+	bRedraw->Connect("Clicked()","Dialog_ReferencePlot", this, "DoRedraw()");
 	TGTextButton *bClose = AddButton(fMainBot, "Close  ", kLHintsRight);
 	bClose->Connect("Clicked()","Dialog_ReferencePlot", this, "DoClose()");
 	
@@ -208,6 +210,19 @@ void Dialog_ReferencePlot::DoClose(void)
 	UnmapWindow();
 }
 
+//---------------------------------
+// DoRedraw
+//---------------------------------
+void Dialog_ReferencePlot::DoRedraw(void)
+{
+	if(timage){
+		canvas->Clear();
+		canvas->Update();
+		timage->Draw();
+		canvas->Update();
+	}
+}
+
 //-------------------
 // DoTimer
 //-------------------
@@ -262,13 +277,8 @@ void Dialog_ReferencePlot::DoTimer(void)
 
 			canvas->Update();
 			
-// 			ifstream ifs(fname.cstr());
-// 			if(ifs.is_open()){
-// 				
-// 			}
-			
 		}
-	}
+	}	
 }
 
 
