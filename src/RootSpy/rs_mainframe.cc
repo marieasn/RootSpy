@@ -1770,6 +1770,8 @@ void rs_mainframe::CreateGUI(void)
 	TGTextButton *bRefs = AddButton(fMainBot, "Show Reference Plot       ", kLHintsLeft);
 	AddSpacer(fMainBot, 50, 1, kLHintsLeft);
 	TGTextButton *bMakeRef = AddButton(fMainBot, "Make this new Reference Plot           ", kLHintsLeft);
+	AddSpacer(fMainBot, 50, 1, kLHintsLeft);
+	TGTextButton *bDropHists = AddButton(fMainBot, "Drop Hists          ", kLHintsLeft);
 	TGTextButton *bQuit = AddButton(fMainBot, "Quit  ", kLHintsRight);
 
 	fMain->MapSubwindows();
@@ -1780,6 +1782,7 @@ void rs_mainframe::CreateGUI(void)
 	bElog->Connect("Clicked()","rs_mainframe", this, "DoELog()");
 	bRefs->Connect("Clicked()","rs_mainframe", this, "DoReferencePlot()");
 	bMakeRef->Connect("Clicked()","rs_mainframe", this, "DoMakeReferencePlot()");
+	bDropHists->Connect("Clicked()","rs_mainframe", this, "DropAllHists()");
 	fMainTab->Connect("Selected(Int_t)", "rs_mainframe", this, "DoTabSelected(Int_t)");
 	bSetArchive->Connect("Clicked()","rs_mainframe", this, "DoSetArchiveFile()");
 	fDelay->Connect("Selected(Int_t)","rs_mainframe", this, "DoSelectDelay(Int_t)");
@@ -2189,22 +2192,30 @@ void rs_mainframe::DropAllHists(void)
 	// sum and reset hists. This is done when the run number
 	// retrieved from EPICS changes to force a purge of all
 	// values from the previous run. Since it is operating on
-	// ROOT objects, it should be called from DoTimer().
+	// ROOT objects, it should be called from DoTimer() or
+	// a GUI callback element.
 	
 	cout << "Purging all histograms ...." << endl;
 	
+	// Lock ROOT
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+
 	RS_INFO->Lock();
 	
-	for(auto hdef_it : RS_INFO->histdefs){
-		hdef_t &hdef = hdef_it.second;
-		for(auto hinfo_it : hdef.hists){
-			hinfo_t &hinfo = hinfo_it.second;
+	// Delete all histograms
+	for(auto hinfo_it : RS_INFO->hinfos){
+			hinfo_t &hinfo = RS_INFO->hinfos[hinfo_it.first];
 			if(hinfo.hist     ) delete hinfo.hist;
 			if(hinfo.macroData) delete hinfo.macroData;
 			hinfo.hist      = NULL;
 			hinfo.macroData = NULL;
-		}
-		hdef.hists.clear();
+	}
+	RS_INFO->hinfos.clear();
+	
+	// Loop over hdefs and delete all sum and reset histos
+	for(auto hdef_it : RS_INFO->histdefs){
+		hdef_t &hdef = RS_INFO->histdefs[hdef_it.first];
+		hdef.hists.clear(); //hist pointers were deleted above
 		
 		if(hdef.sum_hist  ) delete hdef.sum_hist;
 		if(hdef.reset_hist) delete hdef.reset_hist;
@@ -2212,8 +2223,13 @@ void rs_mainframe::DropAllHists(void)
 		hdef.reset_hist = NULL;
 		hdef.sum_hist_present = false;
 	}
-	
+
 	RS_INFO->Unlock();
+
+	// Unlock ROOT
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	
+	cout << "Done" << endl;
 }
 
 //-------------------
