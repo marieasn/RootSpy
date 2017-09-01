@@ -171,6 +171,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	// Setup interpretor so macros don't have to include these things.
 	gROOT->ProcessLine("#include <iostream>");
 	gROOT->ProcessLine("using namespace std;");
+	gROOT->ProcessLine("extern void InsertSeriesData(string sdata);");
 
 #ifdef HAVE_EZCA
 	// Optionally try and get run number
@@ -2572,4 +2573,5 @@ static Bool_t MergeMacroFiles(TDirectory *target, TList *sourcelist)
 
 	return status;	
 }
+
 

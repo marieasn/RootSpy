@@ -105,7 +105,17 @@ int main(int narg, char *argv[])
 	// system too!
 	//delete app;
 
+	// This is here to force the rs_influxdb class and the global
+	// InsertSeriesData() routines to be linked into the RootSpy
+	// executable. Without this, they won't be pulled in by the
+	// linker and therefore won't be available to the macros
+	if(narg<0){
+		void InitSeriesData(void);
+		InitSeriesData();
+	}
+
 	_exit(0);  // Skip ROOT's installed cleanups and thereby end of program seg. faults.
+
 
 	return 0;
 }
