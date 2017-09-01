@@ -62,10 +62,7 @@ rs_influxdb::~rs_influxdb(){
 // AddData
 //---------------------
 template<typename T>
-int rs_influxdb::AddData(const string &item, const map<string, string> &tags, const map<string,T> &vals, uint32_t t){
-
-	// If user did not provide timestamp, then use system clock
-	if(t==0) t = time(NULL);
+int rs_influxdb::AddData(const string &item, const map<string, string> &tags, const map<string,T> &vals, double unix_time){
 
 	// Form POST data
 	stringstream ss;
@@ -74,7 +71,7 @@ int rs_influxdb::AddData(const string &item, const map<string, string> &tags, co
 	ss << " ";
 	for(auto v : vals) ss << v.first << "=" << v.second << ",";
 	ss.str().pop_back(); // remove last ","
-	ss << " " << t;
+	if(unix_time!=0.0) ss<<" "<<(uint64_t)(unix_time*1.0E9);  // time is in units of ns
 
 	// Send data to DB
 	return AddData(ss.str());
@@ -164,14 +161,31 @@ void InsertSeriesData(string sdata)
 //-------------------
 // InsertSeriesData
 //-------------------
-void InsertSeriesData(string item, map<string, string> tags, map<string,double> vals, uint32_t t)
+void InsertSeriesData(string item, map<string, string> tags, map<string,double> vals, double unix_time)
 {
 	if(!db) InitSeriesData();
 	if(db){
 
-		cout << "InsertSeriesData called with " << item << ", " << tags.size() << " tags, and " << vals.size() << " vals with t=" << t << endl;
+		cout << "InsertSeriesData called with " << item << ", " << tags.size() << " tags, and " << vals.size() << " vals with t=" << unix_time << endl;
 
-		db->AddData(item, tags, vals, t);
+		db->AddData(item, tags, vals, unix_time);
+	}
+}
+
+//-------------------
+// InsertSeriesMassFit
+//-------------------
+void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time)
+{
+	if(!db) InitSeriesData();
+	if(db){
+
+		cout << "InsertSeriesMassFit called: ptype=" << ptype << " mass=" << mass << " width=" << width << " t=" << unix_time << endl;
+
+		stringstream ss;
+		ss << "mass_fit,ptype=" << ptype << " mass="<<mass<<",width="<<width<<",mass_err="<<mass_err<<",width_err="<<width_err;
+		if(unix_time!=0.0) ss<<" "<<(uint64_t)(unix_time*1.0E9);  // time is in units of ns
+		db->AddData(ss.str());
 	}
 }
 

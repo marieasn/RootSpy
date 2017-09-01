@@ -67,7 +67,8 @@ using namespace std;
 //=======================================================
 // Global scope routines
 void InsertSeriesData(string sdata);
-void InsertSeriesData(string item, map<string, string> tags, map<string,double> vals, uint32_t t);
+void InsertSeriesData(string item, map<string, string> tags, map<string,double> vals, double unix_time=0.0);
+void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0);
 //=======================================================
 
 
@@ -78,7 +79,7 @@ class rs_influxdb{
 		virtual ~rs_influxdb();
 
 		template<typename T>
-		int AddData(const string &item, const map<string, string> &tags, const map<string,T> &vals, uint32_t t=0);
+		int AddData(const string &item, const map<string, string> &tags, const map<string,T> &vals, double unix_time=0.0);
 		int AddData(const string &sdata);
 
 

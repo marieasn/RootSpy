@@ -172,6 +172,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	gROOT->ProcessLine("#include <iostream>");
 	gROOT->ProcessLine("using namespace std;");
 	gROOT->ProcessLine("extern void InsertSeriesData(string sdata);");
+	gROOT->ProcessLine("extern void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0);");
 
 #ifdef HAVE_EZCA
 	// Optionally try and get run number
