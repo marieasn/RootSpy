@@ -3,6 +3,7 @@
 #include "rs_mainframe.h"
 #include "rs_info.h"
 #include "rs_cmsg.h"
+#include "rs_macroutils.h"
 #include "Dialog_SelectHists.h"
 #include "Dialog_SaveHists.h"
 #include "Dialog_IndivHists.h"
@@ -171,8 +172,22 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	// Setup interpretor so macros don't have to include these things.
 	gROOT->ProcessLine("#include <iostream>");
 	gROOT->ProcessLine("using namespace std;");
+	gROOT->ProcessLine("extern void rs_SetFlag(const string flag, int val);");
+	gROOT->ProcessLine("extern int  rs_GetFlag(const string flag);");
+	gROOT->ProcessLine("extern void rs_ResetHisto(const string hnamepath);");
+	gROOT->ProcessLine("extern void rs_RestoreHisto(const string hnamepath);");
 	gROOT->ProcessLine("extern void InsertSeriesData(string sdata);");
 	gROOT->ProcessLine("extern void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0);");
+
+	// The following ensures that the routines in rs_macroutils are
+	// linked in to the final executable
+	rs_SetFlag("RESET_AFTER_FIT", 0);
+	if(rs_GetFlag("RESET_AFTER_FIT")){
+		// (should never actually get here)
+		rs_ResetHisto("N/A");
+		rs_RestoreHisto("N/A");
+	}
+rs_SetFlag("RESET_AFTER_FIT", 1);
 
 #ifdef HAVE_EZCA
 	// Optionally try and get run number

@@ -92,6 +92,8 @@ class rs_influxdb{
 		string url;
 		CURL *curl;
 		mutex mtx;
+		
+		bool require_unix_time;
 };
 
 

@@ -49,6 +49,9 @@ rs_influxdb::rs_influxdb(const string &host, const string &database, uint32_t po
 	url = ss.str();		
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
+	// Some additional flags from environment
+	const char*	HDTSDB_REQUIRE_UNIX_TIME = getenv("HDTSDB_REQUIRE_UNIX_TIME");
+	require_unix_time = (HDTSDB_REQUIRE_UNIX_TIME==NULL ? true:atoi(HDTSDB_REQUIRE_UNIX_TIME) );
 }
 
 //---------------------
@@ -60,6 +63,12 @@ rs_influxdb::~rs_influxdb(){
 
 //---------------------
 // AddData
+//
+// Templated method that allows data of any type to be passed in
+// so long as it con be converted by stringstream. This will form
+// the data into an appropriate string so the data can be written
+// to the DB. This passes the string into the AddData(const string&)
+// method to do the actual writing to the DB.
 //---------------------
 template<typename T>
 int rs_influxdb::AddData(const string &item, const map<string, string> &tags, const map<string,T> &vals, double unix_time){
@@ -79,6 +88,10 @@ int rs_influxdb::AddData(const string &item, const map<string, string> &tags, co
 
 //---------------------
 // AddData
+//
+// Method that takes string and writes it to the DB. This would typically
+// be called from the above AddData method, but can also be used directly
+// if that's more convenient.
 //---------------------
 int rs_influxdb::AddData(const string &sdata){
 
@@ -146,6 +159,8 @@ void InitSeriesData(void)
 
 //-------------------
 // InsertSeriesData
+//
+// This is a global scope wrapper for the rs_influxdb::AddData(const string &) method
 //-------------------
 void InsertSeriesData(string sdata)
 {
@@ -160,6 +175,9 @@ void InsertSeriesData(string sdata)
 
 //-------------------
 // InsertSeriesData
+//
+// Global scope wrapper for templated rs_influxdb::AddData method, but
+// specialized for doubles.
 //-------------------
 void InsertSeriesData(string item, map<string, string> tags, map<string,double> vals, double unix_time)
 {
@@ -174,6 +192,9 @@ void InsertSeriesData(string item, map<string, string> tags, map<string,double> 
 
 //-------------------
 // InsertSeriesMassFit
+//
+// Global scope method for the special case of writing fit results to an
+// invariant mass spectrum.
 //-------------------
 void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time)
 {
@@ -181,6 +202,15 @@ void InsertSeriesMassFit(string ptype, double mass, double width, double mass_er
 	if(db){
 
 		cout << "InsertSeriesMassFit called: ptype=" << ptype << " mass=" << mass << " width=" << width << " t=" << unix_time << endl;
+		
+		if(unix_time==0.0){
+			if(db->require_unix_time ){
+				cout <<"--- Unix time from source is required. Supressing entry to DB." << endl;
+				return;
+			}else{
+				cout <<"--- Unix time not provided by source. Current time will be used." << endl;
+			}
+		}
 
 		stringstream ss;
 		ss << "mass_fit,ptype=" << ptype << " mass="<<mass<<",width="<<width<<",mass_err="<<mass_err<<",width_err="<<width_err;
