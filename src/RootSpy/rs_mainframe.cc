@@ -187,7 +187,6 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 		rs_ResetHisto("N/A");
 		rs_RestoreHisto("N/A");
 	}
-rs_SetFlag("RESET_AFTER_FIT", 1);
 
 #ifdef HAVE_EZCA
 	// Optionally try and get run number
