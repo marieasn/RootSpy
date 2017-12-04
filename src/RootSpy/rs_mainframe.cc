@@ -172,6 +172,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	// Setup interpretor so macros don't have to include these things.
 	gROOT->ProcessLine("#include <iostream>");
 	gROOT->ProcessLine("using namespace std;");
+	gROOT->ProcessLine("#define ROOTSPY_MACROS");
 	gROOT->ProcessLine("extern void rs_SetFlag(const string flag, int val);");
 	gROOT->ProcessLine("extern int  rs_GetFlag(const string flag);");
 	gROOT->ProcessLine("extern void rs_ResetHisto(const string hnamepath);");
