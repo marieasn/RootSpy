@@ -389,8 +389,11 @@ void rs_info::AddRootObjectsToList(TDirectory *dir)
 
 			TMessage *tm = new TMessage(kMESS_OBJECT);
 			tm->WriteObject(obj);
-			msg.setByteArray(tm->Buffer(),tm->Length());
+			//msg.setByteArray(tm->Buffer(),tm->Length());
+			uint8_t *buff = (uint8_t*)tm->Buffer();
+			int len = tm->Length();
 			msg.add("hnamepath", hnamepath);
+			msg.add("TMessage", buff, len);
 			msg.setText("histogram");
 			RS_CMSG->RegisterHistogram("localfile", &msg);
 
@@ -496,11 +499,11 @@ void rs_info::LoadMacro(string name, string path, string macro_data)
 	macro_names.push_back(name);
 	macro_paths.push_back(path);
 
-	cMsgMessage msg;
-	msg.add("macro_names", macro_names);
-	msg.add("macro_paths", macro_paths);
-	msg.setText("macros list");
-	RS_CMSG->RegisterMacroList("localcode", &msg);
+	cMsgMessage *msg = new cMsgMessage();
+	msg->add("macro_names", macro_names);
+	msg->add("macro_paths", macro_paths);
+	msg->setText("macros list");
+	RS_CMSG->RegisterMacroList("localcode", msg);
 
 	// for the details on TMemFile usage, see getTree()
 	TMemFile *f = new TMemFile(".rootspy_tmp.root", "RECREATE");
@@ -516,12 +519,12 @@ void rs_info::LoadMacro(string name, string path, string macro_data)
 	tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
 	f->CopyTo(*tm);
 
-	msg.payloadReset();
-	msg.setByteArray(tm->Buffer(),tm->Length());
-	msg.add("macro_name", name);
-	msg.add("macro_path", path);
-	msg.add("macro_version", (int32_t)1);
-	msg.setText("macro");
+	msg->payloadReset();
+	msg->setByteArray(tm->Buffer(),tm->Length());
+	msg->add("macro_name", name);
+	msg->add("macro_path", path);
+	msg->add("macro_version", (int32_t)1);
+	msg->setText("macro");
 
 	// clean up everything
 	if(f) {
@@ -535,7 +538,7 @@ void rs_info::LoadMacro(string name, string path, string macro_data)
 	delete macro_str;
 
 	// Register macro
-	RS_CMSG->RegisterMacro("localfile", &msg);
+	RS_CMSG->RegisterMacro("localfile", msg);
 }
 
 //---------------------------------
