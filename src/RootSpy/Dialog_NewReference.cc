@@ -298,72 +298,68 @@ void Dialog_NewReference::DoOK(void)
 	// Rename temporary filename to permanent one
 	rename(tmp_fname.c_str(), fname.c_str()); 
 
-	// Create command to send e-mail (excluding the e-mail address)
-	stringstream cmd;
-	cmd<<"(echo \"Reference histogram changed for "<<hnamepath<<":\"; ";
-	cmd<<"echo \" \"; echo \" \"; ";
-	cmd<<"echo \"This e-mail auto-generated from RootSpy. If you do not\"; ";
-	cmd<<"echo \"wish to receive these notifications then please modify\"; ";
-	cmd<<"echo \"the appropriate macro or contact davidl@jlab.org .\"; ";
-	cmd<<"echo \" \"; echo \" \"; ";
-	
-	// Add host and user
-	const char *host = getenv("HOST");
-	const char *user = getenv("USER");
-	cmd<<"echo \"Host: " << (host ? host:"unknown") << "\"; ";
-	cmd<<"echo \"User: " << (user ? user:"unknown") << "\"; ";
-	cmd<<"echo \" \"; echo \" \"; ";
-	
-	// Add current run if non-zero
-	if(RSMF->epics_run_number > 0){
-		cmd<<"echo \"Current run number from EPICS: " << RSMF->epics_run_number << "\"; ";
-		cmd<<"echo \"(n.b. this may NOT actually be the run from which the new reference was dervied!)\"; ";
+	// If there are email addresses to send to, send the notification
+	if( !emails.empty() ){
+		// Create command to send e-mail (excluding the e-mail address)
+		stringstream cmd;
+		cmd<<"(echo \"Reference histogram changed for "<<hnamepath<<":\"; ";
 		cmd<<"echo \" \"; echo \" \"; ";
-	}
-	
-	if(old_ref_exists){
-		cmd<<"echo \"PREVIOUS REFERENCE PLOT from "<<image_mod_time<<"\"; ";
-		cmd<<"echo \"(archived to: " << archivename << ")\"; ";
-		//cmd<<"uuencode --base64 "<<fname<<" previous.png; ";
-	}
+		cmd<<"echo \"This e-mail auto-generated from RootSpy. If you do not\"; ";
+		cmd<<"echo \"wish to receive these notifications then please modify\"; ";
+		cmd<<"echo \"the appropriate macro or contact davidl@jlab.org .\"; ";
+		cmd<<"echo \" \"; echo \" \"; ";
 
-	cmd<<"echo \" \"; echo \" \"; ";
-	cmd<<"echo \"NEW REFERENCE PLOT:\"; ";
-	cmd<<"echo \"(installed as: " << fname << ")\"; ";
-	//cmd<<"uuencode "<<tmp_fname<<" new.png; ";
+		// Add host and user
+		const char *host = getenv("HOST");
+		const char *user = getenv("USER");
+		cmd<<"echo \"Host: " << (host ? host:"unknown") << "\"; ";
+		cmd<<"echo \"User: " << (user ? user:"unknown") << "\"; ";
+		cmd<<"echo \" \"; echo \" \"; ";
 
-	cmd<<") | mail -s \"New Reference Plot for " << hnamepath << "\" ";
-	if(old_ref_exists) cmd << " -a " << archivename;
-	cmd << " -a " << fname;
-	
-	
-	// Make list of all addresses
-	stringstream sstr;
-	for(auto s : emails) sstr << s << ",";
-	string addresses(sstr.str());
-	addresses.pop_back();
-	
-	// Make and execute full shell command
-	stringstream my_cmd;
-	my_cmd << cmd.str() << addresses;
-	cout << my_cmd.str() << endl;
-	
+		// Add current run if non-zero
+		if(RSMF->epics_run_number > 0){
+			cmd<<"echo \"Current run number from EPICS: " << RSMF->epics_run_number << "\"; ";
+			cmd<<"echo \"(n.b. this may NOT actually be the run from which the new reference was dervied!)\"; ";
+			cmd<<"echo \" \"; echo \" \"; ";
+		}
+
+		if(old_ref_exists){
+			cmd<<"echo \"PREVIOUS REFERENCE PLOT from "<<image_mod_time<<"\"; ";
+			cmd<<"echo \"(archived to: " << archivename << ")\"; ";
+			//cmd<<"uuencode --base64 "<<fname<<" previous.png; ";
+		}
+
+		cmd<<"echo \" \"; echo \" \"; ";
+		cmd<<"echo \"NEW REFERENCE PLOT:\"; ";
+		cmd<<"echo \"(installed as: " << fname << ")\"; ";
+		//cmd<<"uuencode "<<tmp_fname<<" new.png; ";
+
+		cmd<<") | mail -s \"New Reference Plot for " << hnamepath << "\" ";
+		if(old_ref_exists) cmd << " -a " << archivename;
+		cmd << " -a " << fname;
+
+
+		// Make list of all addresses
+		stringstream sstr;
+		for(auto s : emails) sstr << s << ",";
+		string addresses(sstr.str());
+		addresses.pop_back();
+
+		// Make and execute full shell command
+		stringstream my_cmd;
+		my_cmd << cmd.str() << addresses;
+		cout << my_cmd.str() << endl;
+
 #if __APPLE__
-	_DBG_ << "mail command not run for Mac OS X since this will almost certainly" << endl;
-	_DBG_ << "just put this on a queue where no mail agent will ever pick it up and" << endl;
-	_DBG_ << "send it. For all other OSes (e.g. Linux) it will attempt to mail." << endl;
+		_DBG_ << "mail command not run for Mac OS X since this will almost certainly" << endl;
+		_DBG_ << "just put this on a queue where no mail agent will ever pick it up and" << endl;
+		_DBG_ << "send it. For all other OSes (e.g. Linux) it will attempt to mail." << endl;
 #else
-	int res = system(my_cmd.str().c_str());
-	if(res!=0) cerr << "Error executing \""<<my_cmd.str()<<"\"" << endl;
+		int res = system(my_cmd.str().c_str());
+		if(res!=0) cerr << "Error executing \""<<my_cmd.str()<<"\"" << endl;
 #endif
-	
-// 	// Loop over e-mail addresses, sending the message to each one
-// 	for(auto s : emails){
-// 		stringstream my_cmd;
-// 		my_cmd<<cmd.str()<<s;
-// 		cout<<my_cmd.str()<<endl;
-// 
-// 	}
+
+	}
 
 	CloseWindow();
 }
