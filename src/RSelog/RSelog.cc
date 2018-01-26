@@ -149,6 +149,8 @@ int main(int narg, char *argv[])
 	// Loop over hnamepaths, drawing each into the canvas and saving the image
 	int ipage=1;
 	vector<string> img_files;
+	map<string, string> hnamepath_by_img_file;
+	stringstream ss_log; // record messages about why an hnamepath is unavailable for adding to log entry
 	for(string hnamepath : HNAMEPATHS){
 	
 		cout << endl << "--- Processing " << hnamepath << " ---" << endl;
@@ -170,6 +172,7 @@ int main(int narg, char *argv[])
 		RS_INFO->Unlock();
 		if(!hdef) {
 			cerr << "Hmmm ... could not find hdef for " << hnamepath << " but it should be here!?!? -- skipping" << endl;
+			ss_log << "No hdef for \"" << hnamepath << "\"  -- skipped" << endl;
 			continue;
 		}
 		
@@ -179,6 +182,7 @@ int main(int narg, char *argv[])
 			bool good = GetHists(macro_hnamepaths,5,false);
 			if( !good ){
 				cerr << "Could not find all hnamepaths needed for macro " << hnamepath << " -- skipping " << endl;
+				ss_log << "Could not find all " << macro_hnamepaths.size() << " hnamepaths needed for macro \"" << hnamepath << "\"  -- skipped" << endl;
 				skip = true;
 			}
 		}
@@ -193,7 +197,13 @@ int main(int narg, char *argv[])
 			ExecuteMacro(RS_INFO->sum_dir, macroString);
 		}else{
 			// This is not entirely thread safe!
-			if(hdef->sum_hist) hdef->sum_hist->Draw();
+			if(hdef->sum_hist) {
+				if( hdef->sum_hist->InheritsFrom("TH2") ){
+					hdef->sum_hist->Draw("colz");
+				}else{
+					hdef->sum_hist->Draw();
+				}
+			}
 		}
 		
 		// Update canvas and save to PNG file
@@ -203,6 +213,7 @@ int main(int narg, char *argv[])
 		sprintf(fname,"%s/rs_page%02d.png", TMPDIR.c_str(), ipage);
 		c1->SaveAs(fname, "");
 		img_files.push_back(fname);
+		hnamepath_by_img_file[fname] = hnamepath;
 		ipage++;
 
 		RS_INFO->Unlock();
@@ -216,6 +227,9 @@ int main(int narg, char *argv[])
 	if(ofs.is_open()){
 		time_t t = time(NULL);
 		ofs << "Hall-D Monitoring Plots for " << ctime(&t);
+		ofs << "<p>" << img_files.size() << "/" << HNAMEPATHS.size() << " pages generated </p>" << endl;
+		ofs << "<pre>" << ss_log.str() << "</pre>" << endl;
+		ofs << "<hr>" << endl;
 		ofs.close();
 		
 		stringstream cmd;
@@ -231,7 +245,7 @@ int main(int narg, char *argv[])
 		}
 
 		// attach all plots
-		for( string s : img_files ) cmd << " -a " << s;
+		for( string s : img_files ) cmd << " -a " << s << " -c \"" << hnamepath_by_img_file[s] << "\"";
 		
 		// Save command in tmp directory for debugging
 		ofstream ofcmd((TMPDIR + "/occ_elog_cmd").c_str());
