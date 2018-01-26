@@ -1390,7 +1390,7 @@ void rs_mainframe::ELogEntryThread(void)
 	cmd << "hdlog -c RSelog -L " << ELOG_NAME;
 	if(ELOG_NOTIFY) cmd << " -e " << ELOG_EMAIL;
 	if(epics_run_number>0) cmd << " -R " << epics_run_number;
-	for( string s : hnamepaths ) cmd << " -H " << s;
+	for( string s : hnamepaths ) cmd << " -H \"" << s << "\"";
 	
 	// Execute command
 	system(cmd.str().c_str());
