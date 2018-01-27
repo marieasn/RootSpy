@@ -72,6 +72,11 @@ class rs_cmsg:public cMsgCallback{
 		uint16_t udpport;
 		std::thread *udpthread;
 		bool stop_udpthread;
+
+		rs_netdevice *tcpdev;
+		uint16_t tcpport;
+		std::thread *tcpthread;
+		bool stop_tcpthread;
 		
 	public:
 
@@ -97,6 +102,7 @@ class rs_cmsg:public cMsgCallback{
 		void SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool request_macro);
 
 		void DirectUDPServerThread(void);
+		void DirectTCPServerThread(void);
 
 	private:
 		cMsg *cMsgSys;

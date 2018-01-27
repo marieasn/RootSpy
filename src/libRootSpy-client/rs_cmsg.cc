@@ -76,6 +76,11 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	udpthread      = NULL;
 	stop_udpthread = false;
 
+	tcpdev         = NULL;
+	tcpport        = 0;
+	tcpthread      = NULL;
+	stop_tcpthread = false;
+
 	// Connect to cMsg system
 	is_online = connect_to_cmsg;
 	string myDescr = "Access ROOT objects in a running program";
@@ -126,12 +131,15 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		cout<<"---------------------------------------------------"<<endl;	
 	}
 	
-	// Getting list of network devices for direct UDP
+	// Getting list of network devices for direct UDP/TCP
 	rs_netdevice::GetDeviceList(netdevices);
-	rs_netdevice::PrintDevices(netdevices, "Devices available for direct UDP");
+	rs_netdevice::PrintDevices(netdevices, "Devices available for direct UDP/TCP");
 	if(!netdevices.empty()){
 		// Launch thread to listen for direct UDP packets
 		udpthread = new thread(&rs_cmsg::DirectUDPServerThread, this);
+
+		// Launch thread to listen for direct UDP packets
+		tcpthread = new thread(&rs_cmsg::DirectTCPServerThread, this);
 	}
 }
 
@@ -154,6 +162,11 @@ rs_cmsg::~rs_cmsg()
 	if(udpthread){
 		stop_udpthread = true;
 		udpthread->join();
+	}
+
+	if(tcpthread){
+		stop_tcpthread = true;
+		tcpthread->join();
 	}
 	
 	// Optionally write out stats to ROOT file
@@ -242,6 +255,10 @@ void rs_cmsg::BuildRequestHistogram(cMsgMessage &msg, string servername, string 
 	 if(udpdev){
     	msg.add("udpaddr", udpdev->addr32);
     	msg.add("udpport", udpport);
+	}
+	 if(tcpdev){
+    	msg.add("tcpaddr", tcpdev->addr32);
+    	msg.add("tcpport", tcpport);
 	}
 }
 
@@ -1609,7 +1626,7 @@ void rs_cmsg::DirectUDPServerThread(void)
 	// will not be used.
 	udpdev = dev;
 	
-	uint32_t buff_size = 10000000;
+	uint32_t buff_size = 100000;
 	uint8_t *buff = new uint8_t[buff_size];
 	
 	while(!stop_udpthread){
@@ -1670,5 +1687,161 @@ void rs_cmsg::DirectUDPServerThread(void)
 	delete[] buff;
 }
 
+
+//---------------------------------
+// DirectTCPServerThread
+//---------------------------------
+void rs_cmsg::DirectTCPServerThread(void)
+{
+	/// This method is run in a thread to listen for
+	/// UDP packets sent here directly from a remote
+	/// histogram producer. This allows the bulky
+	/// histogram messages to be sent this way instead
+	/// of through the cMsg server.
+
+	if(netdevices.empty()) return; // extra bomb-proofing
+
+	rs_netdevice *dev = netdevices[0];
+
+	// Create socket
+	int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if(fd<0){
+		perror("unable to create socket for TCP direct!");
+		return;
+	}
+	
+	int opt = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,  &opt, sizeof(opt)) ){
+		perror("setsockopt failed");
+		close(fd);
+		return;
+	}
+	
+	// Make socket non-blocking
+	if(fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) < 0 ){
+		perror("can't set socket to non-blocking!");
+		return;
+	}
+	
+	// Bind to address and have system assign port number
+	struct sockaddr_in myaddr;
+	memset((char*)&myaddr, 0, sizeof(myaddr));
+	myaddr.sin_family = AF_INET;
+	myaddr.sin_addr.s_addr = htonl(INADDR_ANY); // accept packets from any device
+	myaddr.sin_port = 0; // let system assign a port
+	if( ::bind(fd, (struct sockaddr*)&myaddr, sizeof(myaddr)) < 0){
+		perror("bind failed");
+		close(fd);
+		return;
+	}
+	
+	// Get port number
+	socklen_t socklen = sizeof(myaddr);
+	if(getsockname(fd, (struct sockaddr*)&myaddr, &socklen) < 0){
+		perror("getsockname failed");
+		close(fd);
+		return;
+	}
+	tcpport = myaddr.sin_port;
+	
+	// Listen for connections
+	if( ::listen(fd, 32) < 0 ){
+		perror("listen failed");
+		close(fd);
+		return;
+	}
+
+	cout << "Launched TCP server using " << dev->name << " - " << dev->ip_dotted << " : " << tcpport << endl;
+	
+	// tcpdev is used as flag to indicate we're able to
+	// receive histograms this way. If we don't get here,
+	// it will be left as NULL and the direct TCP feature
+	// will not be used.
+	tcpdev = dev;
+	
+	uint32_t buff_size = 10000000;
+	uint8_t *buff = new uint8_t[buff_size];
+	
+	while(!stop_tcpthread){
+	
+		// Try and read some data
+		socklen_t myaddr_len = sizeof(myaddr);
+		int fd_new = accept(fd, (struct sockaddr*)&myaddr, &myaddr_len);
+		if(fd_new < 0){
+			// Seems dangerous to check errno here due to
+			// there being multiple threads ....
+			if( (errno==EAGAIN) || (errno==EWOULDBLOCK) ){
+				// no data. sleep for 10ms
+				usleep(10000);
+				continue;
+			}else{
+				perror("receiving on rootspy direct TCP");
+				break;
+			}
+		}
+		
+		int bytes_recvd = read( fd_new, buff, buff_size);
+		
+		if(verbose>4) _DBG_ << "received TCP with " << bytes_recvd << " bytes" << endl;
+		
+		// Note: We reuse the rs_udpmessage data structure here since an rs_tcpmessage would be identical
+		rs_udpmessage *rsudp = (rs_udpmessage*)buff;
+		string mtype = "unknown";
+		switch(rsudp->mess_type){
+			case kUDP_HISTOGRAM: mtype="histogram"; break;
+			case kUDP_MACRO    : mtype="macro";     break;
+		}
+		string hnamepath = (const char*)rsudp->hnamepath;
+		string sender = (const char*)rsudp->sender;
+		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
+		if(verbose>2) _DBG_ << "TCP: hnamepath=" << rsudp->hnamepath << " type=" << mtype << " from " << sender << endl;
+		
+		// It's possible large messages could be broken up by the network into
+		// chunks arriving at different times. Verify that we have the whole 
+		// buffer.
+		int buff_len_transferred = bytes_recvd + sizeof(uint32_t*) - sizeof(rs_udpmessage);
+		for(int i=0; i<100; i++){
+			if( (uint32_t)buff_len_transferred >= rsudp->buff_len ) break;
+			
+			int my_bytes_recvd = read( fd_new, &buff[bytes_recvd], buff_size-bytes_recvd);
+			if( my_bytes_recvd < 0) { usleep(1); continue; }
+			bytes_recvd += my_bytes_recvd;
+			buff_len_transferred = bytes_recvd + sizeof(uint32_t*) - sizeof(rs_udpmessage);
+			if(verbose>4) _DBG_ << "added to TCP buffer " << my_bytes_recvd << " bytes (" << bytes_recvd << " total)" << endl;
+		}
+
+		if( (uint32_t)buff_len_transferred < rsudp->buff_len ){
+			cerr << "ERROR: TCP buffer received smaller than expected (" << buff_len_transferred << " < " << rsudp->buff_len << ")" << endl;
+			cerr << "       message with hnamepath: " << hnamepath << " discarded" << endl;
+			close( fd_new );
+			continue;
+		}
+
+		// Write info into a cMsg object so we can
+		// let the same RegisterHistogram method handle
+		// it as it handles histograms coming from cMsg itself.
+		cMsgMessage *cmsg = new cMsgMessage();
+		cmsg->setSubject(myname);
+		cmsg->setType(sender);
+		cmsg->setText("histogram");
+		cmsg->add("hnamepath", hnamepath);
+		cmsg->add("TMessage", buff8, rsudp->buff_len);
+		cmsg->add("time_sent", rsudp->time_sent);
+		cmsg->add("time_requester", rsudp->time_requester);
+		cmsg->add("time_received", rsudp->time_received);
+
+		REGISTRATION_MUTEX.lock();
+		HISTOS_TO_REGISTER[cmsg] = sender; // defer to main ROOT thread
+		REGISTRATION_MUTEX.unlock();
+
+		// Launch separate thread to handle this
+		//thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
+		//t.detach();
+		
+	}
+	
+	close(fd);
+	delete[] buff;
+}
 
 

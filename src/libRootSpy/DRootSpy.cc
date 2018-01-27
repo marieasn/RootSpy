@@ -550,8 +550,19 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 					_DBG_ << "request has UDP info: " << ip_dotted << " : " << port << endl;
 				}
 				if(VERBOSE>1) _DBG_ << "responding via UDP to \"get hist\" for " << hnamepath << " ..." << endl;
-//				thread t(&DRootSpy::getHistUDP, this, *response, hnamepath, addr, port);
-				thread t(&DRootSpy::getHistUDP, this, (void*)response, hnamepath, addr, port);
+				uint32_t tcpaddr = 0;
+				uint16_t tcpport = 0;
+				try{
+					tcpaddr = msg->getUint32("tcpaddr");
+					tcpport = msg->getUint16("tcpport");
+					if(VERBOSE>1){
+						struct in_addr sin_addr;
+						sin_addr.s_addr = ntohl(tcpaddr);
+						string ip_dotted = inet_ntoa(sin_addr);
+						_DBG_ << "request has TCP info: " << ip_dotted << " : " << tcpport << endl;
+					}
+				}catch(...){}
+				thread t(&DRootSpy::getHistUDP, this, (void*)response, hnamepath, addr, port, tcpaddr, tcpport);
 				t.detach();
 				response = NULL; // thread owns response now
 			}catch(...){
@@ -756,7 +767,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 // getHistUDP
 //---------------------------------
 //TODO: documentation comment.
-void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, uint16_t port)
+void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, uint16_t port, uint32_t tcpaddr32, uint16_t tcpport)
 // void DRootSpy::getHistUDP(cMsgMessage &response, string hnamepath, uint32_t addr32, uint16_t port)
 {
 	/// This method will be run in a separate thread.
@@ -812,8 +823,11 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 	// We limit the payload size to 65000 and if it is
 	// larger than that, we revert to sending it as
 	// a cMsg.
-	if(len>65000){
-		
+	if( (len>65000) && (tcpaddr32==0 ) ){
+	
+		// This is a last resort and will almost certainly leave the cMsg sever
+		// in a stalled state.
+
 		// Send as cMsg
 		response->setText("histogram");
 		response->add("hnamepath", hnamepath);
@@ -822,15 +836,15 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 		// Finished with TMessage object. Free it and release lock on ROOT global
 		delete tm;
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
-		
+
 		if(VERBOSE>2) _DBG_ << "Message size too big for UDP (" << len << ">65000) sending as cMsg ..." << endl;
 		uint64_t tsending = (uint64_t)time(NULL);
 		response->add("time_sent",  tsending);
 		cMsgSys->send(*response);
-		
+
 	}else{
 	
-		// Send as UDP packet
+		// Send as UDP or TCP packet
 
 		string sender = response->getType();
 	
@@ -855,24 +869,58 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 		delete tm;
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 
-		// Send UDP packet
-		struct sockaddr_in si_other;
-		int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-		if(fd<0){
-			_DBG_ << "Can't create socket!" << endl;
+		if( len<65000 ){
+
+			// Send UDP packet
+
+			struct sockaddr_in si_other;
+			int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+			if(fd<0){
+				_DBG_ << "Can't create socket!" << endl;
+				delete[] udpbuff;
+				return;
+			}
+			memset((char*)&si_other, 0, sizeof(si_other));
+			si_other.sin_family = AF_INET;
+			si_other.sin_port = port;
+			si_other.sin_addr.s_addr = htonl(addr32);
+
+			if(VERBOSE>2) _DBG_ << "Sending UDP packet with len = " <<udpbuff_len << endl;
+			sendto(fd, udpbuff, udpbuff_len, 0, (sockaddr*)&si_other, sizeof(si_other));
+
 			delete[] udpbuff;
-			return;
+			close(fd);
+		}else{
+
+			// Send TCP packet
+			// n.b. this is not terribly efficient since it re-establishes a tcp
+			// connection for every histogram sent. It's simpler for now though.
+
+			struct sockaddr_in si_other;
+			int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if(fd<0){
+				_DBG_ << "Can't create socket!" << endl;
+				delete[] udpbuff;
+				return;
+			}
+			memset((char*)&si_other, 0, sizeof(si_other));
+			si_other.sin_family = AF_INET;
+			si_other.sin_port = tcpport;
+			si_other.sin_addr.s_addr = htonl(tcpaddr32);
+			
+			if( connect(fd, (struct sockaddr*)&si_other, sizeof(si_other)) < 0 ){
+				cerr << "Unable to connect to TCP server!" << endl;
+				delete[] udpbuff;
+				close(fd);
+				return;
+			}
+
+			if(VERBOSE>2) _DBG_ << "Sending TCP packet with len = " <<udpbuff_len << endl;
+			send(fd, udpbuff, udpbuff_len, 0);
+
+			delete[] udpbuff;
+			close(fd);
 		}
-		memset((char*)&si_other, 0, sizeof(si_other));
-		si_other.sin_family = AF_INET;
-		si_other.sin_port = port;
-		si_other.sin_addr.s_addr = htonl(addr32);
-
-		if(VERBOSE>2) _DBG_ << "Sending UDP packet with len = " <<udpbuff_len << endl;
-		sendto(fd, udpbuff, udpbuff_len, 0, (sockaddr*)&si_other, sizeof(si_other));
-
-		delete[] udpbuff;
-		close(fd);
 	}
 }
 
