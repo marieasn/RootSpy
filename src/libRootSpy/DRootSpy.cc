@@ -176,6 +176,7 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 
 	// Make connection to cMsg system and subscribe to messages
 	cMsgSys = NULL;
+	cMsgSubConfig = NULL;
 	done= false;
 	ConnectToCMSG();
 	
@@ -275,6 +276,8 @@ DRootSpy::~DRootSpy()
 	// Stop cMsg system
 	cMsgSys->stop();
 	cMsgSys->disconnect();
+	
+	if(cMsgSubConfig) delete cMsgSubConfig;
 
 //	sem_destroy(&RootSpy_final_sem);
 	
@@ -330,12 +333,20 @@ void DRootSpy::ConnectToCMSG(void)
 	cout<<"---------------------------------------------------"<<endl;
 	cout<<"rootspy name: \""<<myname<<"\""<<endl;
 	cout<<"---------------------------------------------------"<<endl;
+	
+	// Set subscription config parameters to prevent
+	// message queue from filling up. This will drop
+	// messages as needed.
+	cMsgSubConfig = new cMsgSubscriptionConfig;
+	cMsgSubConfig->setMaySkip(true);
+	cMsgSubConfig->setSkipSize(1);
+	cMsgSubConfig->setMaxCueSize(2);
 
 	// Subscribe to generic rootspy info requests
-	subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
+	subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, cMsgSubConfig));
 
 	// Subscribe to rootspy requests specific to us
-	subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
+	subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, cMsgSubConfig));
 	
 	// Start cMsg system
 	cMsgSys->start();

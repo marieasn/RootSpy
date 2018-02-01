@@ -137,6 +137,7 @@ class DRootSpy:public cMsgCallback{
  private:
     //class variables
     cMsg *cMsgSys;
+	 cMsgSubscriptionConfig *cMsgSubConfig;
     bool own_gROOTSPY_RW_LOCK;
     TDirectory *hist_dir; // save value of gDirectory used when forming response to "list hist" request
     string myname;

@@ -106,6 +106,7 @@ class rs_cmsg:public cMsgCallback{
 
 	private:
 		cMsg *cMsgSys;
+		cMsgSubscriptionConfig *cMsgSubConfig;
 		
 		bool is_online;
 		string myname;

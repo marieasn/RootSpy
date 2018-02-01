@@ -70,6 +70,7 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	verbose = 2; // higher values=more messages. 0=minimal messages
 	hist_default_active = true;
 	program_name = "rootspy-client"; // should be overwritten by specific program
+	cMsgSubConfig = NULL;
 
 	udpdev         = NULL;
 	udpport        = 0;
@@ -112,12 +113,20 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		cout<<"   cMsg name: \""<<name<<"\""<<endl;
 		cout<<"rootspy name: \""<<myname<<"\""<<endl;
 		cout<<"---------------------------------------------------"<<endl;
+	
+		// Set subscription config parameters to prevent
+		// message queue from filling up. This will drop
+		// messages as needed.
+		cMsgSubConfig = new cMsgSubscriptionConfig;
+		cMsgSubConfig->setMaySkip(true);
+		cMsgSubConfig->setSkipSize(1);
+		cMsgSubConfig->setMaxCueSize(2);
 
 		// Subscribe to generic rootspy info requests
-		subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
+		subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, cMsgSubConfig));
 
 		// Subscribe to rootspy requests specific to us
-		subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
+		subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, cMsgSubConfig));
 		
 		// Start cMsg system
 		cMsgSys->start();
@@ -158,6 +167,8 @@ rs_cmsg::~rs_cmsg()
 		cMsgSys->stop();
 		cMsgSys->disconnect();
 	}
+	
+	if( cMsgSubConfig ) delete cMsgSubConfig;
 	
 	if(udpthread){
 		stop_udpthread = true;
