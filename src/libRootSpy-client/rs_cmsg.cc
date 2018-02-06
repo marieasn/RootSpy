@@ -123,10 +123,12 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		cMsgSubConfig->setMaxCueSize(2);
 
 		// Subscribe to generic rootspy info requests
-		subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, cMsgSubConfig));
+		//subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, cMsgSubConfig));
+		subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
 
 		// Subscribe to rootspy requests specific to us
-		subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, cMsgSubConfig));
+		//subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, cMsgSubConfig));
+		subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
 		
 		// Start cMsg system
 		cMsgSys->start();
