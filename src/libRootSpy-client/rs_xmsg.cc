@@ -1,6 +1,6 @@
 // $Id$
 //
-//    File: rs_cmsg.cc
+//    File: rs_xmsg.cc
 // Created: Thu Aug 27 13:40:02 EDT 2009
 // Creator: davidl (on Darwin harriet.jlab.org 9.8.0 i386)
 //
@@ -9,10 +9,9 @@
 #include <fcntl.h>
 
 #include "RootSpy.h"
-#include "rs_cmsg.h"
+#include "rs_xmsg.h"
 #include "rs_info.h"
 #include "tree_info_t.h"
-#include "cMsg.h"
 
 #include <iostream>
 #include <iomanip>
@@ -31,11 +30,11 @@ using namespace std;
 #include <TKey.h>
 
 mutex REGISTRATION_MUTEX;
-map<void*, string> HISTOS_TO_REGISTER;
-map<void*, string> MACROS_TO_REGISTER;
+set<rs_serialized*> HISTOS_TO_REGISTER;
+set<rs_serialized*> MACROS_TO_REGISTER;
 
 
-double rs_cmsg::start_time=0.0; // overwritten on fist call to rs_cmsg::GetTime()
+double rs_xmsg::start_time=0.0; // overwritten on first call to rs_xmsg::GetTime()
 
 //// See http://www.jlab.org/Hall-D/software/wiki/index.php/Serializing_and_deserializing_root_objects
 //class MyTMessage : public TMessage {
@@ -62,15 +61,14 @@ string join( vector<string>::const_iterator begin, vector<string>::const_iterato
 
 
 //---------------------------------
-// rs_cmsg    (Constructor)
+// rs_xmsg    (Constructor)
 //---------------------------------
-rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
+rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 {
 
 	verbose = 2; // higher values=more messages. 0=minimal messages
 	hist_default_active = true;
 	program_name = "rootspy-client"; // should be overwritten by specific program
-	cMsgSubConfig = NULL;
 
 	udpdev         = NULL;
 	udpport        = 0;
@@ -81,23 +79,26 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	tcpport        = 0;
 	tcpthread      = NULL;
 	stop_tcpthread = false;
+	
+	// Extract name of proxy to connect to
+	string proxy_host = udl.length()>7 ? udl.substr(7):"localhost";
+	auto bind_to = xmsg::util::to_host_addr(proxy_host);
 
-	// Connect to cMsg system
-	is_online = connect_to_cmsg;
-	string myDescr = "Access ROOT objects in a running program";
-	cMsgSetDebugLevel(CMSG_DEBUG_WARN); // print most messages
-	cMsgSys = new cMsg(udl, name, myDescr);   	// the cMsg system object, where
-	try {                         	           	//  all args are of type string
-		if(connect_to_cmsg) cMsgSys->connect(); 
-	} catch (cMsgException e) {
-		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to cMsg system! __________________"<<endl;
-		cout << e.toString() << endl; 
+
+	// Connect to xmsg system
+	is_online = connect_to_xmsg;
+
+	try {
+		xmsgp = new xMsg(name);
+		if(connect_to_xmsg) xmsgp->connect(bind_to); 
+	} catch ( std::exception& e ) {
+		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to xmsg system! __________________"<<endl;
+		cout << e.what() << endl; 
 		cout<<endl<<endl<<endl<<endl;
 
-		// we need to connect to cMsg to run
+		// we need to connect to xmsg to run
 		is_online = false;
 		exit(0);          
-		//return;
 	}
 	
 	if(is_online){
@@ -110,68 +111,65 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		myname = string(str);
 
 		cout<<"---------------------------------------------------"<<endl;
-		cout<<"   cMsg name: \""<<name<<"\""<<endl;
+		cout<<"   xmsg name: \""<<name<<"\""<<endl;
 		cout<<"rootspy name: \""<<myname<<"\""<<endl;
 		cout<<"---------------------------------------------------"<<endl;
 	
-		// Set subscription config parameters to prevent
-		// message queue from filling up. This will drop
-		// messages as needed.
-		cMsgSubConfig = new cMsgSubscriptionConfig;
-		cMsgSubConfig->setMaySkip(true);
-		cMsgSubConfig->setSkipSize(1);
-		cMsgSubConfig->setMaxCueSize(2);
-
 		// Subscribe to generic rootspy info requests
-		//subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, cMsgSubConfig));
-		subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
+		auto connection = xmsgp->connect(bind_to);
+		auto topic_all = xmsg::Topic::build("rootspy", "rootspy", "*");
+		subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), *this).release() );
 
-		// Subscribe to rootspy requests specific to us
-		//subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, cMsgSubConfig));
-		subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
+		// Subscribe to rootspy requests specific to me
+		connection = xmsgp->connect(bind_to); // xMsg requires unique connections
+		auto topic_me = xmsg::Topic::build("rootspy", myname, "*");
+		subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), *this).release() );
 		
-		// Start cMsg system
-		cMsgSys->start();
+		// Create connection for outgoing messages
+		pub_con = new xmsg::ProxyConnection( xmsgp->connect(bind_to) );
 		
 		// Broadcast request for available servers
 		PingServers();
+
 	}else{
 		cout<<"---------------------------------------------------"<<endl;
-		cout<<"  Not connected to cMsg system. Only local histos  "<<endl;
+		cout<<"  Not connected to xmsg system. Only local histos  "<<endl;
 		cout<<"  and macros will be available.                    "<<endl;
 		cout<<"---------------------------------------------------"<<endl;	
 	}
-	
+
+// DISABLE THIS HERE SINCE IT IS ALREADY IN rs_cmsg. MAYBE WE
+// WON'T NEED IT AT ALL!
+# if 0
 	// Getting list of network devices for direct UDP/TCP
 	rs_netdevice::GetDeviceList(netdevices);
 	rs_netdevice::PrintDevices(netdevices, "Devices available for direct UDP/TCP");
 	if(!netdevices.empty()){
-		// Launch thread to listen for direct UDP packets
-		udpthread = new thread(&rs_cmsg::DirectUDPServerThread, this);
 
 		// Launch thread to listen for direct UDP packets
-		tcpthread = new thread(&rs_cmsg::DirectTCPServerThread, this);
+		udpthread = new thread(&rs_xmsg::DirectUDPServerThread, this);
+
+		// Launch thread to listen for direct UDP packets
+		tcpthread = new thread(&rs_xmsg::DirectTCPServerThread, this);
 	}
+#endif
+
 }
 
 //---------------------------------
-// ~rs_cmsg    (Destructor)
+// ~rs_xmsg    (Destructor)
 //---------------------------------
-rs_cmsg::~rs_cmsg()
+rs_xmsg::~rs_xmsg()
 {
-	if(is_online) {
-		// Unsubscribe
-		for(unsigned int i=0; i<subscription_handles.size(); i++){
-			cMsgSys->unsubscribe(subscription_handles[i]);
-		}
-
-		// Stop cMsg system
-		cMsgSys->stop();
-		cMsgSys->disconnect();
+	// Unsubscribe
+	// (n.b. can't use "auto" here since that would require a copy of the unique_ptr
+	// which causes a compiler error)
+	for( auto sub : subscription_handles ){
+		xmsgp->unsubscribe( std::unique_ptr<xmsg::Subscription>( sub ) );
 	}
 	
-	if( cMsgSubConfig ) delete cMsgSubConfig;
-	
+	delete xmsgp;
+		
 	if(udpthread){
 		stop_udpthread = true;
 		udpthread->join();
@@ -185,7 +183,7 @@ rs_cmsg::~rs_cmsg()
 	// Optionally write out stats to ROOT file
 	const char *ROOTSPY_DEBUG = getenv("ROOTSPY_DEBUG");
 	if(ROOTSPY_DEBUG!=NULL){
-		string fname = strlen(ROOTSPY_DEBUG)>0 ? ROOTSPY_DEBUG:"rsclient_stats_cmsg.root";
+		string fname = strlen(ROOTSPY_DEBUG)>0 ? ROOTSPY_DEBUG:"rsclient_stats_xmsg.root";
 
 		// Grab ROOT lock and open output file
 		pthread_rwlock_wrlock(ROOT_MUTEX);
@@ -237,15 +235,51 @@ rs_cmsg::~rs_cmsg()
 	}
 }
 
+//---------------------------------
+// SendMessage
+//
+// This is a wrapper for the templated version of this method
+// defined in the header file. This is useful for commands that
+// do not require an associated payload. Since xmsg requires
+// a non-NULL payload, we just create an empty one for it.
+//
+// See comments for templated SendMessage method in header for
+// details.
+//---------------------------------
+void rs_xmsg::SendMessage(string servername, string command)
+{
+	std::vector<std::uint8_t> buffer;
+	SendMessage( servername, command, std::move(buffer), "none" );
+}
+
+//---------------------------------
+// SendMessage
+//
+// This is another wrapper for the templated version of this method
+// defined in the header file. This is useful for commands that
+// DO require an associated payload, but have it in the form of
+// and xMsg Payload object. This will serialize the payload object
+// and pass it into the templated mathod
+//
+// See comments for templated SendMessage method in header for
+// details.
+//---------------------------------
+void rs_xmsg::SendMessage(string servername, string command, xmsg::proto::Payload &payload)
+{
+	auto buffer = std::vector<std::uint8_t>(payload.ByteSize());
+	payload.SerializeToArray( buffer.data(), buffer.size() );
+	SendMessage( servername, command, std::move(buffer), "xmsg::proto::Payload" );
+}
+
 
 //////////////////////////////////////
 //// helper functions
 //////////////////////////////////////
-
+#if 0
 //---------------------------------
 // BuildRequestHists
 //---------------------------------
-void rs_cmsg::BuildRequestHists(cMsgMessage &msg, string servername)
+void rs_xmsg::BuildRequestHists(xmsg::Message &msg, string servername)
 {
     msg.setSubject(servername);
     msg.setType(myname);
@@ -257,7 +291,7 @@ void rs_cmsg::BuildRequestHists(cMsgMessage &msg, string servername)
 //---------------------------------
 // BuildRequestHistogram
 //---------------------------------
-void rs_cmsg::BuildRequestHistogram(cMsgMessage &msg, string servername, string hnamepath)
+void rs_xmsg::BuildRequestHistogram(xmsg::Message &msg, string servername, string hnamepath)
 {
     msg.setSubject(servername);
     msg.setType(myname);
@@ -278,7 +312,7 @@ void rs_cmsg::BuildRequestHistogram(cMsgMessage &msg, string servername, string 
 //---------------------------------
 // BuildRequestHistograms
 //---------------------------------
-void rs_cmsg::BuildRequestHistograms(cMsgMessage &msg, string servername, vector<string> &hnamepaths)
+void rs_xmsg::BuildRequestHistograms(xmsg::Message &msg, string servername, vector<string> &hnamepaths)
 {
     msg.setSubject(servername);
     msg.setType(myname);
@@ -291,7 +325,7 @@ void rs_cmsg::BuildRequestHistograms(cMsgMessage &msg, string servername, vector
 //---------------------------------
 // BuildRequestTreeInfo
 //---------------------------------
-void rs_cmsg::BuildRequestTreeInfo(cMsgMessage &msg, string servername)
+void rs_xmsg::BuildRequestTreeInfo(xmsg::Message &msg, string servername)
 {
     msg.setSubject(servername);
     msg.setType(myname);
@@ -303,7 +337,7 @@ void rs_cmsg::BuildRequestTreeInfo(cMsgMessage &msg, string servername)
 //---------------------------------
 // BuildRequestTree
 //---------------------------------
-void rs_cmsg::BuildRequestTree(cMsgMessage &msg, string servername, string tree_name, string tree_path, int64_t num_entries)
+void rs_xmsg::BuildRequestTree(xmsg::Message &msg, string servername, string tree_name, string tree_path, int64_t num_entries)
 {
     msg.setSubject(servername);
     msg.setType(myname);
@@ -318,7 +352,7 @@ void rs_cmsg::BuildRequestTree(cMsgMessage &msg, string servername, string tree_
 //---------------------------------
 // BuildRequestMacroList
 //---------------------------------
-void rs_cmsg::BuildRequestMacroList(cMsgMessage &msg, string servername)
+void rs_xmsg::BuildRequestMacroList(xmsg::Message &msg, string servername)
 {
     msg.setSubject(servername);
     msg.setType(myname);
@@ -330,7 +364,7 @@ void rs_cmsg::BuildRequestMacroList(cMsgMessage &msg, string servername)
 //---------------------------------
 // BuildRequestMacro
 //---------------------------------
-void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnamepath)
+void rs_xmsg::BuildRequestMacro(xmsg::Message &msg, string servername, string hnamepath)
 {
     msg.setSubject(servername);
     msg.setType(myname);
@@ -340,7 +374,7 @@ void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnam
     msg.add("hnamepath", hnamepath);
 	 if(verbose>4) _DBG_ << "preparing to request macro with hnamepath=\"" << hnamepath << "\"" << endl;
 }
-
+#endif
 
 //////////////////////////////////////
 //// remote commands
@@ -349,166 +383,161 @@ void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnam
 //---------------------------------
 // PingServers
 //---------------------------------
-void rs_cmsg::PingServers(void)
+void rs_xmsg::PingServers(void)
 {
-	cMsgMessage whosThere;
-	whosThere.setSubject("rootspy");
-	whosThere.setType(myname);
-	whosThere.setText("who's there?");
-	uint64_t tsent = (uint64_t)time(NULL);
-	whosThere.add("time_sent", tsent);
-	
-	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << whosThere.getText() << "\"" << endl;
-		cMsgSys->send(&whosThere);
-	}
+	SendMessage("rootspy", "who's there?");
 }
 
 //---------------------------------
 // RequestHists
 //---------------------------------
-void rs_cmsg::RequestHists(string servername)
+void rs_xmsg::RequestHists(string servername)
 {
-	cMsgMessage listHists;
-	BuildRequestHists(listHists, servername);	
-	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << "\"" << endl;
-		cMsgSys->send(&listHists);
-	}
+	SendMessage(servername, "list hists");
 }
 
 //---------------------------------
 // RequestHistogram
 //---------------------------------
-void rs_cmsg::RequestHistogram(string servername, string hnamepath)
+void rs_xmsg::RequestHistogram(string servername, string hnamepath)
 {
-	cMsgMessage requestHist;
-	BuildRequestHistogram(requestHist, servername, hnamepath);
-	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\" for " << hnamepath << endl;
-		cMsgSys->send(&requestHist);
-		requested_histograms[hnamepath]++;
+	xmsg::proto::Payload payload;
+	AddToPayload(payload, "hnamepath", hnamepath);
+	if(udpdev){
+		::google::protobuf::int64 udpaddr = udpdev->addr32;
+    	AddToPayload(payload, "udpaddr", udpaddr);
+    	AddToPayload(payload, "udpport", udpport);
 	}
+	 if(tcpdev){
+		::google::protobuf::int64 tcpaddr = tcpdev->addr32;
+    	AddToPayload(payload, "tcpaddr", tcpaddr);
+    	AddToPayload(payload, "tcpport", tcpport);
+	}
+	SendMessage(servername, "get hist", payload);
+
+	if(is_online) requested_histograms[hnamepath]++;
 }
 
 //---------------------------------
 // RequestHistograms
 //---------------------------------
-void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
+void rs_xmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
 {
-	cMsgMessage requestHist;
-	BuildRequestHistograms(requestHist, servername, hnamepaths);
-	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << endl;
-		cMsgSys->send(&requestHist);
-		for(uint32_t i=0; i<hnamepaths.size(); i++) requested_histograms[hnamepaths[i]]++;
+	xmsg::proto::Payload payload;
+	AddToPayload(payload, "hnamepaths", hnamepaths);
+	if(udpdev){
+		::google::protobuf::int64 udpaddr = udpdev->addr32;
+    	AddToPayload(payload, "udpaddr", udpaddr);
+    	AddToPayload(payload, "udpport", udpport);
 	}
+	 if(tcpdev){
+		::google::protobuf::int64 tcpaddr = tcpdev->addr32;
+    	AddToPayload(payload, "tcpaddr", tcpaddr);
+    	AddToPayload(payload, "tcpport", tcpport);
+	}
+	SendMessage(servername, "get hists", payload);
+
+	if(is_online) for(auto h : hnamepaths) requested_histograms[h]++;
 }
 
+#if 0
 //---------------------------------
 // RequestTreeInfo
 //---------------------------------
-void rs_cmsg::RequestTreeInfo(string servername)
+void rs_xmsg::RequestTreeInfo(string servername)
 {
-	cMsgMessage treeinfo;
+	xmsgMessage treeinfo;
 	BuildRequestTreeInfo(treeinfo, servername);
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << treeinfo.getText() << "\"" << endl;
-		cMsgSys->send(&treeinfo);
+		xmsgSys->send(&treeinfo);
 	}
 }
 
 //---------------------------------
 // RequestTree
 //---------------------------------
-void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path, int64_t num_entries = -1)
+void rs_xmsg::RequestTree(string servername, string tree_name, string tree_path, int64_t num_entries = -1)
 {
-	cMsgMessage requestTree;
+	xmsgMessage requestTree;
 	BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << requestTree.getText() << endl;
-		cMsgSys->send(&requestTree);
+		xmsgSys->send(&requestTree);
 	}
 }
+#endif
 
 //---------------------------------
 // RequestMacroList
 //---------------------------------
-void rs_cmsg::RequestMacroList(string servername)
+void rs_xmsg::RequestMacroList(string servername)
 {
-	cMsgMessage listHists;
-	BuildRequestMacroList(listHists, servername);	
-	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << "\"" << endl;
-		cMsgSys->send(&listHists);
-	}
+	SendMessage(servername, "list macros");
 }
 
 //---------------------------------
 // RequestMacro
 //---------------------------------
-void rs_cmsg::RequestMacro(string servername, string hnamepath)
+void rs_xmsg::RequestMacro(string servername, string hnamepath)
 {
-	cMsgMessage requestHist;
-	BuildRequestMacro(requestHist, servername, hnamepath);
-	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << requestHist.getText() << "\"" << "\"" << endl;
-		cMsgSys->send(&requestHist);
-		requested_macros[hnamepath]++;
-	}
+	xmsg::proto::Payload payload;
+	AddToPayload(payload, "hnamepath", hnamepath);
+	SendMessage(servername, "get macro", payload);
+
+	if(is_online) requested_macros[hnamepath]++;
 }
 
 //---------------------------------
 // FinalHistogram
 //---------------------------------
-void rs_cmsg::FinalHistogram(string servername, vector<string> hnamepaths)
+void rs_xmsg::FinalHistogram(string servername, vector<string> hnamepaths)
 {
-    cMsgMessage finalhist;
-    finalhist.setSubject(servername);
-    finalhist.setType(myname);
-    finalhist.setText("provide final");
-    finalhist.add("hnamepaths", hnamepaths);
-    
-    if(is_online){
-    	if(verbose>3) _DBG_ << "Sending \"" << finalhist.getText() << endl;
-	 	cMsgSys->send(&finalhist);
-	}
-    cerr<<"final hist request sent"<<endl;
+	xmsg::proto::Payload payload;
+	AddToPayload(payload, "hnamepaths", hnamepaths);
+	SendMessage(servername, "provide final", payload);
 }
 
 
 //---------------------------------
-// callback
+// operator()  (formerly known as "callback")
 //---------------------------------
-void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
-{
-	if(!msg)return;
-	
-	// The convention here is that the message "type" always constains the
+//void rs_xmsg::callback(xmsg::Message &msg, void *userObject)
+void rs_xmsg::operator()(xmsg::Message &msg)
+{	
+	// The convention here is that the message "type" always contains the
 	// unique name of the sender and therefore should be the "subject" to
 	// which any reponse should be sent.
-	string sender = msg->getType();
+	string sender = msg.meta()->replyto();
 	if(sender == myname){  // no need to process messages we sent!
 		if(verbose>4) cout << "Ignoring message from ourself (\""<<sender<<"\")" << endl;
-		delete msg; 
 		return;
 	}
 	
-	// Optional Debugging messages
-	if(verbose>6){
-		map<string,int> *payloads = msg->payloadGet();
-		_DBG_ << "cMsg recieved:" << endl;
-		if(payloads){
-			map<string,int>::iterator iter = payloads->begin();
-			for(; iter!=payloads->end(); iter++){
-				int payloadtype = msg->payloadGetType(iter->first);
-				_DBG_ << "    " << iter->second << " : type=" << payloadtype << " : " << iter->first << endl; 
-			}
-		}else{
-			_DBG_ << "   <no payloads map!>" << endl;
+	// If the message has a Payload object serialized in the payload,
+	// then deserialize it and make a map of the items
+	RSPayloadMap payload_items;
+	xmsg::proto::Payload payload; // n.b. needs to maintain same scope as above container!
+	if( msg.meta()->datatype() == "xmsg::proto::Payload" ){
+		
+		auto &buffer = msg.data();
+		payload.ParseFromArray( buffer.data(), buffer.size() );
+			
+		for(int i=0; i<payload.item_size(); i++ ){
+			payload_items[payload.item(i).name()] = &payload.item(i).data();
 		}
 	}
 
+	// Optional Debugging messages
+	if(verbose>6){
+	
+		_DBG_ << "xmsg recieved --" <<endl;
+		_DBG_ << "    command: " << msg.meta()->description() << endl;
+		_DBG_ << "   datatype: " << msg.meta()->datatype() << endl;
+		for( auto p : payload_items ) _DBG_ << "       item: " << p.first << endl;
+	}
+
+#if 0
 	if(verbose>2){
 		// print round trip time
 		try{
@@ -535,7 +564,8 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 			}
 		}catch(...){}
 	}
-	
+#endif
+
 	// Look for an entry for this server in RS_INFO map.
 	// If it is not there then add it.
 	RS_INFO->Lock();
@@ -549,26 +579,20 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		if(verbose>=4) _DBG_ <<"Updated \""<<sender<<"\" lastHeardFrom."<<endl;
 	}
 	RS_INFO->Unlock();
-	// The actual command is always sent in the text of the message
-	string cmd = msg->getText();
-	if(verbose>3) _DBG_ << "msg->getText() = \"" << cmd << "\"" << endl;
-	if (cmd == "null"){delete msg; return;}
+
+	// The actual command is always sent in the description of the message
+	string cmd = msg.meta()->description();
+	if(verbose>3) _DBG_ << "msg.meta()->description() = \"" << cmd << "\"" << endl;
+	if (cmd == "null") return;
+
 	// Dispatch command
 	bool handled_message = false;
 	
 	//===========================================================
 	if(cmd=="who's there?"){
-		// We don't actually respond to these, only servers
-		cMsgMessage *response = new cMsgMessage();
-		response->setSubject(sender);
-		response->setType(myname);
-		response->setText("I am here");
-		response->add("program", program_name);
-		uint64_t tsent = (uint64_t)time(NULL);
-		response->add("time_sent", tsent);
-		if(verbose>3) _DBG_ << "Sending \"" << response->getText() << endl;
-		cMsgSys->send(response);
-		delete response;
+		xmsg::proto::Payload payload;
+		AddToPayload(payload, "program", program_name);
+		SendMessage(sender, "I am here", payload);
 		handled_message = true;
 	}
 	//===========================================================
@@ -580,24 +604,25 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	}
 	//===========================================================
 	if(cmd=="hists list"){
-		RegisterHistList(sender, msg);
+		RegisterHistList(sender, payload_items);
 		handled_message = true;
 	}
 	//===========================================================
 	if(cmd=="histogram"){
 		// add to global variable so main ROOT thread can actually do registration
 		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[msg] = sender;
+//		HISTOS_TO_REGISTER[msg] = sender;
 		REGISTRATION_MUTEX.unlock();
 		//RegisterHistogram(sender, msg);
 		handled_message = true;
-		msg = NULL; // don't delete message here
+//		msg = NULL; // don't delete message here
 	}
 	//===========================================================
 	if(cmd=="histograms"){	
-		RegisterHistograms(sender, msg);
+		RegisterHistograms(sender, payload_items);
 		handled_message = true;
 	}
+#if 0
 	//===========================================================
 	if(cmd == "tree info") {
 		RegisterTreeInfo(sender, msg);
@@ -608,25 +633,26 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 		RegisterTree(sender, msg);
 		handled_message = true;
 	}
+#endif
 	//===========================================================
 	if(cmd == "macros list") {
-		RegisterMacroList(sender, msg);
+		RegisterMacroList(sender, payload_items);
 		handled_message = true;
 	}
 	//===========================================================
 	if(cmd == "macro") {
 		// add to global variable so main ROOT thread can actually do registration
 		REGISTRATION_MUTEX.lock();
-		MACROS_TO_REGISTER[msg] = sender;
+//		MACROS_TO_REGISTER[msg] = sender;
 		REGISTRATION_MUTEX.unlock();
 		//RegisterMacro(sender, msg);
 		handled_message = true;
-		msg = NULL; // don't delete message here
+//		msg = NULL; // don't delete message here
 	}
 	//===========================================================
 	if(cmd=="final hists"){  // save histograms
 	    _DBG_<<"received final histograms..."<<endl;
-	    RegisterFinalHistogram(sender, msg);
+	    RegisterFinalHistogram(sender, payload_items);
 	    handled_message = true;
 	}
 	//===========================================================
@@ -639,51 +665,39 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	if(cmd=="get hists"    ) handled_message = true;
 	//===========================================================
 	if(!handled_message){
-		_DBG_<<"Received unknown message --  Subject:"<<msg->getSubject()<<" Type:"<<msg->getType()<<" Text:"<<msg->getText()<<endl;
+		_DBG_<<"Received unknown message --  cmd: " << cmd <<endl;
 	}
-	if(msg) delete msg;
 }
 
 //---------------------------------
 // RegisterHistList
 //---------------------------------
 //TODO: documentation comment.
-void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
+void rs_xmsg::RegisterHistList(string server, RSPayloadMap &payload_map)
 {
-	/// Copy list of histograms from cMsg into RS_INFO structures.
-	bool good_response = true;
+	/// Copy list of histograms from xmsg into RS_INFO structures.
 
-	// Get pointers to STL containers that hold the histogram information
-	vector<string> *hist_names=NULL;
-	vector<string> *hist_types=NULL;
-	vector<string> *hist_paths=NULL;
-	vector<string> *hist_titles=NULL;
-	try {                                    //  all args are of type string
-		hist_names = msg->getStringVector("hist_names");
-		hist_types = msg->getStringVector("hist_types");
-		hist_paths = msg->getStringVector("hist_paths");
-		hist_titles = msg->getStringVector("hist_titles");
-	} catch (cMsgException e) {
-		if(verbose>2) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+	// Confirm all items exist in payload
+	int M = payload_map.count("hist_names")
+		   + payload_map.count("hist_types")
+		   + payload_map.count("hist_paths")
+		   + payload_map.count("hist_titles");
+	if( M != 4 ){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
 		return;
 	}
 
-	// Make sure we have valid pointers
-	if(!hist_names)good_response = false;
-	if(!hist_types)good_response = false;
-	if(!hist_paths)good_response = false;
-	if(!hist_titles)good_response = false;
-
-	// Make sure containers all have the same number of entries
-	if(good_response){
-		if (hist_names->size() != hist_types->size())good_response = false;
-		if (hist_names->size() != hist_paths->size())good_response = false;
-		if (hist_names->size() != hist_titles->size())good_response = false;
-	}
-
-	// If the response is incomplete for any reason, then alert user and return.
-	if(!good_response){
-		if(verbose>0) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+	// Get pointers to Data objects for each item and
+	// verify that that all have the same number of entries
+	auto dhist_names  = payload_map["hist_names"];
+	auto dhist_types  = payload_map["hist_types"];
+	auto dhist_paths  = payload_map["hist_paths"];
+	auto dhist_titles = payload_map["hist_titles"];
+	auto N = dhist_names->stringa_size();
+	if( ( dhist_types->stringa_size()  != N )
+	 || ( dhist_paths->stringa_size()  != N )
+	 || ( dhist_titles->stringa_size() != N )){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"hists list\" (sizes don't match!). Ignoring."<<endl;
 		return;
 	}
 
@@ -692,26 +706,27 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 	// Looks like we got a good response. Loop over histograms and add them to
 	// list of hdef_t objects kept in RS_INFO. If there is already an entry
 	// for a histogram, verify that the definition matches this new one.
-	for(unsigned int i=0; i<hist_names->size(); i++){
+	for(int i=0; i<N; i++){
 	
 		// Get name
-		string name = (*hist_names)[i];
+		string name = dhist_names->stringa(i);
 
 		// Get path without the preceeding root:
-		string path = (*hist_paths)[i];
+		string path = dhist_paths->stringa(i);
 
 		size_t pos = path.find_first_of("/");
 		if(pos!=string::npos)path = path.substr(pos);
 		
 		// Create temporary hdef_t object
 		hdef_t hdef(name, path);
-		if( (*hist_types)[i].find("TH1")!=string::npos) hdef.type = hdef_t::oneD;
-		else if( (*hist_types)[i].find("TH2")!=string::npos) hdef.type = hdef_t::twoD;
-		else if( (*hist_types)[i].find("TH3")!=string::npos) hdef.type = hdef_t::threeD;
-		else if( (*hist_types)[i].find("TProfile")!=string::npos) hdef.type = hdef_t::profile;
+		const string &htype = dhist_types->stringa(i);
+		if( htype.find("TH1")!=string::npos) hdef.type = hdef_t::oneD;
+		else if( htype.find("TH2")!=string::npos) hdef.type = hdef_t::twoD;
+		else if( htype.find("TH3")!=string::npos) hdef.type = hdef_t::threeD;
+		else if( htype.find("TProfile")!=string::npos) hdef.type = hdef_t::profile;
 		else hdef.type = hdef_t::noneD;
 
-		hdef.title = (*hist_titles)[i];
+		hdef.title = dhist_titles->stringa(i);
 		if(hist_default_active)
 			hdef.active = true;
 		else
@@ -739,11 +754,12 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 	}
 }
 
+#if 0
 //---------------------------------
 // RegisterTreeInfo
 //---------------------------------
 //TODO: documentation comment.
-void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
+void rs_xmsg::RegisterTreeInfo(string server, RSPayloadMap &payload_map) {
 
 	//TODO: (maybe) test that the msg is valid.
 	RS_INFO->Lock();
@@ -765,8 +781,8 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 			 tree_id_t tid(server, name, path);
 			 RS_INFO->treedefs[tid.tnamepath] = tid;
 		} 
-	}catch(cMsgException &e){
-		_DBG_ << "Bad cMsg in RegisterTreeInfo from: " << server << endl;
+	}catch(xmsgException &e){
+		_DBG_ << "Bad xmsg in RegisterTreeInfo from: " << server << endl;
 		_DBG_ << e.what() << endl;
 	}
 	RS_INFO->Unlock();
@@ -786,39 +802,31 @@ void rs_cmsg::RegisterTreeInfo(string server, cMsgMessage *msg) {
 //	}
 //	RS_INFO->Unlock();
 }
+#endif
 
 //---------------------------------
 // RegisterMacroList
 //---------------------------------
 //TODO: documentation comment.
-void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
+void rs_xmsg::RegisterMacroList(string server, RSPayloadMap &payload_map)
 {
-	/// Copy list of histograms from cMsg into RS_INFO structures.
-	bool good_response = true;
+	/// Copy list of histograms from xmsg into RS_INFO structures.
 
-	// Get pointers to STL containers that hold the histogram information
-	vector<string> *macro_names;
-	vector<string> *macro_paths;
-	try {                                    //  all args are of type string
-		macro_names = msg->getStringVector("macro_names");
-		macro_paths = msg->getStringVector("macro_paths");
-	} catch (cMsgException e) {
-		if(verbose>2) _DBG_<<"Poorly formed response for \"macros list\". (May just be empty list. Ignoring.)"<<endl;
+	// Confirm all items exist in payload
+	int M = payload_map.count("macro_names")
+		   + payload_map.count("macro_paths");
+	if( M != 2 ){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"macros list\". Ignoring."<<endl;
 		return;
 	}
 
-	// Make sure we have valid pointers
-	if(!macro_names)good_response = false;
-	if(!macro_paths)good_response = false;
-
-	// Make sure containers all have the same number of entries
-	if(good_response){
-		if (macro_names->size() != macro_paths->size())good_response = false;
-	}
-
-	// If the response is incomplete for any reason, then alert user and return.
-	if(!good_response){
-		_DBG_<<"Poorly formed response for \"macros list\". Ignoring."<<endl;
+	// Get pointers to Data objects for each item and
+	// verify that that all have the same number of entries
+	auto dmacro_names  = payload_map["macro_names"];
+	auto dmacro_paths  = payload_map["macro_paths"];
+	auto N = dmacro_names->stringa_size();
+	if( dmacro_paths->stringa_size() != N ){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"macros list\" (sizes don't match!). Ignoring."<<endl;
 		return;
 	}
 
@@ -827,13 +835,13 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 	// Looks like we got a good response. Loop over histograms and add them to
 	// list of hdef_t objects kept in RS_INFO. 
 	// store similarly to histograms
-	for(unsigned int i=0; i<macro_names->size(); i++){
+	for(int i=0; i<N; i++){
 	
 		// Get name
-		string name = (*macro_names)[i];
+		string name = dmacro_names->stringa(i);
 
 		// Get path without the preceeding root:
-		string path = (*macro_paths)[i];
+		string path = dmacro_paths->stringa(i);
 
 		size_t pos = path.find_first_of("/");
 		if(pos!=string::npos) path = path.substr(pos);
@@ -882,12 +890,12 @@ void rs_cmsg::RegisterMacroList(string server, cMsgMessage *msg)
 
 
 
-
+#if 0
 //---------------------------------
 // RegisterTreeInfo
 //---------------------------------
 //TODO: documentation comment.
-void rs_cmsg::RegisterTreeInfoSync(string server, cMsgMessage *msg) {
+void rs_xmsg::RegisterTreeInfoSync(string server, RSPayloadMap &payload_map) {
 
 	//TODO: (maybe) test that the msg is valid.
 	RS_INFO->Lock();
@@ -899,7 +907,7 @@ void rs_cmsg::RegisterTreeInfoSync(string server, cMsgMessage *msg) {
 	try{
 		names = *(msg->getStringVector("tree_names"));
 		paths = *(msg->getStringVector("tree_paths"));
-	}catch(cMsgException e){
+	}catch(xmsgException e){
 		// get here if tree_names or tree_paths doesn't exist
 		_DBG_ << "Remote process reports no trees." << endl;
 	}
@@ -930,7 +938,7 @@ void rs_cmsg::RegisterTreeInfoSync(string server, cMsgMessage *msg) {
 //TODO: documentation comment.
 // Note that we only store tree info on a server-by-server basis,
 // so this simplifies the code
-void rs_cmsg::RegisterTree(string server, cMsgMessage *msg) 
+void rs_xmsg::RegisterTree(string server, xmsg::Message &msg) 
 {
 
     RS_INFO->Lock();
@@ -1064,214 +1072,250 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
     pthread_rwlock_unlock(ROOT_MUTEX);
     RS_INFO->Unlock();
 }
+#endif
 
 //---------------------------------
 // RegisterHistogram
+//
+// This is called when a message containing a histogram
+// is received. It copies the information to the 
+// HISTOS_TO_REGISTER to be unpacked later.
 //---------------------------------
-//TODO: documentation comment.
-void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg) 
+void rs_xmsg::RegisterHistogram(string server, RSPayloadMap &payload_map)
 {
-    if(verbose>3)_DBG_ << "In rs_cmsg::RegisterHistogram()..." << endl;
-    
-    // Get hnamepath from message
-    string hnamepath = msg->getString("hnamepath");
-	 
-	 
-	 if(hnamepath.find(": ") == 0 ) hnamepath.erase(0,2);
+	// Confirm all items exist in payload
+	int M = payload_map.count("hnamepath") + payload_map.count("TMessage");
+	if( M != 2 ){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"histogram\". Ignoring."<<endl;
+		return;
+	}
 
-	  if(verbose>=3) _DBG_ << "Registering histogram " << hnamepath << endl;
+	// Get pointers to Data objects for each item and
+	// verify that that all have the same number of entries
+	auto dhnamepath  = payload_map["hnamepath"];
+	auto dTMessage  = payload_map["TMessage"];
 
-    // Lock RS_INFO mutex while working with RS_INFO
-    RS_INFO->Lock();
-	 
-	 received_histograms[hnamepath]++;
-    
-    // Get pointer to hdef_t
-    map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
-    if(hdef_iter==RS_INFO->histdefs.end()){
-	_DBG_<<"No hdef_t object for hnamepath=\""<<hnamepath<<"\"!"<<endl;
-	_DBG_<<"Throwing away histogram."<<endl;
-	RS_INFO->Unlock();
-	if(delete_msg) delete msg;
-	return;
-    }
-    hdef_t *hdef = &(hdef_iter->second);
-    
-    // Get pointer to server_info_t
-    map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
-    if(server_info_iter==RS_INFO->servers.end()){
-	_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
-	_DBG_<<"Throwing away histogram."<<endl;
-	RS_INFO->Unlock();
-	if(delete_msg) delete msg;
-	return;
-    }
-    server_info_t *server_info = &(server_info_iter->second);
-    
-    // Get pointer to hinfo_t
-    hid_t hid(server, hnamepath);
-    map<hid_t,hinfo_t>::iterator hinfo_iter = RS_INFO->hinfos.find(hid);
-    if(hinfo_iter==RS_INFO->hinfos.end()){
-	// hinfo_t object doesn't exist. Add one to RS_INFO
-	RS_INFO->hinfos[hid] = hinfo_t(server, hnamepath);
-	hinfo_iter = RS_INFO->hinfos.find(hid);
-    }
-    hinfo_t *hinfo = &(hinfo_iter->second);
-    
-    // Lock ROOT mutex while working with ROOT objects
-    pthread_rwlock_wrlock(ROOT_MUTEX);
-    
-    // Get ROOT object from message and cast it as a TNamed*
+	auto serialized = new rs_serialized;
+	serialized->sender = server;
+	serialized->hnamepath = dhnamepath->string();
+	std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), serialized->data.begin() );
+	HISTOS_TO_REGISTER.insert(serialized);
+}
 
-	 TNamed *namedObj = NULL;
-	 vector<uint8_t> *mybytes = NULL;
-	 try{
-	 	mybytes = msg->getUint8Vector("TMessage");
-	 }catch(...){
-	   _DBG_ << "Expecting \"TMessage\" payload in histogram message for " << hnamepath << " but none found!" << endl;
-	 }
-	 if(mybytes){
+//---------------------------------
+// RegisterHistograms
+//
+// This is called when a message containing multiple histograms
+// is received. It copies the information to the 
+// HISTOS_TO_REGISTER to be unpacked later.
+//---------------------------------
+void rs_xmsg::RegisterHistograms(string server, RSPayloadMap &payload_map)
+{
+	// The convention here is to have payloads with names like
+	// "hnamepath1", "hnamepath2", ... and corresponding ones 
+	// with names like "TMessage1", "TMessage2", ... This will
+	// look for payloads with these names and add each that it
+	// finds to HISTOS_TO_REGISTER.
+	
+	auto Nstart = HISTOS_TO_REGISTER.size();
+	for(int i=1; i<1000; i++){ // loop should never get to 1000
+
+		char pname_hnamepath[256];
+		char pname_TMessage[256];
+		sprintf(pname_hnamepath, "hnamepath%d", i);
+		sprintf(pname_TMessage, "TMessage%d", i);
+
+		// Confirm all items exist in payload
+		int M = payload_map.count(pname_hnamepath) + payload_map.count(pname_TMessage);
+		if( M != 2 ) break;
+
+		// Get pointers to Data objects for each item and
+		// verify that that all have the same number of entries
+		auto dhnamepath  = payload_map[pname_hnamepath];
+		auto dTMessage  = payload_map[pname_TMessage];
+
+		auto serialized = new rs_serialized;
+		serialized->sender = server;
+		serialized->hnamepath = dhnamepath->string();
+		std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), serialized->data.begin() );
+		HISTOS_TO_REGISTER.insert(serialized);
+	}
+	if(HISTOS_TO_REGISTER.size() == Nstart){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"histograms\". None found!"<<endl;
+	}                                                                                                                                         
+}
+
+//---------------------------------
+// RegisterHistogram
+//
+// This unpacks a histogram from the rs_serialized object
+// and registers it with the system. This is called from
+// the main ROOT thread while processing items from the
+// HISTOS_TO_REGISTER global.
+//---------------------------------
+void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
+{
+	if(verbose>3)_DBG_ << "In rs_xmsg::RegisterHistogram()..." << endl;
+
+	// Get hnamepath from message
+	string &hnamepath = serialized->hnamepath;
+	string &server = serialized->sender;
+
+	if(hnamepath.find(": ") == 0 ) hnamepath.erase(0,2);
+
+	if(verbose>=3) _DBG_ << "Registering histogram " << hnamepath << endl;
+
+	// Lock RS_INFO mutex while working with RS_INFO
+	RS_INFO->Lock();
+
+	received_histograms[hnamepath]++;
+
+	// Get pointer to hdef_t
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+	if(hdef_iter==RS_INFO->histdefs.end()){
+		_DBG_<<"No hdef_t object for hnamepath=\""<<hnamepath<<"\"!"<<endl;
+		_DBG_<<"Throwing away histogram."<<endl;
+		RS_INFO->Unlock();
+		return;
+	}
+	hdef_t *hdef = &(hdef_iter->second);
+    
+	// Get pointer to server_info_t
+	map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
+	if(server_info_iter==RS_INFO->servers.end()){
+		_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
+		_DBG_<<"Throwing away histogram."<<endl;
+		RS_INFO->Unlock();
+		return;
+	}
+	server_info_t *server_info = &(server_info_iter->second);
+    
+	// Get pointer to hinfo_t
+	hid_t hid(server, hnamepath);
+	map<hid_t,hinfo_t>::iterator hinfo_iter = RS_INFO->hinfos.find(hid);
+	if(hinfo_iter==RS_INFO->hinfos.end()){
+		// hinfo_t object doesn't exist. Add one to RS_INFO
+		RS_INFO->hinfos[hid] = hinfo_t(server, hnamepath);
+		hinfo_iter = RS_INFO->hinfos.find(hid);
+	}
+	hinfo_t *hinfo = &(hinfo_iter->second);
+    
+	// Lock ROOT mutex while working with ROOT objects
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+
+	// Get ROOT object from message and cast it as a TNamed*
+
+	TNamed *namedObj = NULL;
+	vector<char> *mybytes = NULL;
+	try{
+		mybytes = &serialized->data;
+	}catch(...){
+		_DBG_ << "Expecting \"TMessage\" payload in histogram message for " << hnamepath << " but none found!" << endl;
+	}
+	if(mybytes){
 		MyTMessage *myTM = new MyTMessage(&(*mybytes)[0], mybytes->size());
 		namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
 		if(!namedObj){
 			pthread_rwlock_unlock(ROOT_MUTEX);
 			RS_INFO->Unlock();
 			delete mybytes;
-			if(delete_msg) delete msg;
 			return;
 		}
 		delete mybytes;
 	}
     
-    // Cast this as a histogram pointer
-    TH1 *h = dynamic_cast<TH1*>(namedObj);
-    if(!h){
-	if(namedObj){
-		_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TH1 type"<<endl;
+	// Cast this as a histogram pointer
+	TH1 *h = dynamic_cast<TH1*>(namedObj);
+	if(!h){
+		if(namedObj){
+			_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TH1 type"<<endl;
+		}
+		pthread_rwlock_unlock(ROOT_MUTEX);
+		RS_INFO->Unlock();
+		return;
 	}
-	pthread_rwlock_unlock(ROOT_MUTEX);
-	RS_INFO->Unlock();
-	if(delete_msg) delete msg;
-	return;
-    }
     
-    // Update hinfo
+	// Update hinfo
 	double last_received = hinfo->received;
-    hinfo->received = GetTime();
+	hinfo->received = GetTime();
 	hinfo->rate = 1.0/(hinfo->received - last_received);
-    if(hinfo->hist){
-	// Subtract old histo from sum
-	if(hdef->sum_hist)hdef->sum_hist->Add(hinfo->hist, -1.0);
-	
-	// Delete old histo
-	delete hinfo->hist;
-	hinfo->hist = NULL;
-    }
+	if(hinfo->hist){
+		// Subtract old histo from sum
+		if(hdef->sum_hist)hdef->sum_hist->Add(hinfo->hist, -1.0);
 
-    // Set pointer to hist in hinfo to new histogram
-    hinfo->hist = h;
+		// Delete old histo
+		delete hinfo->hist;
+		hinfo->hist = NULL;
+	}
+
+	// Set pointer to hist in hinfo to new histogram
+	hinfo->hist = h;
+
+	// Change ROOT TDirectory of new histogram to server's
+	hinfo->hist->SetDirectory(server_info->dir);
+
+	// Adds the new histogram to the hists map in hdef_t
+	map<string, hinfo_t>::iterator hinfo_it = hdef->hists.find(server);
+
+	// first we have to check for and delete any older versions
+	// of the hist.
+	if(hinfo_it != hdef->hists.end()) {
+		hdef->hists.erase(hinfo_it);
+	}
+
+	// Now we add the newer version to the map
+	hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
     
-    // Change ROOT TDirectory of new histogram to server's
-    hinfo->hist->SetDirectory(server_info->dir);
-    
-    // Adds the new histogram to the hists map in hdef_t
-    map<string, hinfo_t>::iterator hinfo_it = hdef->hists.find(server);
-    
-    // first we have to check for and delete any older versions
-    // of the hist.
-    if(hinfo_it != hdef->hists.end()) {
-	hdef->hists.erase(hinfo_it);
-    }
-    
-    // Now we add the newer version to the map
-    hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
-    
-    // Add new histogram to sum and flag it as modified
-    if(verbose>2) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
-    if(hdef->sum_hist){
+	// Add new histogram to sum and flag it as modified
+	if(verbose>2) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
+	if(hdef->sum_hist){
 		// Reset sum histo first if showing only one histo at a time
 		if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
 		hdef->sum_hist->Add(h);
-    }else{
-      // get the directory in which to save the summed histogram
-	  
-	  // Make sure the full directory path exists
-	  string sum_path = "";
-	  TDirectory *hist_sum_dir = RS_INFO->sum_dir;
-	  for(uint32_t i=0; i<hdef->dirs.size(); i++){
-	  	sum_path += "/" + hdef->dirs[i];
-	  	TDirectory *dir = (TDirectory*)(hist_sum_dir->Get(hdef->dirs[i].c_str()));
-		if(!dir) dir = hist_sum_dir->mkdir(hdef->dirs[i].c_str());
-		hist_sum_dir = dir;
-	  }
-	  
-      if(verbose>2) cout << "saving in directory " << sum_path << endl;
+	}else{
+		// get the directory in which to save the summed histogram
 
-      string sum_hist_name = string(h->GetName())+"__sum";
-      hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
-      //hdef->sum_hist->SetDirectory(RS_INFO->sum_dir);
-      hdef->sum_hist->SetDirectory(hist_sum_dir);
-	  hdef->sum_hist->SetName(h->GetName()); // set name back to original single hist name so macros work
-    }
+		// Make sure the full directory path exists
+		string sum_path = "";
+		TDirectory *hist_sum_dir = RS_INFO->sum_dir;
+		for(uint32_t i=0; i<hdef->dirs.size(); i++){
+			sum_path += "/" + hdef->dirs[i];
+			TDirectory *dir = (TDirectory*)(hist_sum_dir->Get(hdef->dirs[i].c_str()));
+			if(!dir) dir = hist_sum_dir->mkdir(hdef->dirs[i].c_str());
+			hist_sum_dir = dir;
+		}
 
-    // Record time we last modified the sum histo
-    hdef->sum_hist_modified = GetTime();
-    
-    //Justin B
-    hdef->sum_hist_present = true;
+		if(verbose>2) cout << "saving in directory " << sum_path << endl;
 
-    // Unlock mutexes
-    pthread_rwlock_unlock(ROOT_MUTEX);
-    RS_INFO->Unlock();
-
-	if(delete_msg) delete msg;
-}
-
-//---------------------------------
-// RegisterHistograms
-//---------------------------------
-//TODO: documentation comment.
-void rs_cmsg::RegisterHistograms(string server, cMsgMessage *msg) 
-{
-	// The cMsgMessage that was sent should contain a vector of other
-	// cMgMessage's that are identical to a single histogram's message.
-	// Get the vector of these and pass the processing of each to the 
-	// single histogram method RegisterHistogram.
-	vector<cMsgMessage*> *cmsgs = msg->getMessagePVector("histograms");
-	if(!cmsgs){
-		_DBG_ << "NULL returned from getMessagePVector() for multiple histograms message!" << endl;
-		return;
-	}
-	if(cmsgs->empty()){
-		_DBG_ << "Empty vector (no histograms) for multiple histograms message!" << endl;
-		return;
+		string sum_hist_name = string(h->GetName())+"__sum";
+		hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
+		//hdef->sum_hist->SetDirectory(RS_INFO->sum_dir);
+		hdef->sum_hist->SetDirectory(hist_sum_dir);
+		hdef->sum_hist->SetName(h->GetName()); // set name back to original single hist name so macros work
 	}
 
-	// Loop over all items and register each
-	for(uint32_t i=0; i<cmsgs->size(); i++){
-		cMsgMessage *cmsg = (*cmsgs)[i];
-		
-		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[cmsg] = server; // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();
+	// Record time we last modified the sum histo
+	hdef->sum_hist_modified = GetTime();
 
-		//RegisterHistogram(server, cmsg);		
-		//delete cmsg;
-	}
-	delete cmsgs;
+	//Justin B
+	hdef->sum_hist_present = true;
+
+	// Unlock mutexes
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	RS_INFO->Unlock();
 }
 
 //---------------------------------
 // RegisterMacro
 //---------------------------------
-void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg) 
+void rs_xmsg::RegisterMacro(string server, RSPayloadMap &payload_map) 
 {
-	/// This will unpack a cMsg containing a macro and 
+	/// This will unpack a xmsg containing a macro and 
 	/// register it in the system. The macro will need
 	/// have been declared previously via a RegisterMacroList
 	/// call so the corresponding hdef_t can be accessed.
 	///
-	/// Note that this is not called by the cMsg thread itself
+	/// Note that this is not called by the xmsg thread itself
 	/// but rather from the rs_mainframe::DoTimer() method.
 	/// This is to prevent crashes due to the main ROOT event
 	/// loop clashing with this thread (the main ROOT event
@@ -1281,120 +1325,130 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	/// complex system of registering the message into a 
 	/// queue for later processing.
 
-	if(verbose>=4) _DBG_ << "In rs_cmsg::RegisterMacro()..." << endl;
+	if(verbose>=4) _DBG_ << "In rs_xmsg::RegisterMacro()..." << endl;
     
-    // Get hnamepath from message
-    string name = msg->getString("macro_name");
-    string path = msg->getString("macro_path");
-    int version = msg->getInt32("macro_version");
-    string hnamepath = path + "/" + name;
-    
-    // Lock RS_INFO mutex while working with RS_INFO
-    RS_INFO->Lock();
-    
-	 received_macros[hnamepath]++;
+	// Confirm all items exist in payload
+	int M = payload_map.count("macro_name")
+		   + payload_map.count("macro_paths")
+		   + payload_map.count("macro_version")
+		   + payload_map.count("TMessage");
+	if( M != 4 ){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"macro\". Ignoring."<<endl;
+		return;
+	}
 
-    // Get pointer to hdef_t
-    map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
-    if(hdef_iter==RS_INFO->histdefs.end()){
-	_DBG_<<"No hdef_t object for hnamepath=\""<<hnamepath<<"\"!"<<endl;
-	_DBG_<<"Throwing away macro."<<endl;
-	RS_INFO->Unlock();
-	return;
-    }
-    hdef_t *hdef = &(hdef_iter->second);
-
-    // sanity check that this is a macro
-    if(hdef->type != hdef_t::macro) {
-	    _DBG_ << " Tried to get macro with hnamepath=\"" << hnamepath
-		  << "\", but it is already defined as a histogram!" << endl;
-	RS_INFO->Unlock();
-	return;
-    }
+	// Get hnamepath from message
+	string name = payload_map["macro_name"]->string();
+	string path = payload_map["macro_path"]->string();
+	int version = payload_map["macro_version"]->flsint32();
+	string hnamepath = path + "/" + name;
     
-    // Get pointer to server_info_t
-    map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
-    if(server_info_iter==RS_INFO->servers.end()){
-	_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
-	_DBG_<<"Throwing away macro."<<endl;
-	RS_INFO->Unlock();
-	return;
-    }
+	// Lock RS_INFO mutex while working with RS_INFO
+	RS_INFO->Lock();
     
-    // Get pointer to hinfo_t
-    hid_t hid(server, hnamepath);
-    hinfo_t *hinfo = NULL;
-    map<hid_t,hinfo_t>::iterator hinfo_iter = RS_INFO->hinfos.find(hid);
-    if(hinfo_iter==RS_INFO->hinfos.end()){
-	// hinfo_t object doesn't exist. Add one to RS_INFO
-	RS_INFO->hinfos[hid] = hinfo_t(server, hnamepath);
-	hinfo_iter = RS_INFO->hinfos.find(hid);
-    }
-    hinfo = &(hinfo_iter->second);
+	received_macros[hnamepath]++;
+
+	// Get pointer to hdef_t
+	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
+	if(hdef_iter==RS_INFO->histdefs.end()){
+		_DBG_<<"No hdef_t object for hnamepath=\""<<hnamepath<<"\"!"<<endl;
+		_DBG_<<"Throwing away macro."<<endl;
+		RS_INFO->Unlock();
+		return;
+	}
+	hdef_t *hdef = &(hdef_iter->second);
+
+	// sanity check that this is a macro
+	if(hdef->type != hdef_t::macro) {
+		_DBG_ << " Tried to get macro with hnamepath=\"" << hnamepath
+			<< "\", but it is already defined as a histogram!" << endl;
+		RS_INFO->Unlock();
+		return;
+	}
     
-    // if we already have data for this macro, then throw it away
-    // we need to do this before unpacking the new data, since we are reusing the file name
-    if(hinfo->macroData) {
-	    hinfo->macroData->Close();
-	    delete hinfo->macroData;
-	    hinfo->macroData = NULL;
-    }
-
-    // save version info
-    hinfo->macroVersion = version;
-
-    // Lock ROOT mutex while working with ROOT objects
-    pthread_rwlock_wrlock(ROOT_MUTEX);
+	// Get pointer to server_info_t
+	map<string,server_info_t>::iterator server_info_iter = RS_INFO->servers.find(server);
+	if(server_info_iter==RS_INFO->servers.end()){
+		_DBG_<<"No server_info_t object for server=\""<<server<<"\"!"<<endl;
+		_DBG_<<"Throwing away macro."<<endl;
+		RS_INFO->Unlock();
+		return;
+	}
     
-    // extract info from message
-    if(verbose>=2) _DBG_ << "unpacking macro \""<<hnamepath<<"\" ..." << endl;
-
-    MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
-    Long64_t length;
-    myTM->ReadLong64(length);
-    TDirectory *savedir = gDirectory;
-
-    // save each macro in a different file per server
-    // we'll concatenate these later
-    stringstream tmpfile_stream;
-    tmpfile_stream << "." << server << "." << hnamepath;
-    string tmpfile_name (tmpfile_stream.str());
-    for(string::iterator str_itr = tmpfile_name.begin(); str_itr != tmpfile_name.end(); str_itr++) {
-	    // clean up filename by making sure that we at least dont have any '/'s
-	    if(*str_itr == '/')     
-		    *str_itr = '_';
-    }
-    if(verbose>=4) _DBG_ << " TMemFile name = " << tmpfile_name << endl;
-    if(verbose>=4) _DBG_ << "     file size = " << length << endl;
-   TString filename(tmpfile_name);
-
-//_DBG_<<"--- Creating TMemFile:" << tmpfile_name <<endl;
-    TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
-//_DBG_<<"--- Finished" <<endl;
-    if(verbose>=4) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
-    if(verbose>4){
-	 	_DBG_ << "TMemFile contents: " << endl;
-		f->ls();
-	 }
-    savedir->cd();
+	// Get pointer to hinfo_t
+	hid_t hid(server, hnamepath);
+	hinfo_t *hinfo = NULL;
+	map<hid_t,hinfo_t>::iterator hinfo_iter = RS_INFO->hinfos.find(hid);
+	if(hinfo_iter==RS_INFO->hinfos.end()){
+		// hinfo_t object doesn't exist. Add one to RS_INFO
+		RS_INFO->hinfos[hid] = hinfo_t(server, hnamepath);
+		hinfo_iter = RS_INFO->hinfos.find(hid);
+	}
+	hinfo = &(hinfo_iter->second);
     
-	TObjString *macro_str = (TObjString *)f->Get("macro");
-	if(macro_str) hinfo->macroString = macro_str->GetString().Data();
-    hinfo->macroData = f;
-	hinfo->Nkeys = f->GetNkeys();
+	// if we already have data for this macro, then throw it away
+	// we need to do this before unpacking the new data, since we are reusing the file name
+	if(hinfo->macroData) {
+		hinfo->macroData->Close();
+		delete hinfo->macroData;
+		hinfo->macroData = NULL;
+	}
+
+	// save version info
+	hinfo->macroVersion = version;
+
+	// Lock ROOT mutex while working with ROOT objects
+	pthread_rwlock_wrlock(ROOT_MUTEX);
+    
+	// extract info from message
+	if(verbose>=2) _DBG_ << "unpacking macro \""<<hnamepath<<"\" ..." << endl;
+
+		auto dTMessage  = payload_map["TMessage"];
+		std::vector<char> data;
+		std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), data.begin() );
+		MyTMessage *myTM = new MyTMessage(data.data(), data.size());
+		Long64_t length;
+		myTM->ReadLong64(length);
+		TDirectory *savedir = gDirectory;
+
+		// save each macro in a different file per server
+		// we'll concatenate these later
+		stringstream tmpfile_stream;
+		tmpfile_stream << "." << server << "." << hnamepath;
+		string tmpfile_name (tmpfile_stream.str());
+		for(string::iterator str_itr = tmpfile_name.begin(); str_itr != tmpfile_name.end(); str_itr++) {
+			// clean up filename by making sure that we at least dont have any '/'s
+			if(*str_itr == '/') *str_itr = '_';
+		}
+		if(verbose>=4) _DBG_ << " TMemFile name = " << tmpfile_name << endl;
+		if(verbose>=4) _DBG_ << "     file size = " << length << endl;
+		TString filename(tmpfile_name);
+
+		TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
+		if(verbose>=4) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
+		if(verbose>4){
+			_DBG_ << "TMemFile contents: " << endl;
+			f->ls();
+		}
+		savedir->cd();
+    
+		TObjString *macro_str = (TObjString *)f->Get("macro");
+		if(macro_str) hinfo->macroString = macro_str->GetString().Data();
+		hinfo->macroData = f;
+		hinfo->Nkeys = f->GetNkeys();
 	
-	// Look for special comments declaring hnamepaths this
-	// macro requires.
-	istringstream ss(hinfo->macroString);
-	string line;
-	uint32_t Nprev_macro_hnamepaths = hdef->macro_hnamepaths.size();
-	hdef->macro_hnamepaths.clear();
-	hdef->macro_guidance = "";
-	bool in_guidance_section = false;
-	while(getline(ss, line)){
-		if( line.find("// Guidance:")==0 )in_guidance_section = true;
-		if( in_guidance_section && (line.find("//")==0) ){
-			hdef->macro_guidance += line + "\n";
+		// Look for special comments declaring hnamepaths this
+		// macro requires.
+		istringstream ss(hinfo->macroString);
+		string line;
+		uint32_t Nprev_macro_hnamepaths = hdef->macro_hnamepaths.size();
+		hdef->macro_hnamepaths.clear();
+		hdef->macro_guidance = "";
+		bool in_guidance_section = false;
+		while(getline(ss, line)){
+			if( line.find("// Guidance:")==0 )in_guidance_section = true;
+			if( in_guidance_section && (line.find("//")==0) ){
+				hdef->macro_guidance += line + "\n";
 			if( line.find("// End Guidance:")==0 )in_guidance_section = false;
 			continue; // don't consider other keywords if in guidance section
 		}
@@ -1424,35 +1478,33 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 	// pre-loading histograms that will be needed for display.
 	if(hdef->macro_hnamepaths.size() != Nprev_macro_hnamepaths){
 		if(verbose>1)_DBG_<<"seeding ... hdef->macro_hnamepaths.size()="<<hdef->macro_hnamepaths.size()<<" Nprev_macro_hnamepaths="<<Nprev_macro_hnamepaths<<endl;
-		thread t(&rs_cmsg::SeedHnamepathsSet, this, (void*)&hdef->macro_hnamepaths, true, false);
+		thread t(&rs_xmsg::SeedHnamepathsSet, this, (void*)&hdef->macro_hnamepaths, true, false);
 		t.detach();
 	}
 
-    // Update hinfo
+	// Update hinfo
 	double last_received = hinfo->received;
-    hinfo->received = GetTime();
- 	hinfo->rate = 1.0/(hinfo->received - last_received);
+	hinfo->received = GetTime();
+	hinfo->rate = 1.0/(hinfo->received - last_received);
    
-    // Adds the new histogram to the hists map in hdef_t
-    map<string, hinfo_t>::iterator hinfo_it = hdef->hists.find(server);
+	// Adds the new histogram to the hists map in hdef_t
+	map<string, hinfo_t>::iterator hinfo_it = hdef->hists.find(server);
     
-    // first we have to check for and delete any older versions
-    // of the hist.
-    if(hinfo_it != hdef->hists.end()) {
-	hdef->hists.erase(hinfo_it);
-    }
+	// first we have to check for and delete any older versions
+	// of the hist.
+	if(hinfo_it != hdef->hists.end()) {
+		hdef->hists.erase(hinfo_it);
+	}
     
-    // Now we add the newer version to the map
-    hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
+	// Now we add the newer version to the map
+	hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
 
-    // Record time we last modified the sum histo
-    hdef->sum_hist_modified = GetTime();
+	// Record time we last modified the sum histo
+	hdef->sum_hist_modified = GetTime();
     
-    // Unlock mutexes
-    pthread_rwlock_unlock(ROOT_MUTEX);
-    RS_INFO->Unlock();
-	 
-	 delete msg;
+	// Unlock mutexes
+	pthread_rwlock_unlock(ROOT_MUTEX);
+	RS_INFO->Unlock();
 }
 
 
@@ -1461,53 +1513,64 @@ void rs_cmsg::RegisterMacro(string server, cMsgMessage *msg)
 // RegisterFinalHistogram
 //---------------------------------
 //TODO: documentation comment.
-void rs_cmsg::RegisterFinalHistogram(string server, cMsgMessage *msg) {
+void rs_xmsg::RegisterFinalHistogram(string server, RSPayloadMap &payload_map)
+{
 
-    // first, save the histogram in memory
-    RegisterHistogram(server, msg);
+	// first, save the histogram in memory
+	RegisterHistogram(server, payload_map);
 
-    // then, store the histogram in a list for optional processing by the client program
-    // Get hnamepath from message
-    string hnamepath = msg->getString("hnamepath");
+	// Confirm all items exist in payload
+	int M = payload_map.count("hnamepath")
+		   + payload_map.count("TMessage");
+	if( M != 2 ){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"final histos\". Ignoring."<<endl;
+		return;
+	}
 
-    // Lock RS_INFO mutex while working with RS_INFO
-    RS_INFO->Lock();
+	// Now, store the histogram in a list for optional processing by the client program
+	// Get hnamepath from message
+	string hnamepath = payload_map["hnamepath"]->string();
+
+	// Lock RS_INFO mutex while working with RS_INFO
+	RS_INFO->Lock();
     
-    // Lock ROOT mutex while working with ROOT objects
-    pthread_rwlock_wrlock(ROOT_MUTEX);
+	// Lock ROOT mutex while working with ROOT objects
+	pthread_rwlock_wrlock(ROOT_MUTEX);
     
-    // Get ROOT object from message and cast it as a TNamed*
-    MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
-    TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
-    if(!namedObj){
-	_DBG_<<"No valid object returned in histogram message."<<endl;
+	// Get ROOT object from message and cast it as a TNamed*
+	auto dTMessage  = payload_map["TMessage"];
+	std::vector<char> data;
+	std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), data.begin() );
+	MyTMessage *myTM = new MyTMessage(data.data(), data.size());
+	TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
+	if(!namedObj){
+		_DBG_<<"No valid object returned in histogram message."<<endl;
+		pthread_rwlock_unlock(ROOT_MUTEX);
+		RS_INFO->Unlock();
+		return;
+	}
+    
+	// Cast this as a histogram pointer
+	TH1 *h = dynamic_cast<TH1*>(namedObj);
+	if(!h){
+		_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TH1 type"<<endl;
+		pthread_rwlock_unlock(ROOT_MUTEX);
+		RS_INFO->Unlock();
+		return;
+	}
+    
+	// save histogram info for consumer thread
+	RS_INFO->final_hists.push_back(final_hist_t( server, hnamepath, h ));
+
+	// Unlock mutexes
 	pthread_rwlock_unlock(ROOT_MUTEX);
 	RS_INFO->Unlock();
-	return;
-    }
-    
-    // Cast this as a histogram pointer
-    TH1 *h = dynamic_cast<TH1*>(namedObj);
-    if(!h){
-	_DBG_<<"Object received of type \""<<namedObj->ClassName()<<"\" is not a TH1 type"<<endl;
-	pthread_rwlock_unlock(ROOT_MUTEX);
-	RS_INFO->Unlock();
-	return;
-    }
-    
-    // save histogram info for consumer thread
-    RS_INFO->final_hists.push_back(final_hist_t( server, hnamepath, h ));
-
-
-    // Unlock mutexes
-    pthread_rwlock_unlock(ROOT_MUTEX);
-    RS_INFO->Unlock();
 }
 
 //---------------------------------
 // SeedHnamepathsSet
 //---------------------------------
-void rs_cmsg::SeedHnamepathsSet(void *vhnamepaths, bool request_histo, bool request_macro)
+void rs_xmsg::SeedHnamepathsSet(void *vhnamepaths, bool request_histo, bool request_macro)
 {
 	set<string> &hnamepaths = *(set<string>*)vhnamepaths;
 
@@ -1522,7 +1585,7 @@ void rs_cmsg::SeedHnamepathsSet(void *vhnamepaths, bool request_histo, bool requ
 //---------------------------------
 // SeedHnamepaths
 //---------------------------------
-void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool request_macro)
+void rs_xmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool request_macro)
 {
 	/// This is run in a separate, temporary thread
 	/// to request the histograms and/or macros with
@@ -1530,7 +1593,7 @@ void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool 
 	/// from ReadConfig as a new RSTab's configuration
 	/// is read in, or from RegisterMacro when a macro
 	/// is first read that specifies a set of hnamepaths
-	/// it needs. The intent is for them to be slowly read 
+	/// it needs. The intent is for them to be read 
 	/// in the background when the program first starts
 	/// up so that by the time the user asks for them,
 	/// they may already be here making the program
@@ -1539,45 +1602,31 @@ void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool 
 	/// This loops over the given hnamepaths requesting
 	/// each from the generic "rootspy" since we don't
 	/// yet know what producers are there. It may also
-	/// requests the hnamepath as both a histogram and
+	/// request the hnamepath as both a histogram and
 	/// a macro (depending on the supplied flags) since
-	/// we may not actually don't know at this point which
+	/// we may not actually know at this point which
 	/// it is!
-	///
-	/// In order to not overwhelm the remote
-	/// processes, requests are sent out one at a time
-	/// with a sleep call in between. Thus, this may
-	/// take a while to send out all requests.
 
 	// If requesting histos, a single request may be sent for
 	// all of them.
 	if(request_histo){
-		vector<string> shnamepaths;
-		list<string>::iterator iter = hnamepaths.begin();
-		for(; iter!=hnamepaths.end(); iter++)shnamepaths.push_back(*iter);
 
-// 		// Send a request for all histogram definitions.
-// 		// This is to avoid the "No hdef_t" errors if the
-// 		// histogram comes back before the definition.
-// 		if(verbose>0) _DBG_ << "Requesting all histogram definitions" << endl;
-// 		RequestHists("rootspy");
-// 		
-// 		// Sleep for 1 second to give servers a chance to respond.
-// 		usleep(1000000);
+		// convert from STL list to STL vector container
+		vector<string> shnamepaths;
+		for(auto h : hnamepaths) shnamepaths.push_back( h );
 		
+		// Request histos
 		if(verbose>1) _DBG_ << "SeedHnamepaths: requesting " << shnamepaths.size() << " histos" << endl;
 		if(verbose>2) for(auto s : shnamepaths) _DBG_ << "   --  " << s << endl;
 		RequestHistograms("rootspy", shnamepaths);
 	}
 
+	// Optionally request macro
 	if(request_macro){
-		list<string>::iterator iter = hnamepaths.begin();
-		for(; iter!=hnamepaths.end(); iter++){
-			string hnamepath = *iter;
+		for(auto hnamepath : hnamepaths){
 		
 			if(verbose>0) _DBG_ << "SeedHnamepaths: requesting macro " << hnamepath << endl;
 			RequestMacro("rootspy", hnamepath);
-			//usleep(10000);
 		}
 	}
 }
@@ -1585,13 +1634,13 @@ void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool 
 //---------------------------------
 // DirectUDPServerThread
 //---------------------------------
-void rs_cmsg::DirectUDPServerThread(void)
+void rs_xmsg::DirectUDPServerThread(void)
 {
 	/// This method is run in a thread to listen for
 	/// UDP packets sent here directly from a remote
 	/// histogram producer. This allows the bulky
 	/// histogram messages to be sent this way instead
-	/// of through the cMsg server.
+	/// of through the xmsg server.
 
 	if(netdevices.empty()) return; // extra bomb-proofing
 
@@ -1640,7 +1689,7 @@ void rs_cmsg::DirectUDPServerThread(void)
 	udpdev = dev;
 	
 	uint32_t buff_size = 100000;
-	uint8_t *buff = new uint8_t[buff_size];
+	char *buff = new char[buff_size];
 	
 	while(!stop_udpthread){
 	
@@ -1670,30 +1719,21 @@ void rs_cmsg::DirectUDPServerThread(void)
 		}
 		string hnamepath = (const char*)rsudp->hnamepath;
 		string sender = (const char*)rsudp->sender;
-		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
+		char *buff8 = (char*)&rsudp->buff_start;
 		if(verbose>2) _DBG_ << "UDP: hnamepath=" << rsudp->hnamepath << " type=" << mtype << " from " << sender << endl;
 
-		// Write info into a cMsg object so we can
+		// Write info into a rs_serialized object so we can
 		// let the same RegisterHistogram method handle
-		// it as handles histograms coming from cMsg itself.
-		cMsgMessage *cmsg = new cMsgMessage();
-		cmsg->setSubject(myname);
-		cmsg->setType(sender);
-		cmsg->setText("histogram");
-		cmsg->add("hnamepath", hnamepath);
-		cmsg->add("TMessage", buff8, rsudp->buff_len);
-		cmsg->add("time_sent", rsudp->time_sent);
-		cmsg->add("time_requester", rsudp->time_requester);
-		cmsg->add("time_received", rsudp->time_received);
+		// it as handles histograms coming from xmsg itself.
+		auto serialized = new rs_serialized;
+		serialized->sender = sender;
+		serialized->hnamepath = hnamepath;
+		serialized->data.reserve(rsudp->buff_len);
+		std::copy( buff8, buff8 + rsudp->buff_len, std::back_inserter(serialized->data) );
 
 		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[cmsg] = sender; // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();
-
-		// Launch separate thread to handle this
-		//thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
-		//t.detach();
-		
+		HISTOS_TO_REGISTER.insert(serialized);  // defer to main ROOT thread
+		REGISTRATION_MUTEX.unlock();		
 	}
 	
 	close(fd);
@@ -1704,13 +1744,13 @@ void rs_cmsg::DirectUDPServerThread(void)
 //---------------------------------
 // DirectTCPServerThread
 //---------------------------------
-void rs_cmsg::DirectTCPServerThread(void)
+void rs_xmsg::DirectTCPServerThread(void)
 {
 	/// This method is run in a thread to listen for
 	/// UDP packets sent here directly from a remote
 	/// histogram producer. This allows the bulky
 	/// histogram messages to be sent this way instead
-	/// of through the cMsg server.
+	/// of through the xmsg server.
 
 	if(netdevices.empty()) return; // extra bomb-proofing
 
@@ -1773,7 +1813,7 @@ void rs_cmsg::DirectTCPServerThread(void)
 	tcpdev = dev;
 	
 	uint32_t buff_size = 10000000;
-	uint8_t *buff = new uint8_t[buff_size];
+	char *buff = new char[buff_size];
 	
 	while(!stop_tcpthread){
 	
@@ -1806,7 +1846,7 @@ void rs_cmsg::DirectTCPServerThread(void)
 		}
 		string hnamepath = (const char*)rsudp->hnamepath;
 		string sender = (const char*)rsudp->sender;
-		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
+		char *buff8 = (char*)&rsudp->buff_start;
 		if(verbose>2) _DBG_ << "TCP: hnamepath=" << rsudp->hnamepath << " type=" << mtype << " from " << sender << endl;
 		
 		// It's possible large messages could be broken up by the network into
@@ -1830,27 +1870,18 @@ void rs_cmsg::DirectTCPServerThread(void)
 			continue;
 		}
 
-		// Write info into a cMsg object so we can
+		// Write info into a rs_serialized object so we can
 		// let the same RegisterHistogram method handle
-		// it as it handles histograms coming from cMsg itself.
-		cMsgMessage *cmsg = new cMsgMessage();
-		cmsg->setSubject(myname);
-		cmsg->setType(sender);
-		cmsg->setText("histogram");
-		cmsg->add("hnamepath", hnamepath);
-		cmsg->add("TMessage", buff8, rsudp->buff_len);
-		cmsg->add("time_sent", rsudp->time_sent);
-		cmsg->add("time_requester", rsudp->time_requester);
-		cmsg->add("time_received", rsudp->time_received);
+		// it as handles histograms coming from xmsg itself.
+		auto serialized = new rs_serialized;
+		serialized->sender = sender;
+		serialized->hnamepath = hnamepath;
+		serialized->data.reserve(rsudp->buff_len);
+		std::copy( buff8, buff8 + rsudp->buff_len, std::back_inserter(serialized->data) );
 
 		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[cmsg] = sender; // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();
-
-		// Launch separate thread to handle this
-		//thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
-		//t.detach();
-		
+		HISTOS_TO_REGISTER.insert(serialized);  // defer to main ROOT thread
+		REGISTRATION_MUTEX.unlock();		
 	}
 	
 	close(fd);
