@@ -8,6 +8,7 @@ env = env.Clone()
 
 sbms.AddROOT(env)
 sbms.AddCMSG(env)
+sbms.AddXMSG(env)
 env.AppendUnique(LIBS=['RootSpy-client', 'RootSpy'])
 sbms.executable(env)
 

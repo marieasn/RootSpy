@@ -83,8 +83,22 @@ if not DEBUG=='0':
 	env.PrependUnique(    CXXFLAGS = ['-g'])
 	env.PrependUnique(FORTRANFLAGS = ['-g'])
 
-# Enable some C++11 features available in gcc4.4
-env.AppendUnique(CXXFLAGS=['-std=c++11'])
+# xMsg requires C++14 features. ROOT uses C++11.
+# Let ROOT add the -std=c++11 flag and then xMsg
+# will add the -std=c++14 flag after it to superceed
+# it. No need to further complicate things here.
+# Enable some C++11 features available in gcc4.9.2
+# env.AppendUnique(CXXFLAGS=['-std=c++11'])
+
+# The following offensive setting is needed to force 
+# the compiler NOT to include __cxx11 in the namespace
+# for std::basic_string<... This seems to be included
+# in RootSpy objects, but not in the CODA installed cMsg
+# library. Oddly, I compiled a private version of cMsg
+# with the -std=c++11 flag and it did NOT add the namespace.
+# I fully expect this line will cause me grief at some
+# point in the future. (Sorry future Dave!)
+#env.AppendUnique(CXXFLAGS=['-D_GLIBCXX_USE_CXX11_ABI=0'])
 
 # Apply any platform/architecture specific settings
 sbms.ApplyPlatformSpecificSettings(env, arch)

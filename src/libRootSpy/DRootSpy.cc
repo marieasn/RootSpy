@@ -88,6 +88,15 @@ void REGISTER_ROOTSPY_MACRO(string name, string path, string macro_data){
 //...................................................
 
 
+// The following is a class just to wrap the call to DRootSpy::callback
+// This is needed because the xMsg::subscribe method will create and destroy
+// multiple instances of this callback object. Using an operator() method
+// in DRootSpy itself thus becomes problematic.
+class LocalCallBack{
+	public:
+		void operator()(xmsg::Message &msg){ gROOTSPY->callback( msg ); }
+};
+
 //---------------------------------
 // DRootSpy    (Constructor)
 //---------------------------------
@@ -167,12 +176,18 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 		if(ROOTSPY_UDL){
 			myUDL = ROOTSPY_UDL;
 		}else{
-			myUDL = "cMsg://127.0.0.1/cMsg/rootspy";
+			myUDL = "xMsg://127.0.0.1/rootspy";
+			//myUDL = "cMsg://127.0.0.1/cMsg/rootspy";
 		}
 	}
 	
 	// Copy to member
 	myudl = myUDL;
+
+	// Make connection to xMsg system and subscribe to messages
+	xmsgp = NULL;
+	pub_con = NULL;
+	ConnectToXMSG();
 
 	// Make connection to cMsg system and subscribe to messages
 	cMsgSys = NULL;
@@ -181,13 +196,9 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	ConnectToCMSG();
 	
 	// Launch thread to watch connection and re-establish if it
-	// goes away.
+	// cMsg connection goes away.
 	pthread_create(&mywatcherthread, NULL, WatchConnectionC, this);
 
-
-	// semaphore for handling sending final histograms
-	//int err = sem_init(&RootSpy_final_sem, 0, 1);
-	
 	finalhists = NULL;
 
 	//create a thread to simulate what the environment of using the
@@ -269,9 +280,11 @@ DRootSpy::~DRootSpy()
 	if(DEBUG) pthread_join(mydebugthread, &retval);
 
 	// Unsubscribe
-	for(unsigned int i=0; i<subscription_handles.size(); i++){
-		cMsgSys->unsubscribe(subscription_handles[i]);
-	}
+	for( auto sub : cmsg_subscription_handles ) cMsgSys->unsubscribe(sub);
+	for( auto sub : xmsg_subscription_handles ) xmsgp->unsubscribe( std::unique_ptr<xmsg::Subscription>( sub ) );
+
+	// Stop xMsg system
+	delete xmsgp;
 
 	// Stop cMsg system
 	cMsgSys->stop();
@@ -313,10 +326,53 @@ DRootSpy::~DRootSpy()
 }
 
 //---------------------------------
+// ConnectToXMSG
+//---------------------------------
+void DRootSpy::ConnectToXMSG(void)
+{
+	if( myudl.find("xmsg://") != 0 ) return;
+
+	// Extract name of proxy to connect to
+	string proxy_host = myudl.length()>7 ? myudl.substr(7):"localhost";
+	auto bind_to = xmsg::util::to_host_addr(proxy_host);
+
+	// Connect to xmsg system
+	try {
+		xmsgp = new xMsg(myname);
+		xmsgp->connect(bind_to); 
+		auto cb = LocalCallBack{};
+
+		cout<<"---------------------------------------------------"<<endl;
+		cout<<"rootspy name xmsg: \""<<myname<<"\""<<endl;
+		cout<<"---------------------------------------------------"<<endl;
+	
+		// Subscribe to generic rootspy info requests
+		auto connection = xmsgp->connect(bind_to);
+		auto topic_all = xmsg::Topic::build("rootspy", "rootspy", "*");
+		xmsg_subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), cb).release() );
+
+		// Subscribe to rootspy requests specific to me
+		connection = xmsgp->connect(bind_to); // xMsg requires unique connections
+		auto topic_me = xmsg::Topic::build("rootspy", myname, "*");
+		xmsg_subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), cb).release() );
+		
+		// Create connection for outgoing messages
+		pub_con = new xmsg::ProxyConnection( xmsgp->connect(bind_to) );
+
+	} catch ( std::exception& e ) {
+		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to xmsg system! __________________"<<endl;
+		cout << e.what() << endl; 
+		cout<<endl<<endl<<endl<<endl;
+	}
+}
+
+//---------------------------------
 // ConnectToCMSG
 //---------------------------------
 void DRootSpy::ConnectToCMSG(void)
 {
+	if( myudl.find("cmsg://") != 0 ) return;
+
 	// Connect to cMsg system
 	string myName = myname;
 	string myDescr = "Access ROOT objects in JANA program";
@@ -331,7 +387,7 @@ void DRootSpy::ConnectToCMSG(void)
 	}
 
 	cout<<"---------------------------------------------------"<<endl;
-	cout<<"rootspy name: \""<<myname<<"\""<<endl;
+	cout<<"rootspy name cmsg: \""<<myname<<"\""<<endl;
 	cout<<"---------------------------------------------------"<<endl;
 	
 	// Set subscription config parameters to prevent
@@ -344,11 +400,11 @@ void DRootSpy::ConnectToCMSG(void)
 
 	// Subscribe to generic rootspy info requests
 	//subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, cMsgSubConfig));
-	subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
+	cmsg_subscription_handles.push_back(cMsgSys->subscribe("rootspy", "*", this, NULL));
 
 	// Subscribe to rootspy requests specific to us
 	//subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, cMsgSubConfig));
-	subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
+	cmsg_subscription_handles.push_back(cMsgSys->subscribe(myname, "*", this, NULL));
 	
 	// Start cMsg system
 	cMsgSys->start();
@@ -459,10 +515,182 @@ void* DRootSpy::DebugSampler(void)
 	return NULL;
 }
 
-void JUNK(cMsgMessage &response, string hnamepath, uint32_t addr32, uint16_t port){}
+//---------------------------------
+// SendMessage
+//
+// This is a wrapper for the templated version of this method
+// defined in the header file. This is useful for commands that
+// do not require an associated payload. Since xmsg requires
+// a non-NULL payload, we just create an empty one for it.
+//
+// See comments for templated SendMessage method in header for
+// details.
+//---------------------------------
+void DRootSpy::SendMessage(string servername, string command)
+{
+	std::vector<std::uint8_t> buffer;
+	SendMessage( servername, command, std::move(buffer), "none" );
+}
 
 //---------------------------------
-// callback
+// SendMessage
+//
+// This is another wrapper for the templated version of this method
+// defined in the header file. This is useful for commands that
+// DO require an associated payload, but have it in the form of
+// and xMsg Payload object. This will serialize the payload object
+// and pass it into the templated mathod
+//
+// See comments for templated SendMessage method in header for
+// details.
+//---------------------------------
+void DRootSpy::SendMessage(string servername, string command, xmsg::proto::Payload &payload)
+{
+	auto buffer = std::vector<std::uint8_t>(payload.ByteSize());
+	payload.SerializeToArray( buffer.data(), buffer.size() );
+	SendMessage( servername, command, std::move(buffer), "xmsg::proto::Payload" );
+}
+
+//---------------------------------
+// callback  (xMsg)
+//---------------------------------
+void DRootSpy::callback(xmsg::Message &msg)
+{	
+	// The convention here is that the message "type" always contains the
+	// unique name of the sender and therefore should be the "subject" to
+	// which any reponse should be sent.
+	string sender = msg.meta()->replyto();
+	if(sender == myname){  // no need to process messages we sent!
+		if(VERBOSE>4) cout << "Ignoring message from ourself (\""<<sender<<"\")" << endl;
+		return;
+	}
+	
+	// If the message has a Payload object serialized in the payload,
+	// then deserialize it and make a map of the items
+	RSPayloadMap payload_items;
+	xmsg::proto::Payload payload; // n.b. needs to maintain same scope as above container!
+	if( msg.meta()->datatype() == "xmsg::proto::Payload" ){
+		
+		auto &buffer = msg.data();
+		payload.ParseFromArray( buffer.data(), buffer.size() );
+			
+		for(int i=0; i<payload.item_size(); i++ ){
+			payload_items[payload.item(i).name()] = &payload.item(i).data();
+		}
+	}
+
+	// Optional Debugging messages
+	if(VERBOSE>6){
+	
+		_DBG_ << "xmsg recieved --" <<endl;
+		_DBG_ << "    command: " << msg.meta()->description() << endl;
+		_DBG_ << "   datatype: " << msg.meta()->datatype() << endl;
+		for( auto p : payload_items ) _DBG_ << "       item: " << p.first << endl;
+	}
+
+	// The actual command is always sent in the description of the message
+	string cmd = msg.meta()->description();
+	if(VERBOSE>3) _DBG_ << "msg.meta()->description() = \"" << cmd << "\"" << endl;
+	if (cmd == "null") return;
+
+	// Dispatch command
+	bool handled_message = false;
+
+	double now = GetTime(); // current time in s (arbitrary zero)
+	
+	//===========================================================
+	if(cmd=="who's there?"){
+		xmsg::proto::Payload payload;
+		AddToPayload(payload, "program", gROOTSPY_PROGRAM_NAME);
+		SendMessage(sender, "I am here", payload);
+		handled_message = true;
+	//===========================================================
+	} else 	if(cmd == "list hists") {
+		if(VERBOSE>1) _DBG_ << "responding to \"list hists\"..." << endl;
+		listHists(sender);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
+	//===========================================================
+	} else 	if(cmd == "get hist") {
+		// Get name of requested histogram
+		string hnamepath = payload_items["hnamepath"]->string();
+		double delta_t = now - last_sent[sender][hnamepath];
+		if(delta_t > 1.0){
+// 			last_sent[sender][hnamepath] = now; // record time
+// 			try{
+// 				uint32_t addr = payload_items["udpaddr"]->flsint64();
+// 				uint16_t port = payload_items["udpport"]->flsint32();
+// 				if(VERBOSE>1){
+// 					struct in_addr sin_addr;
+// 					sin_addr.s_addr = ntohl(addr);
+// 					string ip_dotted = inet_ntoa(sin_addr);
+// 					_DBG_ << "request has UDP info: " << ip_dotted << " : " << port << endl;
+// 				}
+// 				if(VERBOSE>1) _DBG_ << "responding via UDP to \"get hist\" for " << hnamepath << " ..." << endl;
+// 				uint32_t tcpaddr = 0;
+// 				uint16_t tcpport = 0;
+// 				try{
+// 					tcpaddr = payload_items["tcpaddr"]->flsint64();
+// 					tcpport = payload_items["tcpport"]->flsint32();
+// 					if(VERBOSE>1){
+// 						struct in_addr sin_addr;
+// 						sin_addr.s_addr = ntohl(tcpaddr);
+// 						string ip_dotted = inet_ntoa(sin_addr);
+// 						_DBG_ << "request has TCP info: " << ip_dotted << " : " << tcpport << endl;
+// 					}
+// 				}catch(...){}
+// 				throw 0; // Skip using direct UDP/TCP sockets for now (xmsg does it directly anyway)
+// 				//thread t(&DRootSpy::getHistUDP, this, (void*)response, hnamepath, addr, port, tcpaddr, tcpport);
+// 				//t.detach();
+// 				//response = NULL; // thread owns response now
+// 			}catch(...){
+				if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
+				getHist(sender, hnamepath);
+//			}
+			if(VERBOSE>3) _DBG_ << "...done" << endl;
+		}else{
+			if(VERBOSE>3) _DBG_ << "ignoring request for " << hnamepath << " (recently sent)" << endl;
+		}
+	//===========================================================
+	} else 	if(cmd == "get hists") {
+#if 0
+		// Get name of requested histograms
+		vector<string> *hnamepaths = msg->getStringVector("hnamepaths");
+		if(VERBOSE>1) _DBG_ << "responding to \"get hists\" for " << hnamepaths->size() << " hnamepaths ..." << endl;
+		getHists(*response, *hnamepaths);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
+	//===========================================================
+	} else 	if(cmd == "list macros") {
+		if(VERBOSE>1) _DBG_ << "responding to \"list macros\"..." << endl;
+		listMacros(*response);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
+	//===========================================================
+	} else 	if(cmd == "get macro") {
+		// Get name of requested histogram
+		string hnamepath = msg->getString("hnamepath");
+		if(VERBOSE>1) _DBG_ << "sending out macro " << hnamepath << endl;
+		getMacro(*response, hnamepath);
+		if(VERBOSE>3) _DBG_ << "...done" << endl;
+	//===========================================================
+	} else 	if(cmd == "provide final") {
+		finalhists = msg->getStringVector("hnamepaths");
+		finalsender = msg->getType();
+//		sem_post(&RootSpy_final_sem);
+		process_finals = true;
+		if(VERBOSE>1) cerr<<"got finalhists"<<endl;
+		delete msg;
+		in_callback = false;
+		return;
+#endif
+	}
+
+	//===========================================================
+	if(!handled_message){
+		_DBG_<<"Received unknown message --  cmd: " << cmd <<endl;
+	}
+}
+
+//---------------------------------
+// callback  (cMsg)
 //---------------------------------
 //TODO: documentation comment.
 void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
@@ -516,13 +744,12 @@ void DRootSpy::callback(cMsgMessage *msg, void *userObject) {
 
 	// Check message queue to make sure it doesn't grow too large
 	vector<int32_t> queue_counts;
-	for(uint32_t i=0; i<subscription_handles.size(); i++){
-		void *handle = subscription_handles[i];
+	for( auto handle : cmsg_subscription_handles ){
 		int32_t queue_count = cMsgSys->subscriptionQueueCount(handle);
 		if(queue_count >= 32){
 			static int Nwarnings = 0;
 			if(Nwarnings<20){
-				_DBG_ << "cMsg queue " << i << " has >32 messages. Clearing ..." << endl;
+				_DBG_ << "cMsg queue has >32 messages. Clearing ..." << endl;
 				if(++Nwarnings == 20) _DBG_ << "  (last warning!" << endl;
 			}
 			cMsgSys->subscriptionQueueClear(handle);
@@ -718,6 +945,61 @@ void DRootSpy::listHists(cMsgMessage &response)
 }
 
 //---------------------------------
+// listHists
+//---------------------------------
+// Save the top-level directory used to form the list of histograms.
+// This is needed because we want to "cd" into the path relative to
+// this directory when servicing a "get hist" request below. Specfically,
+// using gROOT->cd(PATH) will not work if the histograms are being
+// written to a file. At the same time, we don't want to assume that
+// the program we're attached to doesn't ever change the value of
+// gDirectory while running so we save it here. Note that this doesn't
+// actually guarantee it will work due to multiple threads, but it
+// at least will for the simplest cases.
+void DRootSpy::listHists(string sender) 
+{
+	in_list_hists = true;
+
+	// Lock access to ROOT global while we access it
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+
+	hist_dir = gDirectory;
+	
+	// Add histograms to list, recursively traversing ROOT directories
+	vector<hinfo_t> hinfos;
+	addRootObjectsToList(hist_dir, hinfos);
+	
+	// Release lock on ROOT global
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+	
+	// If any histograms were found, copy their info into the message
+	xmsg::proto::Payload payload;
+	if(hinfos.size()>0) {
+		// Copy elements of hinfo objects into individual vectors
+		vector<string> hist_names;
+		vector<string> hist_types;
+		vector<string> hist_paths;
+		vector<string> hist_titles;
+		for(unsigned int i=0; i<hinfos.size(); i++){
+			hist_names.push_back(hinfos[i].name);
+			hist_types.push_back(hinfos[i].type);
+			hist_paths.push_back(hinfos[i].path);
+			hist_titles.push_back(hinfos[i].title);
+		}
+		AddToPayload(payload, "hist_names",  hist_names);
+		AddToPayload(payload, "hist_types",  hist_types);
+		AddToPayload(payload, "hist_paths",  hist_paths);
+		AddToPayload(payload, "hist_titles", hist_titles);
+	}
+	
+	auto tsending = (::google::protobuf::int64)time(NULL);
+	AddToPayload(payload, "time_sent",  tsending);
+	SendMessage(sender, "hists list", payload);
+	
+	in_list_hists = false;
+}
+
+//---------------------------------
 // getHist
 //---------------------------------
 //TODO: documentation comment.
@@ -771,6 +1053,73 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 		uint64_t tsending = (uint64_t)time(NULL);
 		response.add("time_sent",  tsending);
 		cMsgSys->send(&response);
+	}
+
+	in_get_hist = false;
+}
+
+//---------------------------------
+// getHist
+//---------------------------------
+//TODO: documentation comment.
+void DRootSpy::getHist(string &sender, string &hnamepath, bool send_message)
+{
+
+	in_get_hist = true;
+
+	// split hnamepath into histo name and path
+	size_t pos = hnamepath.find_last_of("/");
+	if(pos == string::npos){in_get_hist=false; return;}
+	string hname = hnamepath.substr(pos+1, hnamepath.length()-1);
+	string path = hnamepath.substr(0, pos);
+	if(path[path.length()-1]==':')path += "/";
+	
+	// Looks like ROOT6 has like leading " :"
+	if(path.find(": ") == 0) path.erase(0,2);
+
+	// Lock access to ROOT global while we access it
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+
+	// Get pointer to ROOT object
+	TDirectory *savedir = gDirectory;
+	hist_dir->cd(path.c_str()); // use directory from last time "list hist" request was serviced
+	TObject *obj = gROOT->FindObject(hname.c_str());
+	savedir->cd();
+	
+	// If object not found, release lock on ROOT global and return
+	if(!obj){
+		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		_DBG_ << "Could not find \"" << hname << "\" in path\"" << path <<"\"!" << endl;
+		in_get_hist = false;
+		return;
+	}
+
+	// Serialize object
+	TMessage *tm = new TMessage(kMESS_OBJECT);
+	tm->WriteObject(obj);
+	uint8_t *buff8 = (uint8_t*)tm->Buffer();
+	int len = tm->Length();
+	
+	// Copy serliazed object into format that can be added to
+	// Payload
+	string data;
+	data.reserve( len );
+	std::copy( buff8, buff8 +len, std::back_inserter(data) );
+
+	xmsg::proto::Payload payload;
+	AddToPayload(payload, "hnamepath", hnamepath);
+	AddToPayload(payload, "TMessage", data);
+
+	// Finished with TMessage object. Free it and release lock on ROOT global
+	delete tm;
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+
+	// Send message containing histogram (asynchronously)
+	if(send_message){
+		::google::protobuf::int64 tsending = (uint64_t)time(NULL);
+		AddToPayload(payload, "time_sent", tsending);
+		SendMessage(sender, "histogram", payload);
+		if(VERBOSE>3) _DBG_<<"Sent histogram message with TMessage buffer of " << data.size() << " bytes" << endl;
 	}
 
 	in_get_hist = false;

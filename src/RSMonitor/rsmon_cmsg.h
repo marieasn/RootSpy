@@ -13,16 +13,28 @@
 #include <set>
 #include <vector>
 #include <string>
+#include <map>
 using namespace std;
 
+#ifdef HAVE_CMSG
 #include <cMsg.hxx>
 using namespace cmsg;
+#endif // HAVE_CMSG
 
 typedef struct timespec timespec_t;
 
-class rsmon_cmsg:public cMsgCallback{
+
+class rsmon_cmsg
+#ifdef HAVE_CMSG
+:public cMsgCallback
+#endif
+{
 	public:
+
+#ifdef HAVE_CMSG
 		rsmon_cmsg(string myname, cMsg *cMsgSys);
+#endif
+
 		virtual ~rsmon_cmsg();
 		
 		class nodeInfo_t{
@@ -69,14 +81,16 @@ class rsmon_cmsg:public cMsgCallback{
 		bool include_rootspy_in_stats;
 		bool respond_to_pings;
 
-		void callback(cMsgMessage *msg, void *userObject);		
 		void FillLines(double now, vector<string> &lines);
 		void FillLinesMessageSizes(double now, vector<string> &lines);
 		void PingServers(void);
 
-	private:
+#ifdef HAVE_CMSG
+		void callback(cMsgMessage *msg, void *userObject);		
 		cMsg *cMsgSys;
-		
+#endif  // HAVE_CMSG
+
+	private:
 		string myname;
 		
 		map<string, nodeInfo_t> all_nodes;

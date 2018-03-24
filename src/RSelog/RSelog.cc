@@ -39,13 +39,22 @@ using namespace std;
 // GLOBALS
 //////////////////////////////////////////////
 rs_cmsg *RS_CMSG = NULL;
+rs_xmsg *RS_XMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
 
+bool USE_CMSG=false;
+bool USE_XMSG=true;
+
 // These defined in rs_cmsg.cc
-extern mutex REGISTRATION_MUTEX;
-extern map<void*, string> HISTOS_TO_REGISTER;
-extern map<void*, string> MACROS_TO_REGISTER;
+extern mutex REGISTRATION_MUTEX_CMSG;
+extern map<void*, string> HISTOS_TO_REGISTER_CMSG;
+extern map<void*, string> MACROS_TO_REGISTER_CMSG;
+
+// These defined in rs_xmsg.cc
+extern mutex REGISTRATION_MUTEX_XMSG;
+extern set<rs_serialized*> HISTOS_TO_REGISTER_XMSG;
+extern set<rs_serialized*> MACROS_TO_REGISTER_XMSG;
 
 
 static int VERBOSE = 1;  // Verbose output to screen - default is to print out some information
@@ -115,9 +124,13 @@ int main(int narg, char *argv[])
 	sprintf(str, "RSelog_%d", getpid());
 	CMSG_NAME = string(str);
 	cout << "RootSpy UDL is " << ROOTSPY_UDL << endl;
-	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
-	RS_CMSG->verbose = VERBOSE;
-	
+	if( USE_CMSG ){
+		RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
+		RS_CMSG->verbose = VERBOSE;
+	}
+	if( USE_XMSG ) RS_XMSG = new rs_xmsg(ROOTSPY_UDL, CMSG_NAME);
+
+
 	// Wait for RS_CMSG to launch cMsg threads and ping servers
 	sleep(2);
 	
@@ -125,8 +138,10 @@ int main(int narg, char *argv[])
 	// when the histograms come.
 	cout << endl << "------------------------------------------------------" << endl;
 	cout << "Requesting all histogram and macro definitions ... " << endl;
-	RS_CMSG->RequestHists("rootspy");
-	RS_CMSG->RequestMacroList("rootspy");
+	if( RS_CMSG ) RS_CMSG->RequestHists("rootspy");
+	if( RS_CMSG ) RS_CMSG->RequestMacroList("rootspy");
+	if( RS_XMSG ) RS_XMSG->RequestHists("rootspy");
+	if( RS_XMSG ) RS_XMSG->RequestMacroList("rootspy");
 	usleep(500000);
 	
 	// Initial request of all hnamepaths. Most likely these are macros.
@@ -264,7 +279,8 @@ int main(int narg, char *argv[])
 	
 
 	// Clean up
-	delete RS_CMSG;
+	if( RS_CMSG )delete RS_CMSG;
+	if( RS_XMSG )delete RS_XMSG;
 	delete RS_INFO;
 
 	cout << "Done" << endl;
@@ -329,8 +345,10 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 		cout << "Requesting hnamepaths:" << endl;
 		for(string s : hnamepaths){
 			cout << "   " << s << endl;
-			RS_CMSG->RequestHistogram("rootspy", s);
-			RS_CMSG->RequestMacro("rootspy", s);
+			if( RS_CMSG )RS_CMSG->RequestHistogram("rootspy", s);
+			if( RS_CMSG )RS_CMSG->RequestMacro("rootspy", s);
+			if( RS_XMSG )RS_XMSG->RequestHistogram("rootspy", s);
+			if( RS_XMSG )RS_XMSG->RequestMacro("rootspy", s);
 		}
 	}
 
@@ -340,7 +358,9 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 	while(!DONE){
 	
 		// current time in seconds 
-		double now = RS_CMSG->GetTime();
+		double now = 0.0;
+		if( RS_CMSG ) now = RS_CMSG->GetTime();
+		if( RS_XMSG ) now = RS_XMSG->GetTime();
 
 		// Register any ROOT items or macros queued up by rs_cmsg
 		RegisterQueuedItems();
@@ -416,23 +436,43 @@ void RegisterQueuedItems(void)
 	// here.
 
 	// Register any histograms waiting in the queue
-	if( ! HISTOS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto h : HISTOS_TO_REGISTER){
-			RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
+	if( ! HISTOS_TO_REGISTER_CMSG.empty() ){
+		REGISTRATION_MUTEX_CMSG.lock();
+		for(auto h : HISTOS_TO_REGISTER_CMSG){
+			if( RS_CMSG ) RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
 		}
-		HISTOS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
+		HISTOS_TO_REGISTER_CMSG.clear();
+		REGISTRATION_MUTEX_CMSG.unlock();
 	}
 	
 	// Register any macros waiting in the queue
-	if( ! MACROS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto m : MACROS_TO_REGISTER){
-			RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
+	if( ! MACROS_TO_REGISTER_CMSG.empty() ){
+		REGISTRATION_MUTEX_CMSG.lock();
+		for(auto m : MACROS_TO_REGISTER_CMSG){
+			if( RS_CMSG ) RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
 		}
-		MACROS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
+		MACROS_TO_REGISTER_CMSG.clear();
+		REGISTRATION_MUTEX_CMSG.unlock();
+	}
+
+	// Register any histograms waiting in the queue
+	if( ! HISTOS_TO_REGISTER_XMSG.empty() ){
+		REGISTRATION_MUTEX_XMSG.lock();
+		for(auto h : HISTOS_TO_REGISTER_XMSG){
+			if( RS_XMSG ) RS_XMSG->RegisterHistogram(h);
+		}
+		HISTOS_TO_REGISTER_XMSG.clear();
+		REGISTRATION_MUTEX_XMSG.unlock();
+	}
+	
+	// Register any macros waiting in the queue
+	if( ! MACROS_TO_REGISTER_XMSG.empty() ){
+		REGISTRATION_MUTEX_XMSG.lock();
+		for(auto m : MACROS_TO_REGISTER_XMSG){
+			if( RS_XMSG ) RS_XMSG->RegisterMacro(m);
+		}
+		MACROS_TO_REGISTER_XMSG.clear();
+		REGISTRATION_MUTEX_XMSG.unlock();
 	}
 }
 

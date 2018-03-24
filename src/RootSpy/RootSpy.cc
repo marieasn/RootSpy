@@ -9,16 +9,20 @@ using namespace std;
 
 #include "RootSpy.h"
 #include "rs_mainframe.h"
-//#include "rs_mainframe_multi.h"
 #include "rs_cmsg.h"
+#include "rs_xmsg.h"
 #include "rs_info.h"
 
 // GLOBALS
 rs_mainframe *RSMF = NULL;
 rs_cmsg *RS_CMSG = NULL;
+rs_xmsg *RS_XMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
 int VERBOSE = 1;
+
+bool USE_CMSG=false;
+bool USE_XMSG=true;
 
 string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
 string CMSG_NAME = "<not set here. see below>";
@@ -60,15 +64,24 @@ int main(int narg, char *argv[])
 	char str[512];
 	sprintf(str, "RootSpy GUI %s-%d", hostname, getpid());
 	CMSG_NAME = string(str);
+	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
+	if(ROOTSPY_VERBOSE) VERBOSE = atoi(ROOTSPY_VERBOSE);
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
 	cout << "Setting verbosity level to " << VERBOSE <<endl;
-	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME, INPUT_ROOT_FILENAME=="");
-	RS_CMSG->verbose = VERBOSE;
-	RS_CMSG->hist_default_active = false;
-	RS_CMSG->program_name = "RootSpy";
-	
-	const char *ROOTSPY_VERBOSE = getenv("ROOTSPY_VERBOSE");
-	if(ROOTSPY_VERBOSE) RS_CMSG->verbose = atoi(ROOTSPY_VERBOSE);
+	if( USE_CMSG ){
+		RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME, INPUT_ROOT_FILENAME=="");
+		RS_CMSG->verbose = VERBOSE;
+		RS_CMSG->hist_default_active = false;
+		RS_CMSG->program_name = "RootSpy";
+		RS_CMSG->verbose = VERBOSE;
+	}
+	if( USE_XMSG ){
+		RS_XMSG = new rs_xmsg(ROOTSPY_UDL, CMSG_NAME, INPUT_ROOT_FILENAME=="");
+		RS_XMSG->verbose = VERBOSE;
+		RS_XMSG->hist_default_active = false;
+		RS_XMSG->program_name = "RootSpy";
+		RS_XMSG->verbose = VERBOSE;
+	}
 
 	if(INPUT_ROOT_FILENAME != "") RS_INFO->LoadRootFile(INPUT_ROOT_FILENAME);
 

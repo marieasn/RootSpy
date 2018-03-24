@@ -37,6 +37,12 @@ class rs_xmsg{
 	public:
 		rs_xmsg(string &udl, string &name, bool connect_to_xmsg=true);
 		virtual ~rs_xmsg();
+		
+		rs_xmsg(const rs_xmsg &src_msg){
+			cerr<< __FILE__ << ":" << __LINE__ <<" this=" << this << " src=" << &src_msg << endl;
+		}
+		
+		static rs_xmsg* GetGlobalPtr(void){ return _rs_xmsg_global; }
 
 		// normal requests (async)
 		void PingServers(void);
@@ -86,7 +92,7 @@ class rs_xmsg{
 	public:
 
 		// The following defines the xMsg callback method
-		void operator()(xmsg::Message &msg);
+		void callback(xmsg::Message &msg);
 
 		void RegisterHistList(string server, RSPayloadMap &payload_map);
 		void RegisterHistogram(string server, RSPayloadMap &payload_map);
@@ -98,6 +104,7 @@ class rs_xmsg{
 		void RegisterTree(string server, RSPayloadMap &payload_map);
 		void RegisterMacroList(string server, RSPayloadMap &payload_map);
 		void RegisterMacro(string server, RSPayloadMap &payload_map);
+		void RegisterMacro(rs_serialized *serialized);
 
 #if 0
 		void BuildRequestHists(xmsg::Message &msg, string servername);
@@ -132,6 +139,9 @@ class rs_xmsg{
 		string myname;
 		
 		std::vector< xmsg::Subscription* > subscription_handles;
+	
+	private:
+		static rs_xmsg *_rs_xmsg_global;
 };
 
 
@@ -175,7 +185,7 @@ void rs_xmsg::SendMessage(string servername, string command, V&& data, string da
 	// Create message and send it
 	xmsg::Message msg( std::move(topic), std::move(MyMeta), std::move(data));
 	if(is_online){
-		if(verbose>3) _DBG_ << "Sending \"" << command << "\"" << endl;
+		if(verbose>3) cerr << "Sending \"" << command << "\"" << endl;
 		xmsgp->publish(*pub_con, msg);
 	}
 }
@@ -194,9 +204,9 @@ void rs_xmsg::AddToPayload(xmsg::proto::Payload &payload, string name, V &data)
 	item->mutable_data()->CopyFrom( mydata );
 }
 
-class MyTMessage : public TMessage {
+class MyTMessageXMSG : public TMessage {
 public:
-   MyTMessage(void *buf, Int_t len) : TMessage(buf, len) { }
+   MyTMessageXMSG(void *buf, Int_t len) : TMessage(buf, len) { }
 };
 
 

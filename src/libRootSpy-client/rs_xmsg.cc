@@ -29,35 +29,22 @@ using namespace std;
 #include <TMemFile.h>
 #include <TKey.h>
 
-mutex REGISTRATION_MUTEX;
-set<rs_serialized*> HISTOS_TO_REGISTER;
-set<rs_serialized*> MACROS_TO_REGISTER;
+mutex REGISTRATION_MUTEX_XMSG;
+set<rs_serialized*> HISTOS_TO_REGISTER_XMSG;
+set<rs_serialized*> MACROS_TO_REGISTER_XMSG;
 
 
 double rs_xmsg::start_time=0.0; // overwritten on first call to rs_xmsg::GetTime()
+rs_xmsg* rs_xmsg::_rs_xmsg_global=NULL; // Overwritten in rs_cmsg constructor
 
-//// See http://www.jlab.org/Hall-D/software/wiki/index.php/Serializing_and_deserializing_root_objects
-//class MyTMessage : public TMessage {
-//public:
-//   MyTMessage(void *buf, Int_t len) : TMessage(buf, len) { }
-//};
-
-
-// templated join for a string vector - could be templated?
-// uses stringstreams 
-string join( vector<string>::const_iterator begin, vector<string>::const_iterator end, string delim )
-{
-  stringstream ss;
-
-  vector<string>::const_iterator it = begin;
-  while( it != end ) {
-    ss << *(it++);
-    if(it != end) 
-      ss << delim;
-  }
-
-  return ss.str();
-}
+// The following is a class just to wrap the call to rs_xmsg::callback
+// This is needed because the xMsg::subscribe method will create and destroy
+// multiple instances of this callback object. Using an operator() method
+// in rs_xmsg itself thus becomes problematic.
+class LocalCallBack{
+	public:
+		void operator()(xmsg::Message &msg){ rs_xmsg::GetGlobalPtr()->callback( msg ); }
+};
 
 
 //---------------------------------
@@ -65,6 +52,7 @@ string join( vector<string>::const_iterator begin, vector<string>::const_iterato
 //---------------------------------
 rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 {
+	_rs_xmsg_global = this; // needed by LocalCallBack via GetGlobalPtr
 
 	verbose = 2; // higher values=more messages. 0=minimal messages
 	hist_default_active = true;
@@ -79,6 +67,12 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 	tcpport        = 0;
 	tcpthread      = NULL;
 	stop_tcpthread = false;
+	
+	// Confirm this is an xmsg udl
+	if( udl.find("xmsg://") != 0 ){
+		is_online = false;
+		return;
+	}
 	
 	// Extract name of proxy to connect to
 	string proxy_host = udl.length()>7 ? udl.substr(7):"localhost";
@@ -118,12 +112,14 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 		// Subscribe to generic rootspy info requests
 		auto connection = xmsgp->connect(bind_to);
 		auto topic_all = xmsg::Topic::build("rootspy", "rootspy", "*");
-		subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), *this).release() );
+		auto cb = LocalCallBack{};
+
+		subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), cb).release() );
 
 		// Subscribe to rootspy requests specific to me
 		connection = xmsgp->connect(bind_to); // xMsg requires unique connections
 		auto topic_me = xmsg::Topic::build("rootspy", myname, "*");
-		subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), *this).release() );
+		subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), cb).release() );
 		
 		// Create connection for outgoing messages
 		pub_con = new xmsg::ProxyConnection( xmsgp->connect(bind_to) );
@@ -500,10 +496,9 @@ void rs_xmsg::FinalHistogram(string servername, vector<string> hnamepaths)
 
 
 //---------------------------------
-// operator()  (formerly known as "callback")
+// callback
 //---------------------------------
-//void rs_xmsg::callback(xmsg::Message &msg, void *userObject)
-void rs_xmsg::operator()(xmsg::Message &msg)
+void rs_xmsg::callback(xmsg::Message &msg)
 {	
 	// The convention here is that the message "type" always contains the
 	// unique name of the sender and therefore should be the "subject" to
@@ -610,12 +605,8 @@ void rs_xmsg::operator()(xmsg::Message &msg)
 	//===========================================================
 	if(cmd=="histogram"){
 		// add to global variable so main ROOT thread can actually do registration
-		REGISTRATION_MUTEX.lock();
-//		HISTOS_TO_REGISTER[msg] = sender;
-		REGISTRATION_MUTEX.unlock();
-		//RegisterHistogram(sender, msg);
+		RegisterHistogram(sender, payload_items);
 		handled_message = true;
-//		msg = NULL; // don't delete message here
 	}
 	//===========================================================
 	if(cmd=="histograms"){	
@@ -642,12 +633,8 @@ void rs_xmsg::operator()(xmsg::Message &msg)
 	//===========================================================
 	if(cmd == "macro") {
 		// add to global variable so main ROOT thread can actually do registration
-		REGISTRATION_MUTEX.lock();
-//		MACROS_TO_REGISTER[msg] = sender;
-		REGISTRATION_MUTEX.unlock();
-		//RegisterMacro(sender, msg);
+		RegisterMacro(sender, payload_items);
 		handled_message = true;
-//		msg = NULL; // don't delete message here
 	}
 	//===========================================================
 	if(cmd=="final hists"){  // save histograms
@@ -1003,7 +990,7 @@ void rs_xmsg::RegisterTree(string server, xmsg::Message &msg)
 
     if(verbose>1) _DBG_ << "unpacking tree..." << endl;
 
-    MyTMessage *myTM = new MyTMessage(msg->getByteArray(),msg->getByteArrayLength());
+    MyTMessageXMSG *myTM = new MyTMessageXMSG(msg->getByteArray(),msg->getByteArrayLength());
     Long64_t length;
     TString filename;
     myTM->ReadTString(filename);
@@ -1079,7 +1066,7 @@ void rs_xmsg::RegisterTree(string server, xmsg::Message &msg)
 //
 // This is called when a message containing a histogram
 // is received. It copies the information to the 
-// HISTOS_TO_REGISTER to be unpacked later.
+// HISTOS_TO_REGISTER_XMSG to be unpacked later.
 //---------------------------------
 void rs_xmsg::RegisterHistogram(string server, RSPayloadMap &payload_map)
 {
@@ -1094,12 +1081,17 @@ void rs_xmsg::RegisterHistogram(string server, RSPayloadMap &payload_map)
 	// verify that that all have the same number of entries
 	auto dhnamepath  = payload_map["hnamepath"];
 	auto dTMessage  = payload_map["TMessage"];
+	
+	if(verbose>3) _DBG_<<"Received histogram with TMessage payload of " << dTMessage->string().size() << " bytes" << endl;
 
 	auto serialized = new rs_serialized;
 	serialized->sender = server;
 	serialized->hnamepath = dhnamepath->string();
-	std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), serialized->data.begin() );
-	HISTOS_TO_REGISTER.insert(serialized);
+	serialized->data.resize( dTMessage->string().size() );
+	std::copy( dTMessage->string().begin(), dTMessage->string().end(), serialized->data.begin() );
+	REGISTRATION_MUTEX_XMSG.lock();
+	HISTOS_TO_REGISTER_XMSG.insert(serialized);
+	REGISTRATION_MUTEX_XMSG.unlock();
 }
 
 //---------------------------------
@@ -1107,7 +1099,7 @@ void rs_xmsg::RegisterHistogram(string server, RSPayloadMap &payload_map)
 //
 // This is called when a message containing multiple histograms
 // is received. It copies the information to the 
-// HISTOS_TO_REGISTER to be unpacked later.
+// HISTOS_TO_REGISTER_XMSG to be unpacked later.
 //---------------------------------
 void rs_xmsg::RegisterHistograms(string server, RSPayloadMap &payload_map)
 {
@@ -1115,9 +1107,10 @@ void rs_xmsg::RegisterHistograms(string server, RSPayloadMap &payload_map)
 	// "hnamepath1", "hnamepath2", ... and corresponding ones 
 	// with names like "TMessage1", "TMessage2", ... This will
 	// look for payloads with these names and add each that it
-	// finds to HISTOS_TO_REGISTER.
+	// finds to HISTOS_TO_REGISTER_XMSG.
 	
-	auto Nstart = HISTOS_TO_REGISTER.size();
+	REGISTRATION_MUTEX_XMSG.lock();
+	auto Nstart = HISTOS_TO_REGISTER_XMSG.size();
 	for(int i=1; i<1000; i++){ // loop should never get to 1000
 
 		char pname_hnamepath[256];
@@ -1137,12 +1130,14 @@ void rs_xmsg::RegisterHistograms(string server, RSPayloadMap &payload_map)
 		auto serialized = new rs_serialized;
 		serialized->sender = server;
 		serialized->hnamepath = dhnamepath->string();
-		std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), serialized->data.begin() );
-		HISTOS_TO_REGISTER.insert(serialized);
+		serialized->data.resize( dTMessage->string().size() );
+		std::copy( dTMessage->string().begin(), dTMessage->string().end(), serialized->data.begin() );
+		HISTOS_TO_REGISTER_XMSG.insert(serialized);
 	}
-	if(HISTOS_TO_REGISTER.size() == Nstart){
+	if(HISTOS_TO_REGISTER_XMSG.size() == Nstart){
 		if(verbose>0) _DBG_<<"Poorly formed response for \"histograms\". None found!"<<endl;
-	}                                                                                                                                         
+	}
+	REGISTRATION_MUTEX_XMSG.unlock();                                                                                                                                
 }
 
 //---------------------------------
@@ -1151,7 +1146,7 @@ void rs_xmsg::RegisterHistograms(string server, RSPayloadMap &payload_map)
 // This unpacks a histogram from the rs_serialized object
 // and registers it with the system. This is called from
 // the main ROOT thread while processing items from the
-// HISTOS_TO_REGISTER global.
+// HISTOS_TO_REGISTER_XMSG global.
 //---------------------------------
 void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 {
@@ -1213,7 +1208,8 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 		_DBG_ << "Expecting \"TMessage\" payload in histogram message for " << hnamepath << " but none found!" << endl;
 	}
 	if(mybytes){
-		MyTMessage *myTM = new MyTMessage(&(*mybytes)[0], mybytes->size());
+		if(verbose>3) _DBG_ << "Upacking TMessage of length " << mybytes->size() << " bytes" << endl;
+		MyTMessageXMSG *myTM = new MyTMessageXMSG(&(*mybytes)[0], mybytes->size());
 		namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
 		if(!namedObj){
 			pthread_rwlock_unlock(ROOT_MUTEX);
@@ -1221,7 +1217,6 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 			delete mybytes;
 			return;
 		}
-		delete mybytes;
 	}
     
 	// Cast this as a histogram pointer
@@ -1310,6 +1305,36 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 //---------------------------------
 void rs_xmsg::RegisterMacro(string server, RSPayloadMap &payload_map) 
 {
+	// Confirm all items exist in payload
+	int M = payload_map.count("macro_name")
+		   + payload_map.count("macro_path")
+		   + payload_map.count("TMessage");
+	if( M != 3 ){
+		if(verbose>0) _DBG_<<"Poorly formed response for \"macro\". Ignoring."<<endl;
+		return;
+	}
+
+	// Get hnamepath from message
+	string name = payload_map["macro_name"]->string();
+	string path = payload_map["macro_path"]->string();
+	string hnamepath = path + "/" + name;
+
+	// Package up message into an rs_serialized object
+	auto serialized = new rs_serialized;
+	serialized->sender = server;
+	serialized->hnamepath = hnamepath;
+	auto dTMessage  = payload_map["TMessage"];
+	std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), serialized->data.begin() );
+	REGISTRATION_MUTEX_XMSG.lock();
+	MACROS_TO_REGISTER_XMSG.insert(serialized);
+	REGISTRATION_MUTEX_XMSG.unlock();
+}
+
+//---------------------------------
+// RegisterMacro
+//---------------------------------
+void rs_xmsg::RegisterMacro(rs_serialized *serialized) 
+{
 	/// This will unpack a xmsg containing a macro and 
 	/// register it in the system. The macro will need
 	/// have been declared previously via a RegisterMacroList
@@ -1326,22 +1351,9 @@ void rs_xmsg::RegisterMacro(string server, RSPayloadMap &payload_map)
 	/// queue for later processing.
 
 	if(verbose>=4) _DBG_ << "In rs_xmsg::RegisterMacro()..." << endl;
-    
-	// Confirm all items exist in payload
-	int M = payload_map.count("macro_name")
-		   + payload_map.count("macro_paths")
-		   + payload_map.count("macro_version")
-		   + payload_map.count("TMessage");
-	if( M != 4 ){
-		if(verbose>0) _DBG_<<"Poorly formed response for \"macro\". Ignoring."<<endl;
-		return;
-	}
 
-	// Get hnamepath from message
-	string name = payload_map["macro_name"]->string();
-	string path = payload_map["macro_path"]->string();
-	int version = payload_map["macro_version"]->flsint32();
-	string hnamepath = path + "/" + name;
+	string server = serialized->sender;
+	string hnamepath = serialized->hnamepath;
     
 	// Lock RS_INFO mutex while working with RS_INFO
 	RS_INFO->Lock();
@@ -1395,7 +1407,7 @@ void rs_xmsg::RegisterMacro(string server, RSPayloadMap &payload_map)
 	}
 
 	// save version info
-	hinfo->macroVersion = version;
+	hinfo->macroVersion = 0.0; // versions not supported currently with xMsg (they were never used)
 
 	// Lock ROOT mutex while working with ROOT objects
 	pthread_rwlock_wrlock(ROOT_MUTEX);
@@ -1403,10 +1415,8 @@ void rs_xmsg::RegisterMacro(string server, RSPayloadMap &payload_map)
 	// extract info from message
 	if(verbose>=2) _DBG_ << "unpacking macro \""<<hnamepath<<"\" ..." << endl;
 
-		auto dTMessage  = payload_map["TMessage"];
-		std::vector<char> data;
-		std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), data.begin() );
-		MyTMessage *myTM = new MyTMessage(data.data(), data.size());
+		auto &data = serialized->data;
+		MyTMessageXMSG *myTM = new MyTMessageXMSG(data.data(), data.size());
 		Long64_t length;
 		myTM->ReadLong64(length);
 		TDirectory *savedir = gDirectory;
@@ -1541,7 +1551,7 @@ void rs_xmsg::RegisterFinalHistogram(string server, RSPayloadMap &payload_map)
 	auto dTMessage  = payload_map["TMessage"];
 	std::vector<char> data;
 	std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), data.begin() );
-	MyTMessage *myTM = new MyTMessage(data.data(), data.size());
+	MyTMessageXMSG *myTM = new MyTMessageXMSG(data.data(), data.size());
 	TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
 	if(!namedObj){
 		_DBG_<<"No valid object returned in histogram message."<<endl;
@@ -1731,9 +1741,9 @@ void rs_xmsg::DirectUDPServerThread(void)
 		serialized->data.reserve(rsudp->buff_len);
 		std::copy( buff8, buff8 + rsudp->buff_len, std::back_inserter(serialized->data) );
 
-		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER.insert(serialized);  // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();		
+		REGISTRATION_MUTEX_XMSG.lock();
+		HISTOS_TO_REGISTER_XMSG.insert(serialized);  // defer to main ROOT thread
+		REGISTRATION_MUTEX_XMSG.unlock();		
 	}
 	
 	close(fd);
@@ -1879,9 +1889,9 @@ void rs_xmsg::DirectTCPServerThread(void)
 		serialized->data.reserve(rsudp->buff_len);
 		std::copy( buff8, buff8 + rsudp->buff_len, std::back_inserter(serialized->data) );
 
-		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER.insert(serialized);  // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();		
+		REGISTRATION_MUTEX_XMSG.lock();
+		HISTOS_TO_REGISTER_XMSG.insert(serialized);  // defer to main ROOT thread
+		REGISTRATION_MUTEX_XMSG.unlock();		
 	}
 	
 	close(fd);

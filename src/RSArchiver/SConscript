@@ -9,6 +9,7 @@ env = env.Clone()
 
 sbms.AddROOT(env)
 sbms.AddCMSG(env)
+sbms.AddXMSG(env)
 env.PrependUnique(LIBS='RootSpy-client')
 
 # This a temporary fix to avoid requiring 
@@ -17,10 +18,11 @@ env.AppendUnique(CCFLAGS='-DNO_CODAOBJECTROOT')
 
 codalibdir = '%s/Linux-x86_64/lib' % os.getenv('CODA', '/')
 
-if os.path.exists(codalibdir):
-	env.AppendUnique(LIBPATH=codalibdir, LIBS='codaObject')
-else:
-	env.AppendUnique(CCFLAGS='-DNO_CODAOBJECTROOT')
+env.AppendUnique(CCFLAGS='-DNO_CODAOBJECTROOT')
+#if os.path.exists(codalibdir):
+#	env.AppendUnique(LIBPATH=codalibdir, LIBS='codaObject')
+#else:
+#	env.AppendUnique(CCFLAGS='-DNO_CODAOBJECTROOT')
 	
 sbms.executable(env)
 

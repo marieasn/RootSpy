@@ -12,7 +12,7 @@
 #include "rs_info.h"
 #include "rs_cmsg.h"
 #include "tree_info_t.h"
-#include "cMsg.h"
+
 
 #include <iostream>
 #include <sstream>
@@ -27,6 +27,8 @@ extern double START_TIME;
 
 bool sizeSort (const pair<string,double> &a, const pair<string,double> &b) { return (b.second<a.second); }
 
+#ifdef HAVE_CMSG
+#include "cMsg.h"
 
 //---------------------------------
 // rsmon_cmsg    (Constructor)
@@ -68,20 +70,24 @@ rsmon_cmsg::rsmon_cmsg(string myname, cMsg *cMsgSys)
 //	all_nodes[myname].subscription_handle = cMsgSys->subscribe(myname, "*", this, NULL);
 	all_nodes[myname].subscription_handle = cMsgSys->subscribe("rs_*", "*", this, NULL);
 }
+#endif // HAVE_CMSG
 
 //---------------------------------
 // ~rsmon_cmsg    (Destructor)
 //---------------------------------
 rsmon_cmsg::~rsmon_cmsg()
 {
+#ifdef HAVE_CMSG
 	// Unsubscribe
 	map<string, nodeInfo_t>::iterator it;
 	for(it=all_nodes.begin(); it!=all_nodes.end(); it++){
 		void *subscription_handle = it->second.subscription_handle;
 		if(subscription_handle) cMsgSys->unsubscribe(subscription_handle);
 	}
-
+#endif
 }
+
+#ifdef HAVE_CMSG
 
 //---------------------------------
 // callback
@@ -166,6 +172,7 @@ void rsmon_cmsg::callback(cMsgMessage *msg, void *userObject)
 
 	delete msg;
 }
+#endif
 
 //---------------------------------
 // FillLines
@@ -424,9 +431,11 @@ void rsmon_cmsg::FillLinesMessageSizes(double now, vector<string> &lines)
 //---------------------------------
 void rsmon_cmsg::PingServers(void)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage whosThere;
 	whosThere.setSubject("rootspy");
 	whosThere.setType(myname);
 	whosThere.setText("who's there?");
 	cMsgSys->send(&whosThere);
+#endif
 }

@@ -72,10 +72,14 @@ extern string ELOG_EMAIL;
 extern bool   ELOG_NOTIFY;
 
 // These defined in rs_cmsg.cc
-extern mutex REGISTRATION_MUTEX;
-extern map<void*, string> HISTOS_TO_REGISTER;
-extern map<void*, string> MACROS_TO_REGISTER;
+extern mutex REGISTRATION_MUTEX_CMSG;
+extern map<void*, string> HISTOS_TO_REGISTER_CMSG;
+extern map<void*, string> MACROS_TO_REGISTER_CMSG;
 
+// These defined in rs_xmsg.cc
+extern mutex REGISTRATION_MUTEX_XMSG;
+extern set<rs_serialized*> HISTOS_TO_REGISTER_XMSG;
+extern set<rs_serialized*> MACROS_TO_REGISTER_XMSG;
 
 // information for menu bar
 enum MenuCommandIdentifiers {
@@ -895,18 +899,23 @@ void rs_mainframe::DoTimer(void) {
         if(!RS_CMSG->IsOnline())
 	    return;
   */
-	double now = RS_CMSG->GetTime();
+	double now = 0.0;
+	if( RS_CMSG ) now = RS_CMSG->GetTime();
+	if( RS_XMSG ) now = RS_XMSG->GetTime();
 	
 	// Pings server to keep it alive
 	if(now-last_ping_time >= 3.0){
-		RS_CMSG->PingServers();
+		if( RS_CMSG ) RS_CMSG->PingServers();
+		if( RS_XMSG ) RS_XMSG->PingServers();
 		last_ping_time = now;
 	}
 	
 	// Ask for list of all hists and macros from all servers every 5 seconds
 	if(now-last_hist_requested >= 5.0){
-		RS_CMSG->RequestHists("rootspy");
-		RS_CMSG->RequestMacroList("rootspy");
+		if( RS_CMSG ) RS_CMSG->RequestHists("rootspy");
+		if( RS_CMSG ) RS_CMSG->RequestMacroList("rootspy");
+		if( RS_XMSG ) RS_XMSG->RequestHists("rootspy");
+		if( RS_XMSG ) RS_XMSG->RequestMacroList("rootspy");
 		last_hist_requested = now;
 	}
 
@@ -925,30 +934,61 @@ void rs_mainframe::DoTimer(void) {
 		}
 	}
 
-	// Register any histograms waiting in the queue
-	if( ! HISTOS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto h : HISTOS_TO_REGISTER){
-			RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
+	// Register any histograms waiting in the cMsg queue
+	if( RS_CMSG ) { 
+		if( ! HISTOS_TO_REGISTER_CMSG.empty() ){
+			REGISTRATION_MUTEX_CMSG.lock();
+			for(auto h : HISTOS_TO_REGISTER_CMSG){
+				RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
+			}
+			HISTOS_TO_REGISTER_CMSG.clear();
+			REGISTRATION_MUTEX_CMSG.unlock();
 		}
-		HISTOS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
-	}
-	
-	// Register any macros waiting in the queue
-	if( ! MACROS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto m : MACROS_TO_REGISTER){
-			RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
+
+		// Register any macros waiting in the queue
+		if( ! MACROS_TO_REGISTER_CMSG.empty() ){
+			REGISTRATION_MUTEX_CMSG.lock();
+			for(auto m : MACROS_TO_REGISTER_CMSG){
+				RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
+			}
+			MACROS_TO_REGISTER_CMSG.clear();
+			REGISTRATION_MUTEX_CMSG.unlock();
 		}
-		MACROS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
+
+		// If reference window is up, then update it
+		if(dialog_referenceplot){
+			if(dialog_referenceplot->IsMapped()){
+				((Dialog_ReferencePlot*)dialog_referenceplot)->DoTimer();
+			}
+		}
 	}
-	
-	// If reference window is up, then update it
-	if(dialog_referenceplot){
-		if(dialog_referenceplot->IsMapped()){
-			((Dialog_ReferencePlot*)dialog_referenceplot)->DoTimer();
+
+	// Register any histograms waiting in the xMsg queue
+	if( RS_XMSG ) { 
+		if( ! HISTOS_TO_REGISTER_XMSG.empty() ){
+			REGISTRATION_MUTEX_XMSG.lock();
+			for(auto h : HISTOS_TO_REGISTER_XMSG){
+				RS_XMSG->RegisterHistogram(h);
+			}
+			HISTOS_TO_REGISTER_XMSG.clear();
+			REGISTRATION_MUTEX_XMSG.unlock();
+		}
+
+		// Register any macros waiting in the queue
+		if( ! MACROS_TO_REGISTER_XMSG.empty() ){
+			REGISTRATION_MUTEX_XMSG.lock();
+			for(auto m : MACROS_TO_REGISTER_XMSG){
+				RS_XMSG->RegisterMacro(m);
+			}
+			MACROS_TO_REGISTER_XMSG.clear();
+			REGISTRATION_MUTEX_XMSG.unlock();
+		}
+
+		// If reference window is up, then update it
+		if(dialog_referenceplot){
+			if(dialog_referenceplot->IsMapped()){
+				((Dialog_ReferencePlot*)dialog_referenceplot)->DoTimer();
+			}
 		}
 	}
 
@@ -1011,7 +1051,7 @@ void rs_mainframe::DoTreeInfoShort(void) {
 	for(; iter!=RS_INFO->servers.end(); iter++){
 		string servername = iter->first;
 		if(servername!=""){
-			RS_CMSG->RequestTreeInfo(servername);
+			if( RS_CMSG ) RS_CMSG->RequestTreeInfo(servername);
 		}
 	}
 	RS_INFO->Unlock();
@@ -1277,33 +1317,9 @@ void rs_mainframe::DoFinal(void) {
 	for(; serviter != RS_INFO->servers.end(); serviter++) {
 		string server = serviter->first;
 		vector<string> paths = serviter->second.hnamepaths;		
-		RS_CMSG->FinalHistogram(server, paths);
-		
+		if( RS_CMSG ) RS_CMSG->FinalHistogram(server, paths);
+		if( RS_XMSG ) RS_XMSG->FinalHistogram(server, paths);
 	}
-}
-
-//-------------------
-// DoOnline
-//-------------------
-void rs_mainframe::DoOnline(void)
-{
-    if(!RS_CMSG->IsOnline()) {
-	// Create cMsg object
-	char hostname[256];
-	gethostname(hostname, 256);
-	char str[512];
-	sprintf(str, "RootSpy GUI %s-%d", hostname, getpid());
-	CMSG_NAME = string(str);
-	cout << "Full UDL is " << ROOTSPY_UDL << endl;
-
-	delete RS_CMSG;
-	RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
-    }
-
-    if(RS_CMSG->IsOnline())
-	SetWindowName("RootSpy - Online");
-    else
-	SetWindowName("RootSpy - Offline");
 }
 
 //-------------------

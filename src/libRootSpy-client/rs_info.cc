@@ -7,6 +7,7 @@
 
 #include "rs_info.h"
 #include "rs_cmsg.h"
+#include "rs_xmsg.h"
 
 #include <iostream>
 #include <iomanip>
@@ -16,7 +17,6 @@ using namespace std;
 
 
 extern rs_info *RS_INFO;
-
 
 //...................................................
 // REGISTER_ROOTSPY_MACRO
@@ -139,9 +139,11 @@ int rs_info::RequestHistograms(string hnamepath, bool lock_mutex)
 			//if(server_iter->second){
 				NrequestsSent++;
 				if(it->second.type == hdef_t::macro)
-					RS_CMSG->RequestMacro(server_iter->first, hnamepath);
+					if( RS_CMSG )RS_CMSG->RequestMacro(server_iter->first, hnamepath);
+					if( RS_XMSG )RS_XMSG->RequestMacro(server_iter->first, hnamepath);
 				else
-					RS_CMSG->RequestHistogram(server_iter->first, hnamepath);
+					if( RS_CMSG )RS_CMSG->RequestHistogram(server_iter->first, hnamepath);
+					if( RS_XMSG )RS_XMSG->RequestHistogram(server_iter->first, hnamepath);
 			//}
 		}
 	}
@@ -375,6 +377,7 @@ void rs_info::AddRootObjectsToList(TDirectory *dir)
 			hist_paths.push_back(path);
 			hist_titles.push_back(hHist->GetTitle());
 
+#ifdef HAVE_CMSG
 			cMsgMessage msg;
 			msg.add("hist_names", hist_names);
 			msg.add("hist_types", hist_types);
@@ -399,6 +402,12 @@ void rs_info::AddRootObjectsToList(TDirectory *dir)
 
 			// Finished with TMessage object. Free it and release lock on ROOT global
 			delete tm;
+
+#else  // HAVE_CMSG
+
+			_DBG_ << "WARNING: cMsg unsupported in this executable" << endl;
+
+#endif  // HAVE_CMSG
 		}
 
 		// If object is a tree, then register it
@@ -408,6 +417,9 @@ void rs_info::AddRootObjectsToList(TDirectory *dir)
 			vector<string> branch_info;
 			TraverseTree(branch_list, branch_info);
 			if(!branch_info.empty()) {
+
+#if HAVE_CMSG
+
 				cMsgMessage msg;
 				msg.add("tree_name", obj->GetName());
 				msg.add("tree_title", obj->GetTitle());
@@ -461,6 +473,12 @@ void rs_info::AddRootObjectsToList(TDirectory *dir)
 
 				// Finished with TMessage object. Free it and release lock on ROOT global
 				delete tm;
+
+#else  // HAVE_CMSG
+
+			_DBG_ << "WARNING: cMsg unsupported in this executable" << endl;
+
+#endif  // HAVE_CMSG
 			}
 		}
 
@@ -498,6 +516,8 @@ void rs_info::LoadMacro(string name, string path, string macro_data)
 	vector<string> macro_paths;
 	macro_names.push_back(name);
 	macro_paths.push_back(path);
+
+#ifdef HAVE_CMSG
 
 	cMsgMessage *msg = new cMsgMessage();
 	msg->add("macro_names", macro_names);
@@ -539,6 +559,12 @@ void rs_info::LoadMacro(string name, string path, string macro_data)
 
 	// Register macro
 	RS_CMSG->RegisterMacro("localfile", msg);
+
+#else  // HAVE_CMSG
+
+			_DBG_ << "WARNING: cMsg unsupported in this executable" << endl;
+
+#endif  // HAVE_CMSG
 }
 
 //---------------------------------

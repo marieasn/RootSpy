@@ -8,8 +8,6 @@ using namespace std;
 #include "TH1.h"
 #include "TTree.h"
 
-#include "cMsg.h"
-
 class macro_info_t {
 public:
 	macro_info_t() {

@@ -110,7 +110,6 @@ class rs_mainframe:public TGMainFrame {
 		void DoLoadHistsList(void);
 		void DoSaveHistsList(void);
 		void DoFinal(void);
-		void DoOnline(void);
 		void DoELog(void);
 		void ELogEntryThread(void);
 		//void DoELogPage(void);

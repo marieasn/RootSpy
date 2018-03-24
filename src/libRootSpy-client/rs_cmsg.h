@@ -19,8 +19,12 @@
 #include <string>
 #include <thread>
 
+#ifdef HAVE_CMSG
+#include <cMsg.h>
 #include <cMsg.hxx>
 using namespace cmsg;
+#endif // HAVE_CMSG
+
 
 typedef struct timespec timespec_t;
 
@@ -28,7 +32,18 @@ typedef struct timespec timespec_t;
 
 class rs_mainframe;
 
+// NOTE: We want this to compile with or without cMsg 
+// support. At this point in time xMsg is being added
+// which requires -std=c++14 making it incompatible with
+// the cMsg libraries built with -std=c++11. Hence the
+// heavy use of preprocessor masks based on HAVE_CMSG
+
+
+#ifdef HAVE_CMSG
 class rs_cmsg:public cMsgCallback{
+#else
+class rs_cmsg{
+#endif
 	public:
 		rs_cmsg(string &udl, string &name, bool connect_to_cmsg=true);
 		virtual ~rs_cmsg();
@@ -45,7 +60,6 @@ class rs_cmsg:public cMsgCallback{
 		void RequestMacro(string servername, string hnamepath);
 
 		bool   IsOnline(void)   { return is_online; }
-		cMsg*  GetcMsgPtr(void) { return cMsgSys;   }
 		string GetMyName(void)  { return myname;    }
 
 		// Static method to return time in seconds with microsecond accuracy
@@ -80,6 +94,8 @@ class rs_cmsg:public cMsgCallback{
 		
 	public:
 
+#ifdef HAVE_CMSG
+		cMsg* GetcMsgPtr(void) { return cMsgSys;   }
 		void callback(cMsgMessage *msg, void *userObject);
 		void RegisterHistList(string server, cMsgMessage *msg);
 		void RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg=false);
@@ -91,22 +107,25 @@ class rs_cmsg:public cMsgCallback{
 		void RegisterMacroList(string server, cMsgMessage *msg);
 		void RegisterMacro(string server, cMsgMessage *msg);
 
-                void BuildRequestHists(cMsgMessage &msg, string servername);
-                void BuildRequestHistogram(cMsgMessage &msg, string servername, string hnamepath);
-                void BuildRequestHistograms(cMsgMessage &msg, string servername, vector<string> &hnamepaths);
-                void BuildRequestTreeInfo(cMsgMessage &msg, string servername);
-                void BuildRequestTree(cMsgMessage &msg, string servername, string tree_name, string tree_path, int64_t num_entries);
+		void BuildRequestHists(cMsgMessage &msg, string servername);
+		void BuildRequestHistogram(cMsgMessage &msg, string servername, string hnamepath);
+		void BuildRequestHistograms(cMsgMessage &msg, string servername, vector<string> &hnamepaths);
+		void BuildRequestTreeInfo(cMsgMessage &msg, string servername);
+		void BuildRequestTree(cMsgMessage &msg, string servername, string tree_name, string tree_path, int64_t num_entries);
 		void BuildRequestMacroList(cMsgMessage &msg, string servername);
 		void BuildRequestMacro(cMsgMessage &msg, string servername, string hnamepath);
+
+	private:
+		cMsg *cMsgSys;
+		cMsgSubscriptionConfig *cMsgSubConfig;
+#endif // HAVE_CMSG
+
+	public:
 		void SeedHnamepathsSet(void *vhnamepaths, bool request_histo, bool request_macro);
 		void SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool request_macro);
 
 		void DirectUDPServerThread(void);
 		void DirectTCPServerThread(void);
-
-	private:
-		cMsg *cMsgSys;
-		cMsgSubscriptionConfig *cMsgSubConfig;
 		
 		bool is_online;
 		string myname;

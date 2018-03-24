@@ -54,9 +54,13 @@ enum RSMON_MODE{
 
 rsmon_cmsg *RSMON_CMSG = NULL;
 rs_cmsg *RS_CMSG = NULL;
+rs_xmsg *RS_XMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
 RSMON_MODE MODE = MODE_OBSERVE;
+
+bool USE_CMSG=false;
+bool USE_XMSG=true;
 
 void Usage(void);
 void ParseCommandLineArguments(int narg, char *argv[]);
@@ -440,9 +444,11 @@ int main(int narg, char *argv[])
 			case MODE_OBSERVE:
 			case MODE_MESS_SIZES:
 				if(RSMON_CMSG==NULL && (RS_CMSG==NULL || RS_CMSG->IsOnline())){
+#ifdef HAVE_CMSG
 					RSMON_CMSG = new rsmon_cmsg(CMSG_NAME, (RS_CMSG==NULL ? NULL:RS_CMSG->GetcMsgPtr()));
 					RSMON_CMSG->focus_node = FOCUS_NODE;
 					RSMON_CMSG->respond_to_pings = RESPOND_TO_PINGS;
+#endif
 				}
 				break;
 			case MODE_SPEED_TEST:

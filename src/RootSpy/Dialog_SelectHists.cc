@@ -141,7 +141,8 @@ void Dialog_SelectHists::DoTimer(void)
 
 	// Ping servers occasionally to make sure our server list is up-to-date
 	if(now-last_ping_time >= 3){
-		RS_CMSG->PingServers();
+		if( RS_CMSG) RS_CMSG->PingServers();
+		if( RS_XMSG) RS_XMSG->PingServers();
 		last_ping_time = now;
 	}
 	
@@ -153,8 +154,10 @@ void Dialog_SelectHists::DoTimer(void)
 		for(; iter!=RS_INFO->servers.end(); iter++){
 			string servername = iter->first;
 			if(servername!=""){
-				RS_CMSG->RequestHists(servername);
-				RS_CMSG->RequestMacroList(servername);
+				if( RS_CMSG) RS_CMSG->RequestHists(servername);
+				if( RS_CMSG) RS_CMSG->RequestMacroList(servername);
+				if( RS_XMSG) RS_XMSG->RequestHists(servername);
+				if( RS_XMSG) RS_XMSG->RequestMacroList(servername);
 			}
 		}
 		RS_INFO->Unlock();

@@ -143,7 +143,8 @@ void Dialog_IndivHists::RequestCurrentIndividualHistograms(void) {
 	map<string, server_info_t>::iterator server_iter = RS_INFO->servers.begin();
 	for(; server_iter != RS_INFO->servers.end(); server_iter++) {
 		string server_name = (server_iter->second.serverName);
-		RS_CMSG->RequestHistogram(server_name, RS_INFO->current.hnamepath);
+		if( RS_CMSG ) RS_CMSG->RequestHistogram(server_name, RS_INFO->current.hnamepath);
+		if( RS_XMSG ) RS_XMSG->RequestHistogram(server_name, RS_INFO->current.hnamepath);
 	}
 	RS_INFO->Unlock();
 	requested = true;

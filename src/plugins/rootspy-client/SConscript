@@ -10,6 +10,7 @@ env.AppendUnique(LIBS=['RootSpy-client'])
 
 sbms.AddROOT(env)
 sbms.AddCMSG(env)
+sbms.AddXMSG(env)
 sbms.plugin(env)
 
 

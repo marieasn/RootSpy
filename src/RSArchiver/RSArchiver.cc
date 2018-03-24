@@ -39,14 +39,23 @@ using namespace std;
 // GLOBALS
 //////////////////////////////////////////////
 rs_cmsg *RS_CMSG = NULL;
+rs_xmsg *RS_XMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
 bool MAKE_BACKUP = false;
 
+bool USE_CMSG=false;
+bool USE_XMSG=true;
+
 // These defined in rs_cmsg.cc
-extern mutex REGISTRATION_MUTEX;
-extern map<void*, string> HISTOS_TO_REGISTER;
-extern map<void*, string> MACROS_TO_REGISTER;
+extern mutex REGISTRATION_MUTEX_CMSG;
+extern map<void*, string> HISTOS_TO_REGISTER_CMSG;
+extern map<void*, string> MACROS_TO_REGISTER_CMSG;
+
+// These defined in rs_xmsg.cc
+extern mutex REGISTRATION_MUTEX_XMSG;
+extern set<rs_serialized*> HISTOS_TO_REGISTER_XMSG;
+extern set<rs_serialized*> MACROS_TO_REGISTER_XMSG;
 
 
 // classes to generate optional output formats
@@ -178,7 +187,8 @@ int main(int narg, char *argv[])
     // ------------------- final output & cleanup -------------------------
     EndRunProcessing();   // request and collect all current histograms
 
-    delete RS_CMSG;
+    if( RS_CMSG ) delete RS_CMSG;
+    if( RS_XMSG ) delete RS_XMSG;
 
 	_exit(0);  // Skip ROOT's installed cleanups and thereby end of program seg. faults.
 
@@ -246,7 +256,8 @@ void BeginRun()
     sprintf(str, "RSArchiver_%d", getpid());
     CMSG_NAME = string(str);
     cout << "Full UDL is " << ROOTSPY_UDL << endl;
-    RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
+    if( USE_CMSG ) RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
+	 if( USE_XMSG ) RS_XMSG = new rs_xmsg(ROOTSPY_UDL, CMSG_NAME);
 
     // set session name to some default
     if(SESSION.empty()) SESSION="halldsession";
@@ -277,7 +288,8 @@ void EndRunProcessing(void)
 			_DBG_ << "sending request to" << server_it->first 
 			      << " for " << server_it->second.hnamepaths.size() << " histograms " << endl;
 		
-		RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
+		if( RS_CMSG ) RS_CMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
+		if( RS_XMSG ) RS_XMSG->FinalHistogram(server_it->first, server_it->second.hnamepaths);
 	}		
 
     // save the current state of which histograms are on which server so that we know what we requested
@@ -320,7 +332,8 @@ void MainLoop(void)
     // Loop until we are told to stop for some reason	
     while(!DONE) {		    
         // keeps the connections alive, and keeps the list of servers up-to-date
-        RS_CMSG->PingServers();
+        if( RS_CMSG ) RS_CMSG->PingServers();
+        if( RS_XMSG ) RS_XMSG->PingServers();
 	
         if(VERBOSE>1)  _DBG_ << "number of servers = " << RS_INFO->servers.size() << endl;
 
@@ -360,7 +373,8 @@ void GetAllHists(uint32_t Twait)
 	/// n.b. This routine will take a minimum of Twait+2 seconds to complete!
 
 	// update list of histograms from all servers and give them 2 seconds to respond
-	RS_CMSG->RequestHists("rootspy");
+	if( RS_CMSG ) RS_CMSG->RequestHists("rootspy");
+	if( RS_XMSG ) RS_XMSG->RequestHists("rootspy");
 	sleep(2);
 
 	// Request all histograms from all servers
@@ -385,25 +399,45 @@ void GetAllHists(uint32_t Twait)
 	// can process them. Here, we process them.
 	
 	// Register any histograms waiting in the queue
-	if( ! HISTOS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto h : HISTOS_TO_REGISTER){
-			RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
+	if( ! HISTOS_TO_REGISTER_CMSG.empty() ){
+		REGISTRATION_MUTEX_CMSG.lock();
+		for(auto h : HISTOS_TO_REGISTER_CMSG){
+			if( RS_CMSG ) RS_CMSG->RegisterHistogram(h.second, (cMsgMessage*)h.first, true);
 		}
-		HISTOS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
+		HISTOS_TO_REGISTER_CMSG.clear();
+		REGISTRATION_MUTEX_CMSG.unlock();
 	}
 	
 	// Register any macros waiting in the queue
-	if( ! MACROS_TO_REGISTER.empty() ){
-		REGISTRATION_MUTEX.lock();
-		for(auto m : MACROS_TO_REGISTER){
-			RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
+	if( ! MACROS_TO_REGISTER_CMSG.empty() ){
+		REGISTRATION_MUTEX_CMSG.lock();
+		for(auto m : MACROS_TO_REGISTER_CMSG){
+			if( RS_CMSG ) RS_CMSG->RegisterMacro(m.second, (cMsgMessage*)m.first);
 		}
-		MACROS_TO_REGISTER.clear();
-		REGISTRATION_MUTEX.unlock();
+		MACROS_TO_REGISTER_CMSG.clear();
+		REGISTRATION_MUTEX_CMSG.unlock();
 	}
-    
+
+	// Register any histograms waiting in the queue
+	if( ! HISTOS_TO_REGISTER_XMSG.empty() ){
+		REGISTRATION_MUTEX_XMSG.lock();
+		for(auto h : HISTOS_TO_REGISTER_XMSG){
+			if( RS_XMSG ) RS_XMSG->RegisterHistogram(h);
+		}
+		HISTOS_TO_REGISTER_XMSG.clear();
+		REGISTRATION_MUTEX_XMSG.unlock();
+	}
+	
+	// Register any macros waiting in the queue
+	if( ! MACROS_TO_REGISTER_XMSG.empty() ){
+		REGISTRATION_MUTEX_XMSG.lock();
+		for(auto m : MACROS_TO_REGISTER_XMSG){
+			if( RS_XMSG ) RS_XMSG->RegisterMacro(m);
+		}
+		MACROS_TO_REGISTER_XMSG.clear();
+		REGISTRATION_MUTEX_XMSG.unlock();
+	}
+
 	// Lock mutexes
 	RS_INFO->Lock();
 	pthread_rwlock_wrlock(ROOT_MUTEX);

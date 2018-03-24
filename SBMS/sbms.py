@@ -560,6 +560,35 @@ def AddCMSG(env):
 
 
 ##################################
+# XMSG
+##################################
+def AddXMSG(env):
+
+	# Only add xMsg if XMSGROOT is set
+	xmsgroot = os.getenv('XMSG_ROOT')
+	if(xmsgroot != None) :
+		env.AppendUnique(CXXFLAGS = ['-DHAVE_XMSG'])
+		env.AppendUnique(CPPPATH = ['%s/include' % xmsgroot])
+		env.AppendUnique(LIBPATH = ['%s/lib' % xmsgroot])
+		env.AppendUnique(LIBS=['xmsg'])
+		env.AppendUnique(CXXFLAGS=['-std=c++14'])
+
+		zeromqroot = os.getenv('ZEROMQ_ROOT')
+		if zeromqroot:
+			env.AppendUnique(CXXFLAGS = ['-DHAVE_ZEROMQ'])
+			env.AppendUnique(CPPPATH = ['%s/include' % zeromqroot])
+			env.AppendUnique(LIBPATH = ['%s/lib' % zeromqroot])
+			env.AppendUnique(LIBS=['zmq-static'])
+
+		protobufroot = os.getenv('PROTOBUF_ROOT')
+		if protobufroot:
+			env.AppendUnique(CXXFLAGS = ['-DHAVE_PROTOBUF'])
+			env.AppendUnique(CPPPATH = ['%s/include' % protobufroot])
+			env.AppendUnique(LIBPATH = ['%s/lib64' % protobufroot])
+			env.AppendUnique(LIBS=['protobuf'])
+
+
+##################################
 # Xerces
 ##################################
 def AddXERCES(env):

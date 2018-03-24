@@ -5,6 +5,12 @@
 // Creator: davidl (on Darwin harriet.jlab.org 9.8.0 i386)
 //
 
+// NOTE: We want this to compile with or without cMsg 
+// support. At this point in time xMsg is being added
+// which requires -std=c++14 making it incompatible with
+// the cMsg libraries built with -std=c++11. Hence the
+// heavy use of preprocessor masks based on HAVE_CMSG
+
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -12,7 +18,6 @@
 #include "rs_cmsg.h"
 #include "rs_info.h"
 #include "tree_info_t.h"
-#include "cMsg.h"
 
 #include <iostream>
 #include <iomanip>
@@ -30,9 +35,9 @@ using namespace std;
 #include <TMemFile.h>
 #include <TKey.h>
 
-mutex REGISTRATION_MUTEX;
-map<void*, string> HISTOS_TO_REGISTER;
-map<void*, string> MACROS_TO_REGISTER;
+mutex REGISTRATION_MUTEX_CMSG;
+map<void*, string> HISTOS_TO_REGISTER_CMSG;
+map<void*, string> MACROS_TO_REGISTER_CMSG;
 
 
 double rs_cmsg::start_time=0.0; // overwritten on fist call to rs_cmsg::GetTime()
@@ -70,7 +75,6 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	verbose = 2; // higher values=more messages. 0=minimal messages
 	hist_default_active = true;
 	program_name = "rootspy-client"; // should be overwritten by specific program
-	cMsgSubConfig = NULL;
 
 	udpdev         = NULL;
 	udpport        = 0;
@@ -82,9 +86,18 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	tcpthread      = NULL;
 	stop_tcpthread = false;
 
+	// Confirm this is a cmsg udl
+	if( udl.find("cmsg://") != 0 ){
+		is_online = false;
+		return;
+	}
+
 	// Connect to cMsg system
 	is_online = connect_to_cmsg;
 	string myDescr = "Access ROOT objects in a running program";
+
+#ifdef HAVE_CMSG
+	cMsgSubConfig = NULL;
 	cMsgSetDebugLevel(CMSG_DEBUG_WARN); // print most messages
 	cMsgSys = new cMsg(udl, name, myDescr);   	// the cMsg system object, where
 	try {                         	           	//  all args are of type string
@@ -99,6 +112,14 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		exit(0);          
 		//return;
 	}
+
+#else // HAVE_CMSG
+
+	// No cMSG support. Warn user
+	if( is_online ) cout << "WARNING: cMsg support disabled in this executable." << endl;
+	is_online = false;
+
+#endif // HAVE_CMSG
 	
 	if(is_online){
 	
@@ -113,6 +134,8 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		cout<<"   cMsg name: \""<<name<<"\""<<endl;
 		cout<<"rootspy name: \""<<myname<<"\""<<endl;
 		cout<<"---------------------------------------------------"<<endl;
+
+#ifdef HAVE_CMSG
 	
 		// Set subscription config parameters to prevent
 		// message queue from filling up. This will drop
@@ -135,6 +158,9 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 		
 		// Broadcast request for available servers
 		PingServers();
+
+#endif // HAVE_CMSG
+
 	}else{
 		cout<<"---------------------------------------------------"<<endl;
 		cout<<"  Not connected to cMsg system. Only local histos  "<<endl;
@@ -159,6 +185,9 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 //---------------------------------
 rs_cmsg::~rs_cmsg()
 {
+
+#ifdef HAVE_CMSG
+
 	if(is_online) {
 		// Unsubscribe
 		for(unsigned int i=0; i<subscription_handles.size(); i++){
@@ -172,6 +201,8 @@ rs_cmsg::~rs_cmsg()
 	
 	if( cMsgSubConfig ) delete cMsgSubConfig;
 	
+#endif // HAVE_CMSG
+
 	if(udpthread){
 		stop_udpthread = true;
 		udpthread->join();
@@ -237,6 +268,7 @@ rs_cmsg::~rs_cmsg()
 	}
 }
 
+#ifdef HAVE_CMSG
 
 //////////////////////////////////////
 //// helper functions
@@ -341,6 +373,7 @@ void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnam
 	 if(verbose>4) _DBG_ << "preparing to request macro with hnamepath=\"" << hnamepath << "\"" << endl;
 }
 
+#endif // HAVE_CMSG
 
 //////////////////////////////////////
 //// remote commands
@@ -351,6 +384,8 @@ void rs_cmsg::BuildRequestMacro(cMsgMessage &msg, string servername, string hnam
 //---------------------------------
 void rs_cmsg::PingServers(void)
 {
+#ifdef HAVE_CMSG
+
 	cMsgMessage whosThere;
 	whosThere.setSubject("rootspy");
 	whosThere.setType(myname);
@@ -362,6 +397,7 @@ void rs_cmsg::PingServers(void)
 		if(verbose>3) _DBG_ << "Sending \"" << whosThere.getText() << "\"" << endl;
 		cMsgSys->send(&whosThere);
 	}
+#endif
 }
 
 //---------------------------------
@@ -369,12 +405,14 @@ void rs_cmsg::PingServers(void)
 //---------------------------------
 void rs_cmsg::RequestHists(string servername)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage listHists;
 	BuildRequestHists(listHists, servername);	
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << "\"" << endl;
 		cMsgSys->send(&listHists);
 	}
+#endif
 }
 
 //---------------------------------
@@ -382,6 +420,7 @@ void rs_cmsg::RequestHists(string servername)
 //---------------------------------
 void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage requestHist;
 	BuildRequestHistogram(requestHist, servername, hnamepath);
 	if(is_online){
@@ -389,6 +428,7 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 		cMsgSys->send(&requestHist);
 		requested_histograms[hnamepath]++;
 	}
+#endif
 }
 
 //---------------------------------
@@ -396,6 +436,7 @@ void rs_cmsg::RequestHistogram(string servername, string hnamepath)
 //---------------------------------
 void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage requestHist;
 	BuildRequestHistograms(requestHist, servername, hnamepaths);
 	if(is_online){
@@ -403,6 +444,7 @@ void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
 		cMsgSys->send(&requestHist);
 		for(uint32_t i=0; i<hnamepaths.size(); i++) requested_histograms[hnamepaths[i]]++;
 	}
+#endif
 }
 
 //---------------------------------
@@ -410,12 +452,14 @@ void rs_cmsg::RequestHistograms(string servername, vector<string> &hnamepaths)
 //---------------------------------
 void rs_cmsg::RequestTreeInfo(string servername)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage treeinfo;
 	BuildRequestTreeInfo(treeinfo, servername);
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << treeinfo.getText() << "\"" << endl;
 		cMsgSys->send(&treeinfo);
 	}
+#endif
 }
 
 //---------------------------------
@@ -423,12 +467,14 @@ void rs_cmsg::RequestTreeInfo(string servername)
 //---------------------------------
 void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path, int64_t num_entries = -1)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage requestTree;
 	BuildRequestTree(requestTree, servername, tree_name, tree_path, num_entries);
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << requestTree.getText() << endl;
 		cMsgSys->send(&requestTree);
 	}
+#endif
 }
 
 //---------------------------------
@@ -436,12 +482,14 @@ void rs_cmsg::RequestTree(string servername, string tree_name, string tree_path,
 //---------------------------------
 void rs_cmsg::RequestMacroList(string servername)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage listHists;
 	BuildRequestMacroList(listHists, servername);	
 	if(is_online){
 		if(verbose>3) _DBG_ << "Sending \"" << listHists.getText() << "\"" << endl;
 		cMsgSys->send(&listHists);
 	}
+#endif
 }
 
 //---------------------------------
@@ -449,6 +497,7 @@ void rs_cmsg::RequestMacroList(string servername)
 //---------------------------------
 void rs_cmsg::RequestMacro(string servername, string hnamepath)
 {
+#ifdef HAVE_CMSG
 	cMsgMessage requestHist;
 	BuildRequestMacro(requestHist, servername, hnamepath);
 	if(is_online){
@@ -456,6 +505,7 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 		cMsgSys->send(&requestHist);
 		requested_macros[hnamepath]++;
 	}
+#endif
 }
 
 //---------------------------------
@@ -463,6 +513,7 @@ void rs_cmsg::RequestMacro(string servername, string hnamepath)
 //---------------------------------
 void rs_cmsg::FinalHistogram(string servername, vector<string> hnamepaths)
 {
+#ifdef HAVE_CMSG
     cMsgMessage finalhist;
     finalhist.setSubject(servername);
     finalhist.setType(myname);
@@ -474,8 +525,10 @@ void rs_cmsg::FinalHistogram(string servername, vector<string> hnamepaths)
 	 	cMsgSys->send(&finalhist);
 	}
     cerr<<"final hist request sent"<<endl;
+#endif
 }
 
+#ifdef HAVE_CMSG
 
 //---------------------------------
 // callback
@@ -586,9 +639,9 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	//===========================================================
 	if(cmd=="histogram"){
 		// add to global variable so main ROOT thread can actually do registration
-		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[msg] = sender;
-		REGISTRATION_MUTEX.unlock();
+		REGISTRATION_MUTEX_CMSG.lock();
+		HISTOS_TO_REGISTER_CMSG[msg] = sender;
+		REGISTRATION_MUTEX_CMSG.unlock();
 		//RegisterHistogram(sender, msg);
 		handled_message = true;
 		msg = NULL; // don't delete message here
@@ -616,9 +669,9 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 	//===========================================================
 	if(cmd == "macro") {
 		// add to global variable so main ROOT thread can actually do registration
-		REGISTRATION_MUTEX.lock();
-		MACROS_TO_REGISTER[msg] = sender;
-		REGISTRATION_MUTEX.unlock();
+		REGISTRATION_MUTEX_CMSG.lock();
+		MACROS_TO_REGISTER_CMSG[msg] = sender;
+		REGISTRATION_MUTEX_CMSG.unlock();
 		//RegisterMacro(sender, msg);
 		handled_message = true;
 		msg = NULL; // don't delete message here
@@ -1251,9 +1304,9 @@ void rs_cmsg::RegisterHistograms(string server, cMsgMessage *msg)
 	for(uint32_t i=0; i<cmsgs->size(); i++){
 		cMsgMessage *cmsg = (*cmsgs)[i];
 		
-		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[cmsg] = server; // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();
+		REGISTRATION_MUTEX_CMSG.lock();
+		HISTOS_TO_REGISTER_CMSG[cmsg] = server; // defer to main ROOT thread
+		REGISTRATION_MUTEX_CMSG.unlock();
 
 		//RegisterHistogram(server, cmsg);		
 		//delete cmsg;
@@ -1582,6 +1635,8 @@ void rs_cmsg::SeedHnamepaths(list<string> &hnamepaths, bool request_histo, bool 
 	}
 }
 
+#endif // HAVE_CMSG
+
 //---------------------------------
 // DirectUDPServerThread
 //---------------------------------
@@ -1670,8 +1725,11 @@ void rs_cmsg::DirectUDPServerThread(void)
 		}
 		string hnamepath = (const char*)rsudp->hnamepath;
 		string sender = (const char*)rsudp->sender;
-		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
 		if(verbose>2) _DBG_ << "UDP: hnamepath=" << rsudp->hnamepath << " type=" << mtype << " from " << sender << endl;
+
+#ifdef HAVE_CMSG
+
+		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
 
 		// Write info into a cMsg object so we can
 		// let the same RegisterHistogram method handle
@@ -1686,9 +1744,14 @@ void rs_cmsg::DirectUDPServerThread(void)
 		cmsg->add("time_requester", rsudp->time_requester);
 		cmsg->add("time_received", rsudp->time_received);
 
-		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[cmsg] = sender; // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();
+		REGISTRATION_MUTEX_CMSG.lock();
+		HISTOS_TO_REGISTER_CMSG[cmsg] = sender; // defer to main ROOT thread
+		REGISTRATION_MUTEX_CMSG.unlock();
+#else
+
+		_DBG_<< "WARNING: Received UDP message in rs_cmsg when cMsg unsupported!" << endl;
+
+#endif // HAVE_CMSG
 
 		// Launch separate thread to handle this
 		//thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);
@@ -1806,7 +1869,6 @@ void rs_cmsg::DirectTCPServerThread(void)
 		}
 		string hnamepath = (const char*)rsudp->hnamepath;
 		string sender = (const char*)rsudp->sender;
-		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
 		if(verbose>2) _DBG_ << "TCP: hnamepath=" << rsudp->hnamepath << " type=" << mtype << " from " << sender << endl;
 		
 		// It's possible large messages could be broken up by the network into
@@ -1830,6 +1892,10 @@ void rs_cmsg::DirectTCPServerThread(void)
 			continue;
 		}
 
+#if HAVE_CMSG
+
+		uint8_t *buff8 = (uint8_t*)&rsudp->buff_start;
+
 		// Write info into a cMsg object so we can
 		// let the same RegisterHistogram method handle
 		// it as it handles histograms coming from cMsg itself.
@@ -1843,9 +1909,15 @@ void rs_cmsg::DirectTCPServerThread(void)
 		cmsg->add("time_requester", rsudp->time_requester);
 		cmsg->add("time_received", rsudp->time_received);
 
-		REGISTRATION_MUTEX.lock();
-		HISTOS_TO_REGISTER[cmsg] = sender; // defer to main ROOT thread
-		REGISTRATION_MUTEX.unlock();
+		REGISTRATION_MUTEX_CMSG.lock();
+		HISTOS_TO_REGISTER_CMSG[cmsg] = sender; // defer to main ROOT thread
+		REGISTRATION_MUTEX_CMSG.unlock();
+
+#else
+
+		_DBG_<< "WARNING: Received UDP message in rs_cmsg when cMsg unsupported!" << endl;
+
+#endif // HAVE_CMSG
 
 		// Launch separate thread to handle this
 		//thread t(&rs_cmsg::RegisterHistogram, this, sender, cmsg, true);

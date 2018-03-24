@@ -93,7 +93,8 @@ void Dialog_SaveHists::DoTimer(void)
 
 	// Ping servers occasionally to make sure our list is up-to-date
 	if(now-last_ping_time >= 3){
-		RS_CMSG->PingServers();
+		if( RS_CMSG) RS_CMSG->PingServers();
+		if( RS_XMSG) RS_XMSG->PingServers();
 		last_ping_time = now;
 	}
 	
@@ -105,7 +106,8 @@ void Dialog_SaveHists::DoTimer(void)
 		for(; iter!=RS_INFO->servers.end(); iter++){
 			string servername = iter->first;
 			if(servername!=""){
-				RS_CMSG->RequestHists(servername);
+				if( RS_CMSG) RS_CMSG->RequestHists(servername);
+				if( RS_XMSG) RS_XMSG->RequestHists(servername);
 			}
 		}
 		RS_INFO->Unlock();
@@ -475,7 +477,8 @@ void Dialog_SaveHists::DoSave(void) {
 				//add the active histograms to a map. Key is hnamepath. Map used for uniqueness.
 				histtosave.insert(pair<string, int>(path, 0));
 				//Send a request for the histograms to the cmsg server.
-				RS_CMSG->RequestHistogram(server, path);
+				if( RS_CMSG ) RS_CMSG->RequestHistogram(server, path);
+				if( RS_XMSG ) RS_XMSG->RequestHistogram(server, path);
 			}
 		}
 	}

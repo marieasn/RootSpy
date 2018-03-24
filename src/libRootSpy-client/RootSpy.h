@@ -7,12 +7,16 @@
 //#include <iomanip>
 //using namespace std;
 
+#include <rs_cmsg.h>
+#include <rs_xmsg.h>
+
 class rs_mainframe;
 class rs_cmsg;
 class rs_info;
 
 extern rs_mainframe *RSMF;
 extern rs_cmsg *RS_CMSG;
+extern rs_xmsg *RS_XMSG;
 extern rs_info *RS_INFO;
 
 #include <time.h>
