@@ -969,6 +969,7 @@ void rs_mainframe::DoTimer(void) {
 			REGISTRATION_MUTEX_XMSG.lock();
 			for(auto h : HISTOS_TO_REGISTER_XMSG){
 				RS_XMSG->RegisterHistogram(h);
+				delete h;
 			}
 			HISTOS_TO_REGISTER_XMSG.clear();
 			REGISTRATION_MUTEX_XMSG.unlock();
@@ -979,6 +980,7 @@ void rs_mainframe::DoTimer(void) {
 			REGISTRATION_MUTEX_XMSG.lock();
 			for(auto m : MACROS_TO_REGISTER_XMSG){
 				RS_XMSG->RegisterMacro(m);
+				delete m;
 			}
 			MACROS_TO_REGISTER_XMSG.clear();
 			REGISTRATION_MUTEX_XMSG.unlock();
