@@ -1324,7 +1324,8 @@ void rs_xmsg::RegisterMacro(string server, RSPayloadMap &payload_map)
 	serialized->sender = server;
 	serialized->hnamepath = hnamepath;
 	auto dTMessage  = payload_map["TMessage"];
-	std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), serialized->data.begin() );
+	serialized->data.resize( dTMessage->string().size() );
+	std::copy( dTMessage->string().begin(), dTMessage->string().end(), serialized->data.begin() );
 	REGISTRATION_MUTEX_XMSG.lock();
 	MACROS_TO_REGISTER_XMSG.insert(serialized);
 	REGISTRATION_MUTEX_XMSG.unlock();
