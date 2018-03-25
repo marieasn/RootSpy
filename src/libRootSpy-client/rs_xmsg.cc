@@ -650,6 +650,7 @@ void rs_xmsg::callback(xmsg::Message &msg)
 	if(cmd=="get tree info") handled_message = true;
 	if(cmd=="get macro"    ) handled_message = true;
 	if(cmd=="get hists"    ) handled_message = true;
+	if(cmd=="get hist"     ) handled_message = true;
 	//===========================================================
 	if(!handled_message){
 		_DBG_<<"Received unknown message --  cmd: " << cmd <<endl;
