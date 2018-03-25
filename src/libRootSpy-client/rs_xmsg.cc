@@ -1200,22 +1200,20 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 	pthread_rwlock_wrlock(ROOT_MUTEX);
 
 	// Get ROOT object from message and cast it as a TNamed*
-
 	TNamed *namedObj = NULL;
-	vector<char> *mybytes = NULL;
-	try{
-		mybytes = &serialized->data;
-	}catch(...){
-		_DBG_ << "Expecting \"TMessage\" payload in histogram message for " << hnamepath << " but none found!" << endl;
-	}
-	if(mybytes){
-		if(verbose>3) _DBG_ << "Upacking TMessage of length " << mybytes->size() << " bytes" << endl;
-		MyTMessageXMSG *myTM = new MyTMessageXMSG(&(*mybytes)[0], mybytes->size());
-		namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
+	if(!serialized->data.empty()){
+		// The TMessage will take ownership of the buffer and delete
+		// it when it itself is deleted. Thus, we need to hand it
+		// a buffer it can delete.
+		int len = serialized->data.size();
+		char *buff = new char[ len ];
+		memcpy( buff, serialized->data.data(), len );
+		if(verbose>3) _DBG_ << "Upacking TMessage of length " << len << " bytes" << endl;
+		MyTMessageXMSG myTM( buff, len);
+		namedObj = (TNamed*)myTM.ReadObject(myTM.GetClass());
 		if(!namedObj){
 			pthread_rwlock_unlock(ROOT_MUTEX);
 			RS_INFO->Unlock();
-			delete mybytes;
 			return;
 		}
 	}
@@ -1417,10 +1415,15 @@ void rs_xmsg::RegisterMacro(rs_serialized *serialized)
 	// extract info from message
 	if(verbose>=2) _DBG_ << "unpacking macro \""<<hnamepath<<"\" ..." << endl;
 
-		auto &data = serialized->data;
-		MyTMessageXMSG *myTM = new MyTMessageXMSG(data.data(), data.size());
+		// The TMessage will take ownership of the buffer and delete
+		// it when it itself is deleted. Thus, we need to hand it
+		// a buffer it can delete.
+		int len = serialized->data.size();
+		char *buff = new char[ len ];
+		memcpy( buff, serialized->data.data(), len );
+		MyTMessageXMSG myTM( buff, len);
 		Long64_t length;
-		myTM->ReadLong64(length);
+		myTM.ReadLong64(length);
 		TDirectory *savedir = gDirectory;
 
 		// save each macro in a different file per server
@@ -1436,7 +1439,7 @@ void rs_xmsg::RegisterMacro(rs_serialized *serialized)
 		if(verbose>=4) _DBG_ << "     file size = " << length << endl;
 		TString filename(tmpfile_name);
 
-		TMemFile *f = new TMemFile(filename, myTM->Buffer() + myTM->Length(), length);
+		TMemFile *f = new TMemFile(filename, myTM.Buffer() + myTM.Length(), length);
 		if(verbose>=4) _DBG_ << "     num. keys = " << f->GetNkeys() << endl;
 		if(verbose>4){
 			_DBG_ << "TMemFile contents: " << endl;
@@ -1551,10 +1554,16 @@ void rs_xmsg::RegisterFinalHistogram(string server, RSPayloadMap &payload_map)
     
 	// Get ROOT object from message and cast it as a TNamed*
 	auto dTMessage  = payload_map["TMessage"];
-	std::vector<char> data;
-	std::copy( dTMessage->bytes().begin(), dTMessage->bytes().end(), data.begin() );
-	MyTMessageXMSG *myTM = new MyTMessageXMSG(data.data(), data.size());
-	TNamed *namedObj = (TNamed*)myTM->ReadObject(myTM->GetClass());
+
+
+	// The TMessage will take ownership of the buffer and delete
+	// it when it itself is deleted. Thus, we need to hand it
+	// a buffer it can delete.
+	int len = dTMessage->string().size();
+	char *buff = new char[ len ];
+	memcpy( buff, dTMessage->string().data(), len );
+	MyTMessageXMSG myTM( buff, len);
+	TNamed *namedObj = (TNamed*)myTM.ReadObject(myTM.GetClass());
 	if(!namedObj){
 		_DBG_<<"No valid object returned in histogram message."<<endl;
 		pthread_rwlock_unlock(ROOT_MUTEX);
