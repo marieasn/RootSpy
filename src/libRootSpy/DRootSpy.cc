@@ -330,7 +330,7 @@ DRootSpy::~DRootSpy()
 //---------------------------------
 void DRootSpy::ConnectToXMSG(void)
 {
-	if( myudl.find("xmsg://") != 0 ) return;
+	if( myudl.find("xMsg://") != 0 ) return;
 
 	// Extract name of proxy to connect to
 	string proxy_host = myudl.length()>7 ? myudl.substr(7):"localhost";
@@ -343,7 +343,7 @@ void DRootSpy::ConnectToXMSG(void)
 		auto cb = LocalCallBack{};
 
 		cout<<"---------------------------------------------------"<<endl;
-		cout<<"rootspy name xmsg: \""<<myname<<"\""<<endl;
+		cout<<"rootspy name xMsg: \""<<myname<<"\""<<endl;
 		cout<<"---------------------------------------------------"<<endl;
 	
 		// Subscribe to generic rootspy info requests
@@ -371,7 +371,7 @@ void DRootSpy::ConnectToXMSG(void)
 //---------------------------------
 void DRootSpy::ConnectToCMSG(void)
 {
-	if( myudl.find("cmsg://") != 0 ) return;
+	if( myudl.find("cMsg://") != 0 ) return;
 
 	// Connect to cMsg system
 	string myName = myname;
@@ -387,7 +387,7 @@ void DRootSpy::ConnectToCMSG(void)
 	}
 
 	cout<<"---------------------------------------------------"<<endl;
-	cout<<"rootspy name cmsg: \""<<myname<<"\""<<endl;
+	cout<<"rootspy name cMsg: \""<<myname<<"\""<<endl;
 	cout<<"---------------------------------------------------"<<endl;
 	
 	// Set subscription config parameters to prevent
