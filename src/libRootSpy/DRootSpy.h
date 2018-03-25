@@ -32,10 +32,8 @@
 #include <TH1.h>
 #include <pthread.h>
 
-#ifdef HAVE_CMSG
 #include <cMsg.hxx>
 using namespace cmsg;
-#endif
 
 #include <memory> 
 #include <xmsg/xmsg.h>
