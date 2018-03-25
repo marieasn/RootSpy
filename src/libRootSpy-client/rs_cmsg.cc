@@ -87,7 +87,7 @@ rs_cmsg::rs_cmsg(string &udl, string &name, bool connect_to_cmsg)
 	stop_tcpthread = false;
 
 	// Confirm this is a cmsg udl
-	if( udl.find("cmsg://") != 0 ){
+	if( udl.find("cMsg://") != 0 ){
 		is_online = false;
 		return;
 	}

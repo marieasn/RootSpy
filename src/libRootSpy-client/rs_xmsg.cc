@@ -69,7 +69,7 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 	stop_tcpthread = false;
 	
 	// Confirm this is an xmsg udl
-	if( udl.find("xmsg://") != 0 ){
+	if( udl.find("xMsg://") != 0 ){
 		is_online = false;
 		return;
 	}
@@ -105,7 +105,7 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 		myname = string(str);
 
 		cout<<"---------------------------------------------------"<<endl;
-		cout<<"   xmsg name: \""<<name<<"\""<<endl;
+		cout<<"   xMsg name: \""<<name<<"\""<<endl;
 		cout<<"rootspy name: \""<<myname<<"\""<<endl;
 		cout<<"---------------------------------------------------"<<endl;
 	
