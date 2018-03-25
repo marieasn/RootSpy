@@ -615,63 +615,36 @@ void DRootSpy::callback(xmsg::Message &msg)
 		string hnamepath = payload_items["hnamepath"]->string();
 		double delta_t = now - last_sent[sender][hnamepath];
 		if(delta_t > 1.0){
-// 			last_sent[sender][hnamepath] = now; // record time
-// 			try{
-// 				uint32_t addr = payload_items["udpaddr"]->flsint64();
-// 				uint16_t port = payload_items["udpport"]->flsint32();
-// 				if(VERBOSE>1){
-// 					struct in_addr sin_addr;
-// 					sin_addr.s_addr = ntohl(addr);
-// 					string ip_dotted = inet_ntoa(sin_addr);
-// 					_DBG_ << "request has UDP info: " << ip_dotted << " : " << port << endl;
-// 				}
-// 				if(VERBOSE>1) _DBG_ << "responding via UDP to \"get hist\" for " << hnamepath << " ..." << endl;
-// 				uint32_t tcpaddr = 0;
-// 				uint16_t tcpport = 0;
-// 				try{
-// 					tcpaddr = payload_items["tcpaddr"]->flsint64();
-// 					tcpport = payload_items["tcpport"]->flsint32();
-// 					if(VERBOSE>1){
-// 						struct in_addr sin_addr;
-// 						sin_addr.s_addr = ntohl(tcpaddr);
-// 						string ip_dotted = inet_ntoa(sin_addr);
-// 						_DBG_ << "request has TCP info: " << ip_dotted << " : " << tcpport << endl;
-// 					}
-// 				}catch(...){}
-// 				throw 0; // Skip using direct UDP/TCP sockets for now (xmsg does it directly anyway)
-// 				//thread t(&DRootSpy::getHistUDP, this, (void*)response, hnamepath, addr, port, tcpaddr, tcpport);
-// 				//t.detach();
-// 				//response = NULL; // thread owns response now
-// 			}catch(...){
-				if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
-				getHist(sender, hnamepath);
-//			}
+			if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
+			getHist(sender, hnamepath);
 			if(VERBOSE>3) _DBG_ << "...done" << endl;
 		}else{
 			if(VERBOSE>3) _DBG_ << "ignoring request for " << hnamepath << " (recently sent)" << endl;
 		}
 	//===========================================================
 	} else 	if(cmd == "get hists") {
-#if 0
 		// Get name of requested histograms
-		vector<string> *hnamepaths = msg->getStringVector("hnamepaths");
-		if(VERBOSE>1) _DBG_ << "responding to \"get hists\" for " << hnamepaths->size() << " hnamepaths ..." << endl;
-		getHists(*response, *hnamepaths);
+		vector<string> hnamepaths;
+		int N = payload_items["hnamepaths"]->stringa_size();
+		for(int i=0; i<N; i++) hnamepaths.push_back(payload_items["hnamepaths"]->stringa(i));
+		if(VERBOSE>1) _DBG_ << "responding to \"get hists\" for " << hnamepaths.size() << " hnamepaths ..." << endl;
+		getHists(sender, hnamepaths);
 		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	//===========================================================
 	} else 	if(cmd == "list macros") {
 		if(VERBOSE>1) _DBG_ << "responding to \"list macros\"..." << endl;
-		listMacros(*response);
+		listMacros(sender);
 		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	//===========================================================
 	} else 	if(cmd == "get macro") {
 		// Get name of requested histogram
-		string hnamepath = msg->getString("hnamepath");
+		string hnamepath = payload_items["hnamepath"]->string();
 		if(VERBOSE>1) _DBG_ << "sending out macro " << hnamepath << endl;
-		getMacro(*response, hnamepath);
+		getMacro(sender, hnamepath);
 		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	//===========================================================
 	} else 	if(cmd == "provide final") {
+#if 0
 		finalhists = msg->getStringVector("hnamepaths");
 		finalsender = msg->getType();
 //		sem_post(&RootSpy_final_sem);
@@ -1061,7 +1034,6 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 //---------------------------------
 // getHist
 //---------------------------------
-//TODO: documentation comment.
 void DRootSpy::getHist(string &sender, string &hnamepath, bool send_message)
 {
 
@@ -1100,7 +1072,7 @@ void DRootSpy::getHist(string &sender, string &hnamepath, bool send_message)
 	uint8_t *buff8 = (uint8_t*)tm->Buffer();
 	int len = tm->Length();
 	
-	// Copy serliazed object into format that can be added to
+	// Copy serialized object into format that can be added to
 	// Payload
 	string data;
 	data.reserve( len );
@@ -1290,7 +1262,6 @@ void DRootSpy::getHistUDP(void *vresponse, string hnamepath, uint32_t addr32, ui
 //---------------------------------
 // getHists
 //---------------------------------
-//TODO: documentation comment.
 void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths)
 {
 	in_get_hists = true;
@@ -1331,6 +1302,20 @@ void DRootSpy::getHists(cMsgMessage &response, vector<string> &hnamepaths)
 }
 
 //---------------------------------
+// getHists
+//---------------------------------
+void DRootSpy::getHists(string sender, vector<string> &hnamepaths)
+{
+	in_get_hists = true;
+	
+	// For now, just send each histo back as a separate
+	// message. 
+	for(auto h : hnamepaths) getHist(sender, h);
+	
+	in_get_hists = false;
+}
+
+//---------------------------------
 // listMacros
 //---------------------------------
 void DRootSpy::listMacros(cMsgMessage &response) 
@@ -1354,6 +1339,33 @@ void DRootSpy::listMacros(cMsgMessage &response)
 	uint64_t tsending = (uint64_t)time(NULL);
 	response.add("time_sent",  tsending);
 	cMsgSys->send(&response);
+	
+	in_list_macros = false;
+}
+
+//---------------------------------
+// listMacros
+//---------------------------------
+void DRootSpy::listMacros(string sender) 
+{
+	in_list_macros = true;
+
+	// If any histograms were found, copy their info into the message
+	xmsg::proto::Payload payload;
+	vector<string> macro_names;
+	vector<string> macro_paths;
+	for(map<string,macro_info_t>::iterator macro_itr = macros.begin();
+		 macro_itr != macros.end(); macro_itr++) {
+		macro_names.push_back(macro_itr->second.name);
+		macro_paths.push_back(macro_itr->second.path);
+	}
+
+	AddToPayload(payload, "macro_names", macro_names);
+	AddToPayload(payload, "macro_paths", macro_paths);
+	
+	::google::protobuf::int64 tsending = (uint64_t)time(NULL);
+	AddToPayload(payload, "time_sent", tsending);
+	SendMessage(sender, "macros list", payload);
 	
 	in_list_macros = false;
 }
@@ -1436,6 +1448,85 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath)
 	response.add("time_sent",  tsending);
 	cMsgSys->send(&response);
 	
+	in_get_macro = false;
+}
+
+
+//---------------------------------
+// getMacro
+//---------------------------------
+void DRootSpy::getMacro(string sender, string &hnamepath)
+{
+
+	in_get_macro = true;
+
+	// find the macro
+	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
+	if(the_macro_itr == macros.end()) {
+		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
+		in_get_macro = false;
+		return;
+	}
+	macro_info_t &the_macro = the_macro_itr->second;
+
+	// Lock access to ROOT global while we access it
+	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+
+	TDirectory *savedir = gDirectory;
+	
+	// for the details on TMemFile usage, see getTree()
+	TMemFile *f = new TMemFile(".rootspy_tmp.root", "RECREATE");
+	
+	// fill the TMemFile with our payload:
+	//  1) TObjString of the macro "code"
+	//  2) TObjArray of any histograms used by the macro
+	TObjString *macro_str = new TObjString(the_macro.macro.c_str());
+	macro_str->Write("macro");
+	if( the_macro.histograms.size() > 0 ) {
+		for(unsigned int i=0; i<the_macro.histograms.size(); i++)
+			the_macro.histograms[i]->Write();
+	}
+	
+	savedir->cd();
+
+	// Serialize object
+	TMessage *tm = new TMessage(kMESS_ANY);
+	f->Write();
+	tm->WriteLong64(f->GetEND()); // see treeClient.C ROOT tutorial
+	f->CopyTo(*tm);
+
+	// Copy serialized object into format that can be added to
+	// Payload
+	uint8_t *buff8 = (uint8_t*)tm->Buffer();
+	int len = tm->Length();
+	string data;
+	data.reserve( len );
+	std::copy( buff8, buff8 +len, std::back_inserter(data) );
+
+	if(VERBOSE>1)_DBG_ << " TMemFile length = " << f->GetEND() << endl;
+
+	xmsg::proto::Payload payload;
+	AddToPayload(payload, "macro_name", the_macro.name);
+	AddToPayload(payload, "macro_path", the_macro.path);
+	AddToPayload(payload, "macro_version", the_macro.version);
+	AddToPayload(payload, "TMessage", data);
+
+	// clean up everything
+	if(f) {
+		f->Close();
+		delete f;
+		f = NULL;
+	}
+
+	// Finished with TMessage object. Free it and release lock on ROOT global
+	delete tm;
+	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+
+	// Send message containing histogram (asynchronously)
+	::google::protobuf::int64 tsending = (uint64_t)time(NULL);
+	AddToPayload(payload, "time_sent", tsending);
+	SendMessage(sender, "macro", payload);
+
 	in_get_macro = false;
 }
 
