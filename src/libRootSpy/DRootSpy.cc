@@ -94,7 +94,9 @@ void REGISTER_ROOTSPY_MACRO(string name, string path, string macro_data){
 // in DRootSpy itself thus becomes problematic.
 class LocalCallBack{
 	public:
-		void operator()(xmsg::Message &msg){ gROOTSPY->callback( msg ); }
+		// n.b. it's possible for thsi to get called before the DRootSpy
+		// constructor completes and sets gROOTSPY
+		void operator()(xmsg::Message &msg){ if(gROOTSPY) gROOTSPY->callback( msg ); }
 };
 
 //---------------------------------
