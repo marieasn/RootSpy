@@ -616,7 +616,7 @@ void DRootSpy::callback(xmsg::Message &msg)
 		// Get name of requested histogram
 		string hnamepath = payload_items["hnamepath"]->string();
 		double delta_t = now - last_sent[sender][hnamepath];
-		if(delta_t > 1.0){
+		if(delta_t > 0.5){
 			if(VERBOSE>1) _DBG_ << "responding via cMsg to \"get hist\" for " << hnamepath << " ..." << endl;
 			getHist(sender, hnamepath);
 			if(VERBOSE>3) _DBG_ << "...done" << endl;
