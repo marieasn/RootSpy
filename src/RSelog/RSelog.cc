@@ -78,7 +78,7 @@ int RUN_NUMBER = 0;
 
 void signal_stop_handler(int signum);
 
-bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=5, bool send_request=true);
+bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=10, bool send_request=true);
 void RegisterQueuedItems(void);
 void ExecuteMacro(TDirectory *f, string macro);
 void ParseCommandLineArguments(int &narg, char *argv[]);
