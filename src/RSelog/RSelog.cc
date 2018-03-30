@@ -78,7 +78,7 @@ int RUN_NUMBER = 0;
 
 void signal_stop_handler(int signum);
 
-bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=10, bool send_request=true);
+bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=5, bool send_request=true);
 void RegisterQueuedItems(void);
 void ExecuteMacro(TDirectory *f, string macro);
 void ParseCommandLineArguments(int &narg, char *argv[]);
@@ -194,7 +194,7 @@ int main(int narg, char *argv[])
 		// Get any additional hnamepaths this may require (if it is a macro)
 		bool skip = false;
 		if( ! macro_hnamepaths.empty() ){
-			bool good = GetHists(macro_hnamepaths,5,false);
+			bool good = GetHists(macro_hnamepaths,8,true);
 			if( !good ){
 				cerr << "Could not find all hnamepaths needed for macro " << hnamepath << " -- skipping " << endl;
 				ss_log << "Could not find all " << macro_hnamepaths.size() << " hnamepaths needed for macro \"" << hnamepath << "\"  -- skipped" << endl;
