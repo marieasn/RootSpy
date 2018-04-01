@@ -112,7 +112,7 @@ class rs_mainframe:public TGMainFrame {
 		void DoFinal(void);
 		void DoELog(void);
 		void ELogEntryThread(void);
-		//void DoELogPage(void);
+		void DoHDMonGUI(void);
 		void DoReferencePlot(void);
 		void DoMakeReferencePlot(void);
 				
