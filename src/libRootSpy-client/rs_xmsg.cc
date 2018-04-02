@@ -78,54 +78,54 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 	string proxy_host = udl.length()>7 ? udl.substr(7):"localhost";
 	auto bind_to = xmsg::util::to_host_addr(proxy_host);
 
-
 	// Connect to xmsg system
-	is_online = connect_to_xmsg;
+	is_online = false;
+	if(connect_to_xmsg){
 
-	try {
-		xmsgp = new xMsg(name);
-		if(connect_to_xmsg) xmsgp->connect(bind_to); 
-	} catch ( std::exception& e ) {
-		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to xmsg system! __________________"<<endl;
-		cout << e.what() << endl; 
-		cout<<endl<<endl<<endl<<endl;
+		try {
 
-		// we need to connect to xmsg to run
-		is_online = false;
-		exit(0);          
-	}
-	
-	if(is_online){
-	
-		// Create a unique name for ourself
-		char hostname[256];
-		gethostname(hostname, 256);
-		char str[512];
-		sprintf(str, "rs_%s_%d", hostname, getpid());
-		myname = string(str);
+			xmsgp = new xMsg(name);
 
-		cout<<"---------------------------------------------------"<<endl;
-		cout<<"   xMsg name: \""<<name<<"\""<<endl;
-		cout<<"rootspy name: \""<<myname<<"\""<<endl;
-		cout<<"---------------------------------------------------"<<endl;
-	
-		// Subscribe to generic rootspy info requests
-		auto connection = xmsgp->connect(bind_to);
-		auto topic_all = xmsg::Topic::build("rootspy", "rootspy", "*");
-		auto cb = LocalCallBack{};
+			// Create a unique name for ourself
+			char hostname[256];
+			gethostname(hostname, 256);
+			char str[512];
+			sprintf(str, "rs_%s_%d", hostname, getpid());
+			myname = string(str);
 
-		subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), cb).release() );
+			cout<<"---------------------------------------------------"<<endl;
+			cout<<"   xMsg name: \""<<name<<"\""<<endl;
+			cout<<"rootspy name: \""<<myname<<"\""<<endl;
+			cout<<"---------------------------------------------------"<<endl;
 
-		// Subscribe to rootspy requests specific to me
-		connection = xmsgp->connect(bind_to); // xMsg requires unique connections
-		auto topic_me = xmsg::Topic::build("rootspy", myname, "*");
-		subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), cb).release() );
-		
-		// Create connection for outgoing messages
-		pub_con = new xmsg::ProxyConnection( xmsgp->connect(bind_to) );
-		
-		// Broadcast request for available servers
-		PingServers();
+			// Subscribe to generic rootspy info requests
+			auto connection = xmsgp->connect(bind_to);
+			auto topic_all = xmsg::Topic::build("rootspy", "rootspy", "*");
+			auto cb = LocalCallBack{};
+
+			subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), cb).release() );
+
+			// Subscribe to rootspy requests specific to me
+			connection = xmsgp->connect(bind_to); // xMsg requires unique connections
+			auto topic_me = xmsg::Topic::build("rootspy", myname, "*");
+			subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), cb).release() );
+
+			// Create connection for outgoing messages
+			pub_con = new xmsg::ProxyConnection( xmsgp->connect(bind_to) );
+
+			// Broadcast request for available servers
+			PingServers();
+
+			is_online = true;
+		} catch ( std::exception& e ) {
+			cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to xmsg system! __________________"<<endl;
+			cout << e.what() << endl; 
+			cout<<endl<<endl<<endl<<endl;
+
+			// we need to connect to xmsg to run
+			is_online = false;
+			exit(0);          
+		}
 
 	}else{
 		cout<<"---------------------------------------------------"<<endl;
@@ -133,22 +133,6 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
 		cout<<"  and macros will be available.                    "<<endl;
 		cout<<"---------------------------------------------------"<<endl;	
 	}
-
-// DISABLE THIS HERE SINCE IT IS ALREADY IN rs_cmsg. MAYBE WE
-// WON'T NEED IT AT ALL!
-# if 0
-	// Getting list of network devices for direct UDP/TCP
-	rs_netdevice::GetDeviceList(netdevices);
-	rs_netdevice::PrintDevices(netdevices, "Devices available for direct UDP/TCP");
-	if(!netdevices.empty()){
-
-		// Launch thread to listen for direct UDP packets
-		udpthread = new thread(&rs_xmsg::DirectUDPServerThread, this);
-
-		// Launch thread to listen for direct UDP packets
-		tcpthread = new thread(&rs_xmsg::DirectTCPServerThread, this);
-	}
-#endif
 
 }
 
