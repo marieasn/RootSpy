@@ -50,7 +50,7 @@ class LocalCallBack{
 //---------------------------------
 // rs_xmsg    (Constructor)
 //---------------------------------
-rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg)
+rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg):pub_con(NULL)
 {
 	_rs_xmsg_global = this; // needed by LocalCallBack via GetGlobalPtr
 

@@ -186,7 +186,11 @@ void rs_xmsg::SendMessage(string servername, string command, V&& data, string da
 	xmsg::Message msg( std::move(topic), std::move(MyMeta), std::move(data));
 	if(is_online){
 		if(verbose>3) cerr << "Sending \"" << command << "\"" << endl;
-		xmsgp->publish(*pub_con, msg);
+		if(pub_con){
+			xmsgp->publish(*pub_con, msg);
+		}else{
+			cerr << "connection for publishing not set. command \"" << command << "\" not sent." << endl;
+		}
 	}
 }
 
