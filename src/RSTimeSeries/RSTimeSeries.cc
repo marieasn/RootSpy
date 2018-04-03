@@ -1,6 +1,13 @@
 // RSTimeSeries
-// Program to archive data over RootSpy into ROOT files
-// The current design of this program is to be 
+//
+// Program to periodically run macros that write values
+// to the time series DB. The location of the DB is
+// set by the following environment variables:
+//
+//    HDTSDB_HOST    (def. halldweb)
+//    HDTSDB_PORT    (def. 8086    )
+//    HDTSDB_DB      (def. RootSpy )
+//
 
 #include <unistd.h>
 #include <getopt.h>
