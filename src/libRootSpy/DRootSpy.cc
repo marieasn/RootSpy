@@ -285,6 +285,8 @@ DRootSpy::~DRootSpy()
 	for( auto sub : cmsg_subscription_handles ) cMsgSys->unsubscribe(sub);
 	for( auto sub : xmsg_subscription_handles ) xmsgp->unsubscribe( std::unique_ptr<xmsg::Subscription>( sub ) );
 
+	if( pub_con ) delete pub_con;
+
 	// Stop xMsg system
 	delete xmsgp;
 
