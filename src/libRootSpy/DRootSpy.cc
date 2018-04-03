@@ -291,10 +291,12 @@ DRootSpy::~DRootSpy()
 	delete xmsgp;
 
 	// Stop cMsg system
-	cMsgSys->stop();
-	cMsgSys->disconnect();
-	
 	if(cMsgSubConfig) delete cMsgSubConfig;
+	if(cMsgSys){
+		cMsgSys->stop();
+		cMsgSys->disconnect();
+		delete cMsgSys;
+	}
 
 //	sem_destroy(&RootSpy_final_sem);
 	
