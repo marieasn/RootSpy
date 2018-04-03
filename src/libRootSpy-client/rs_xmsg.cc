@@ -148,6 +148,8 @@ rs_xmsg::~rs_xmsg()
 		xmsgp->unsubscribe( std::unique_ptr<xmsg::Subscription>( sub ) );
 	}
 	
+	if( pub_con ) delete pub_con;
+	
 	delete xmsgp;
 		
 	if(udpthread){
