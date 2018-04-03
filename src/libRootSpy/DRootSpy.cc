@@ -598,8 +598,6 @@ void DRootSpy::callback(xmsg::Message &msg)
 	if (cmd == "null") return;
 
 	// Dispatch command
-	bool handled_message = false;
-
 	double now = GetTime(); // current time in s (arbitrary zero)
 	
 	//===========================================================
@@ -607,7 +605,6 @@ void DRootSpy::callback(xmsg::Message &msg)
 		xmsg::proto::Payload payload;
 		AddToPayload(payload, "program", gROOTSPY_PROGRAM_NAME);
 		SendMessage(sender, "I am here", payload);
-		handled_message = true;
 	//===========================================================
 	} else 	if(cmd == "list hists") {
 		if(VERBOSE>1) _DBG_ << "responding to \"list hists\"..." << endl;
@@ -658,10 +655,8 @@ void DRootSpy::callback(xmsg::Message &msg)
 		in_callback = false;
 		return;
 #endif
-	}
-
 	//===========================================================
-	if(!handled_message){
+	}else{
 		_DBG_<<"Received unknown message --  cmd: " << cmd <<endl;
 	}
 }
