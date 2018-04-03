@@ -1464,7 +1464,7 @@ void DRootSpy::getMacro(string sender, string &hnamepath)
 	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
 	if(the_macro_itr == macros.end()) {
 		// (this may happen frequently for macros provided by other processes)
-		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
+		if(VERBOSE>3) _DBG_ << "Couldn't find macro: " + hnamepath << endl;
 		in_get_macro = false;
 		return;
 	}
