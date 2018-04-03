@@ -100,7 +100,7 @@ int rs_influxdb::AddData(const string &sdata){
 	// Send data to DB
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sdata.c_str());
 	CURLcode res = curl_easy_perform(curl);
-	if(res != CURLE_OK) { cerr << curl_easy_strerror(res) << endl; return res; }
+	if(res != CURLE_OK) { cerr << "CURL: " << curl_easy_strerror(res) << endl; return res; }
 
 	return 0;
 }
@@ -215,6 +215,7 @@ void InsertSeriesMassFit(string ptype, double mass, double width, double mass_er
 		stringstream ss;
 		ss << "mass_fit,ptype=" << ptype << " mass="<<mass<<",width="<<width<<",mass_err="<<mass_err<<",width_err="<<width_err;
 		if(unix_time!=0.0) ss<<" "<<(uint64_t)(unix_time*1.0E9);  // time is in units of ns
+cout << "\"" << ss.str() << "\"" << endl;
 		db->AddData(ss.str());
 	}
 }
