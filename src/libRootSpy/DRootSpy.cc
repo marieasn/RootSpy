@@ -1059,8 +1059,9 @@ void DRootSpy::getHist(string &sender, string &hnamepath, bool send_message)
 	
 	// If object not found, release lock on ROOT global and return
 	if(!obj){
+		// (this may happen frequently for histograms provided by other processes)
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
-		_DBG_ << "Could not find \"" << hname << "\" in path\"" << path <<"\"!" << endl;
+		if(VERBOSE>3) _DBG_ << "Could not find \"" << hname << "\" in path\"" << path <<"\"!" << endl;
 		in_get_hist = false;
 		return;
 	}
@@ -1380,7 +1381,7 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath)
 	// find the macro
 	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
 	if(the_macro_itr == macros.end()) {
-		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
+		if(VERBOSE>3) _DBG_ << "Couldn't find macro: " + hnamepath << endl;
 		in_get_macro = false;
 		return;
 	}
@@ -1462,6 +1463,7 @@ void DRootSpy::getMacro(string sender, string &hnamepath)
 	// find the macro
 	map<string,macro_info_t>::iterator the_macro_itr = macros.find(hnamepath);
 	if(the_macro_itr == macros.end()) {
+		// (this may happen frequently for macros provided by other processes)
 		_DBG_ << "Couldn't find macro: " + hnamepath << endl;
 		in_get_macro = false;
 		return;
