@@ -130,7 +130,13 @@ int main(int narg, char *argv[])
 	if(signal(SIGINT, signal_stop_handler)==SIG_ERR)
 	cerr << "unable to set INT signal handler" << endl;
 	
-	
+	// when running curl as external process, suppress use
+	// of proxy which will cause failure to connect to influxdb
+	putenv("HTTP_PROXY=");
+	putenv("HTTPS_PROXY=");
+	putenv("http_proxy=");
+	putenv("https_proxy=");
+
 	// ------------------- initialization ---------------------------------
 	BeginRun();
 	
