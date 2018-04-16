@@ -78,7 +78,7 @@ int RUN_NUMBER = 0;
 
 void signal_stop_handler(int signum);
 
-bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=5, bool send_request=true);
+bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=15, bool send_request=true);
 void RegisterQueuedItems(void);
 void ExecuteMacro(TDirectory *f, string macro);
 void ParseCommandLineArguments(int &narg, char *argv[]);
@@ -150,6 +150,9 @@ int main(int narg, char *argv[])
 	bool good = GetHists(HNAMEPATHS);
 	if( !good ){
 		cerr << "Unable to get all hnamepaths in initial set!" << endl;
+		if(RS_CMSG) delete RS_CMSG;
+		if(RS_XMSG) delete RS_XMSG;
+		if(RS_INFO) delete RS_INFO;
 		exit(-1);
 	}
 
@@ -397,7 +400,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 
 		uint32_t sleep_tics = 200000;
 		uint32_t min_tries = (2*1000000)/sleep_tics; // 2 seconds
-		uint32_t max_tries = timeout_secs*(1000000/sleep_tics); // 2 seconds
+		uint32_t max_tries = timeout_secs*(1000000/sleep_tics);
 				
 		// Check if everything is found
 		if(found_hnamepaths.size() == hnamepaths.size()) {
@@ -414,6 +417,9 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 		// Check if past timeout
 		if(Ntries >= max_tries) {
 			cerr << endl << "Timed out waiting for hists!" << endl;
+			for(auto hnamepath: hnamepaths){
+				cout << hnamepath << ": " << (found_hnamepaths.count(hnamepath) ? "found":"not found") << endl;
+			}
 			return false;
 		}
 
