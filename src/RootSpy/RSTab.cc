@@ -577,20 +577,22 @@ void RSTab::DoUpdateWithFollowUp(void)
 	/// is some delay between the requests going out and the results coming
 	/// back, DoUpdate can't immediately update the screen in one call so multiple
 	/// calls to it are needed with some delay in between. This will call it 
-	/// once immediately(-ish), but then allow DoTimer to call it again later.
+	/// once immediately(-ish), but then call DoUpdate about half a second
+	/// later. Both of these are done with a one shot timer.
+	///
 	/// Note that originally this did multiple calls to handle this. I don't
 	/// recall when it was pared down to one. Recently though, it was noticed 
 	/// that the auto advance feature would occasionally (sometimes often) skip
 	/// a macro. I believe this was due to the 250ms delay which too closely
 	/// matched the 250ms DoTimer delay. It was switched to 10ms to ensure the
-	/// last_request_time was set before the next DoTimer call.
+	/// last_request_time was set before the next DoUpdate call.
 
 	// NOTE: Calling DoUpdate() directly here was resulting in se.g faults on
 	// OS X in the rs_cmg::RegisterHistogram() method (??!!) Register for ROOT
 	// to call it in 10ms 
 
 	TTimer::SingleShot(10, "RSTab", this, "DoUpdate()");
-	//TTimer::SingleShot(250, "RSTab", this, "DoUpdate()");
+	TTimer::SingleShot(500, "RSTab", this, "DoUpdate()");
 	//TTimer::SingleShot(1000, "RSTab", this, "DoUpdate()");
 }
 
