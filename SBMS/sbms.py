@@ -578,7 +578,7 @@ def AddXMSG(env):
 			env.AppendUnique(CXXFLAGS = ['-DHAVE_ZEROMQ'])
 			env.AppendUnique(CPPPATH = ['%s/include' % zeromqroot])
 			env.AppendUnique(LIBPATH = ['%s/lib' % zeromqroot])
-			env.AppendUnique(LIBS=['zmq-static'])
+			env.AppendUnique(LIBS=['zmq'])
 
 		protobufroot = os.getenv('PROTOBUF_ROOT')
 		if protobufroot:
