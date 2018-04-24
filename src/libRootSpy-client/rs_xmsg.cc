@@ -1431,7 +1431,13 @@ void rs_xmsg::RegisterMacro(rs_serialized *serialized)
 			_DBG_ << "TMemFile contents: " << endl;
 			f->ls();
 		}
-		savedir->cd();
+
+		if(savedir){
+			savedir->cd();
+		}else{
+			// This has actually happened a few times. Not sure how.
+			_DBG_<<"savedir=" << savedir << " (this shouldn't happen!)" << endl;
+		}
     
 		TObjString *macro_str = (TObjString *)f->Get("macro");
 		if(macro_str) hinfo->macroString = macro_str->GetString().Data();
