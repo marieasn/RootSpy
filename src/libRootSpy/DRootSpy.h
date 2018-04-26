@@ -175,6 +175,7 @@ class DRootSpy:public cMsgCallback{
 		pthread_t mydebugthread;
 		string finalsender;
 		bool done;
+		mutex pub_mutex;
 
 		map<string,macro_info_t> macros;
 
@@ -241,6 +242,7 @@ void DRootSpy::SendMessage(string servername, string command, V&& data, string d
 	// Create message and send it
 	xmsg::Message msg( std::move(topic), std::move(MyMeta), std::move(data));
 	if(VERBOSE>3) _DBG_ << "Sending \"" << command << "\"" << endl;
+	lock_guard<mutex> lck(pub_mutex);
 	xmsgp->publish(*pub_con, msg);
 }
 

@@ -137,6 +137,7 @@ class rs_xmsg{
 		
 		bool is_online;
 		string myname;
+		mutex pub_mutex;
 		
 		std::vector< xmsg::Subscription* > subscription_handles;
 	
@@ -187,6 +188,7 @@ void rs_xmsg::SendMessage(string servername, string command, V&& data, string da
 	if(is_online){
 		if(verbose>3) cerr << "Sending \"" << command << "\"" << endl;
 		if(pub_con){
+			lock_guard<mutex> lck(pub_mutex);
 			xmsgp->publish(*pub_con, msg);
 		}else{
 			cerr << "connection for publishing not set. command \"" << command << "\" not sent." << endl;
