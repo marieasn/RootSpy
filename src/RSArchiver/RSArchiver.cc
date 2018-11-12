@@ -215,7 +215,7 @@ void BeginRun()
         // make file to store "current" status of summed histograms
         CURRENT_OUTFILE = new TFile(BACKUP_FILENAME.c_str(), "recreate"); 
         if(!IsGoodTFile(CURRENT_OUTFILE)) {
-            cout << "Couldn't make output file, exiting" << endl;
+            cout << "Couldn't create backup output file: " << BACKUP_FILENAME << endl;
 				delete CURRENT_OUTFILE;
 				CURRENT_OUTFILE = NULL;
             return;
@@ -421,6 +421,7 @@ void GetAllHists(uint32_t Twait)
 	// Register any histograms waiting in the queue
 	if( ! HISTOS_TO_REGISTER_XMSG.empty() ){
 		REGISTRATION_MUTEX_XMSG.lock();
+		cout << "Registering " << HISTOS_TO_REGISTER_XMSG.size() << " histograms from xmsg" <<endl; 
 		for(auto h : HISTOS_TO_REGISTER_XMSG){
 			if( RS_XMSG ) RS_XMSG->RegisterHistogram(h);
 			delete h;
@@ -432,6 +433,7 @@ void GetAllHists(uint32_t Twait)
 	// Register any macros waiting in the queue
 	if( ! MACROS_TO_REGISTER_XMSG.empty() ){
 		REGISTRATION_MUTEX_XMSG.lock();
+		cout << "Registering " << MACROS_TO_REGISTER_XMSG.size() << " macros from xmsg" <<endl; 
 		for(auto m : MACROS_TO_REGISTER_XMSG){
 			if( RS_XMSG ) RS_XMSG->RegisterMacro(m);
 			delete m;
@@ -447,10 +449,12 @@ void GetAllHists(uint32_t Twait)
 	// Save current state of summed histograms to output file
 	RS_INFO->sum_dir->Write("",TObject::kOverwrite);
 	if(CURRENT_OUTFILE){
+		cout << "Flushing ROOT objects to backup file ..." << endl;
 		CURRENT_OUTFILE->SaveSelf(kTRUE); // force writing out of keys and header
-		if(MAKE_BACKUP){
-			WriteArchiveFile(OUTPUT_FILENAME, RS_INFO->sum_dir);
-		}
+	}
+	if(MAKE_BACKUP){
+		// n.b. the "BACKUP" file is now actually the primary and vice versa
+		WriteArchiveFile(OUTPUT_FILENAME, RS_INFO->sum_dir);
 	}
     
 	// Optionally generate documents
