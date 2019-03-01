@@ -197,7 +197,7 @@ int main(int narg, char *argv[])
 		// Get any additional hnamepaths this may require (if it is a macro)
 		bool skip = false;
 		if( ! macro_hnamepaths.empty() ){
-			bool good = GetHists(macro_hnamepaths,8,true);
+			bool good = GetHists(macro_hnamepaths,12,true);
 			if( !good ){
 				cerr << "Could not find all hnamepaths needed for macro " << hnamepath << " -- skipping " << endl;
 				ss_log << "Could not find all " << macro_hnamepaths.size() << " hnamepaths needed for macro \"" << hnamepath << "\"  -- skipped" << endl;
