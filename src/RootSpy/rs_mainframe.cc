@@ -2002,8 +2002,16 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 {
 	// Lock ROOT
 	pthread_rwlock_wrlock(ROOT_MUTEX);
-
-	TStyle savestyle(*gStyle);
+	
+	// Keep a separate TSyle for each macro we draw. This used to
+	// allow macros to change the style and have it stay changed 
+	// until the next macro is drawn.
+	static std::map<string, TStyle*> styles;
+	if( styles.count( macro ) == 0 ){
+		styles[macro] = new TStyle(*gStyle);
+	}
+	*gStyle = *styles[macro];
+	//TStyle savestyle(*gStyle);
 
 	TDirectory *savedir = gDirectory;
 	f->cd();
@@ -2081,7 +2089,7 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 	// restore
 	savedir->cd();
 	
-	*gStyle = savestyle;
+	//*gStyle = savestyle;
 
 	// Unlock ROOT
 	pthread_rwlock_unlock(ROOT_MUTEX);
