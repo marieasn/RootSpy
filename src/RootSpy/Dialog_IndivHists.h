@@ -42,7 +42,7 @@ class Dialog_IndivHists:public TGMainFrame{
 		void DoUpdate(void);
 		void DoCombined(void);
 		void DoDivided(void);
-		Bool_t HandleConfigureNotify(Event_t* event);
+		bool HandleConfigureNotify(Event_t* event);
 
 		enum display_style {
 			COMBINED,
@@ -50,7 +50,7 @@ class Dialog_IndivHists:public TGMainFrame{
 		};
 		
 		string hnamepath;
-		Bool_t last_enable_divided;
+		bool last_enable_divided;
 
 	private:
 		//Methods

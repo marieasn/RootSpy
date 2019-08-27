@@ -75,7 +75,7 @@ class Dialog_SelectHists:public TGMainFrame{
 		vector<hid_t> last_hids;
 		map<hid_t, TGListTreeItem*> server_items;
 		map<hid_t, TGListTreeItem*> hist_items;
-		map<string, bool> item_checked; // key=hnamepath, val=is checked
+		map<string, int> item_checked; // key=hnamepath, val=is checked
 		int last_type_filters;
 
 		void CreateGUI(void);

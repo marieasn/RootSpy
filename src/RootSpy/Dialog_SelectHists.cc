@@ -211,7 +211,7 @@ void Dialog_SelectHists::DoOK(void)
 	// Replace existing list of hnamepaths
 	hnamepaths->clear();
 
-	map<string,bool>::iterator iter = item_checked.begin();
+	auto iter = item_checked.begin();
 	for(; iter!=item_checked.end(); iter++){
 		if(iter->second) hnamepaths->push_back(iter->first);
 	}
