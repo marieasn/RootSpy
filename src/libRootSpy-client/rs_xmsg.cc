@@ -1221,7 +1221,7 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 	hinfo->rate = 1.0/(hinfo->received - last_received);
 	if(hinfo->hist){
 		// Subtract old histo from sum
-		if(hdef->sum_hist)hdef->sum_hist->Add(hinfo->hist, -1.0);
+		if( (hdef->sum_hist) && (hdef->type!=hdef_t::profile) )hdef->sum_hist->Add(hinfo->hist, -1.0);
 
 		// Delete old histo
 		delete hinfo->hist;
@@ -1251,6 +1251,11 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 	if(hdef->sum_hist){
 		// Reset sum histo first if showing only one histo at a time
 		if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
+		
+		// Need to check if hist is type profile and if so, reset it and sum all hists
+		// together again. This is because we can't subtract the old histo from the
+		// sum above like for non-profile hists without it screwing up the histogram.
+		
 		hdef->sum_hist->Add(h);
 	}else{
 		// get the directory in which to save the summed histogram
