@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/stat.h>
 
 #include <TROOT.h>
 #include <TFile.h>
@@ -64,6 +65,12 @@ PDFOutputGenerator *pdf_generator = NULL;
 
 static int VERBOSE = 1;  // Verbose output to screen - default is to print out some information
 
+// These are used by the recursive CopyROOTDir to keep track of
+// how many objects of each type are copied
+int Ndirectories=0;
+int Ntrees=0;
+int Nhists=0;
+
 // configuration variables
 namespace config {
     static string ROOTSPY_UDL = "cMsg://127.0.0.1/cMsg/rootspy";
@@ -110,7 +117,7 @@ void EndRunProcessing(void);
 void ParseCommandLineArguments(int &narg, char *argv[]);
 void Usage(void);
 void WriteArchiveFile( string fname, TDirectory *sum_dir );
-void CopyROOTDir(TDirectory *source);
+void CopyROOTDir(TDirectory *source, bool reset_counters=false);
 //void SaveTrees( TDirectoryFile *the_file );
 
 void signal_stop_handler(int signum);
@@ -201,6 +208,9 @@ int main(int narg, char *argv[])
 //-----------
 void BeginRun()
 {
+    // Do this before anything else
+    if(!ROOT_MUTEX) ROOT_MUTEX = new pthread_rwlock_t;
+
     // Create rs_info object
     RS_INFO = new rs_info();
 
@@ -245,7 +255,6 @@ void BeginRun()
         pdf_generator = new PDFOutputGenerator();
     
     // Makes a Mutex to lock / unlock Root Global
-    ROOT_MUTEX = new pthread_rwlock_t;
     pthread_rwlock_init(ROOT_MUTEX, NULL);
     
     // ------------------- cMsg initialization ----------------------------
@@ -471,11 +480,18 @@ void GetAllHists(uint32_t Twait)
 //-----------
 // CopyROOTDir
 //-----------
-void CopyROOTDir(TDirectory *source)
+void CopyROOTDir(TDirectory *source, bool reset_counters)
 {
 	/// Copy the given directory and contents to the
 	/// current gDirectory. This was taken from an 
 	/// answer to a similar question on a ROOT forum
+	
+	// Optionally reset counters so number of each object type can be tallied
+	if( reset_counters ){
+		Ndirectories = 0;
+		Ntrees       = 0;
+		Nhists       = 0;
+	}
 
    TDirectory *savedir = gDirectory;
    TDirectory *adir = savedir->mkdir(source->GetName());
@@ -488,17 +504,20 @@ void CopyROOTDir(TDirectory *source)
       TClass *cl = gROOT->GetClass(classname);
       if (!cl) continue;
       if (cl->InheritsFrom("TDirectory")) {
+			Ndirectories++;
          source->cd(key->GetName());
          TDirectory *subdir = gDirectory;
          adir->cd();
          CopyROOTDir(subdir);
          adir->cd();
       } else if (cl->InheritsFrom("TTree")) {
+			Ntrees++;
          TTree *T = (TTree*)source->Get(key->GetName());
          adir->cd();
          TTree *newT = T->CloneTree();
          newT->Write();
       } else {
+			Nhists++;
          source->cd();
          TObject *obj = key->ReadObj();
          adir->cd();
@@ -535,14 +554,24 @@ void WriteArchiveFile( string fname, TDirectory *sum_dir )
 	}
 	
 	file->cd();
-	CopyROOTDir(sum_dir);
+	CopyROOTDir(sum_dir, true);
 	savedir->cd();	
 
 	file->Write();
 	file->Close();
 	delete file;
 
-	savedir->cd();		
+	savedir->cd();
+	
+	cout << " -- Saved:  " << Ndirectories << " directories,  " << Ntrees << " trees,  " << Nhists << " hists" << endl;
+	cout << " -- RS_INFO: " << RS_INFO->servers.size() << " servers,  " << RS_INFO->histdefs.size() << " histdefs,  " << RS_INFO->hinfos.size() << " hinfos,  " << RS_INFO->treedefs.size() << " treedefs" << endl;
+	struct stat fstats;
+	if( stat(fname.c_str(), &fstats) != -1 ){
+		cout << " -- " << (fstats.st_size>>10) << "kB : " << fname << endl;
+	}
+	if( stat(BACKUP_FILENAME.c_str(), &fstats) != -1 ){
+		cout << " -- " << (fstats.st_size>>10) << "kB : " << BACKUP_FILENAME << endl;
+	}
 }
 
 
