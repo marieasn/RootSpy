@@ -40,6 +40,20 @@ void Usage(void);
 void AttachPlugins(void);
 void* FailedAttachHack(string fullpath, string err);
 
+//...................................................
+// REGISTER_ROOTSPY_MACRO
+//
+// This is similar to the version DRootSpy.cc, but is here to provide
+// a means for the RootSpy GUI program to directly attach plugins
+// and use their macros. This is primarily intended for use when reading
+// from a ROOT file so that one can test the macros without needing a
+// cMsg server.
+extern "C"{
+void REGISTER_ROOTSPY_MACRO(string name, string path, string macro_data){
+	if(RS_INFO) RS_INFO->LoadMacro(name, path, macro_data);
+}
+};
+
 //-------------------
 // main
 //-------------------
@@ -140,7 +154,8 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 {
 	// Copy from environment first so that command line may
 	// override
-	const char *ptr = getenv("ROOTSPY_UDL");
+	const char *ptr = getenv("ROOTSPY_AGGREGATOR_UDL");
+	if(ptr == nullptr) ptr = getenv("ROOTSPY_UDL");
 	if(ptr)ROOTSPY_UDL = ptr;
 
 	// Loop over comman line arguments

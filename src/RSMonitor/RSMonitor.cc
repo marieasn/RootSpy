@@ -36,7 +36,7 @@ int VERBOSE=0;
 bool REDRAW_SCREEN = true; // for debugging
 string FOCUS_NODE = "";
 bool INCLUDE_ROOTSPY_STATS = true;
-bool USE_RS_CMSG=false;
+bool CONNECT_AS_SERVER=false;
 bool PING_SERVERS = false;
 bool RESPOND_TO_PINGS = true;
 int REQUESTS_SENT=0;
@@ -59,8 +59,6 @@ rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
 RSMON_MODE MODE = MODE_OBSERVE;
 
-bool USE_CMSG=false;
-bool USE_XMSG=true;
 
 void Usage(void);
 void ParseCommandLineArguments(int narg, char *argv[]);
@@ -307,7 +305,7 @@ void ParseCommandLineArguments(int narg, char *argv[])
 		}
 	}
 	
-	if(MODE == MODE_SPEED_TEST) USE_RS_CMSG = true;
+	if(MODE == MODE_SPEED_TEST) CONNECT_AS_SERVER = true;
 }
 
 //------------------------------
@@ -381,7 +379,8 @@ void UpdateHistoRequests(double now)
 	for(; hbs_iter!=hnamepaths_by_server.end(); hbs_iter++){
 		string server = hbs_iter->first;
 		vector<string> &hnamepaths = hbs_iter->second;
-		RS_CMSG->RequestHistograms(server, hnamepaths);
+		if( RS_CMSG) RS_CMSG->RequestHistograms(server, hnamepaths);
+		if( RS_XMSG) RS_XMSG->RequestHistograms(server, hnamepaths);
 		REQUESTS_SENT++;
 		for(uint32_t i=0; i<hnamepaths.size(); i++){
 			LAST_REQUEST_TIME[hid_t(server, hnamepaths[i])] = now;
@@ -400,6 +399,22 @@ void UpdateHistoRequests(double now)
 		REQUESTS_SENT++;
 	}
 #endif
+}
+
+//------------------------------
+// MakeRSMON
+//------------------------------
+void MakeRSMON(void)
+{
+	// Check if an RSMON object is needed based on the current mode. If
+	// so and it does not already exist create one of the appropriate type.
+
+	if(RSMON_CMSG==NULL && (RS_CMSG==NULL || RS_CMSG->IsOnline())){
+		RSMON_CMSG = new rsmon_cmsg(CMSG_NAME, (RS_CMSG==NULL ? NULL:RS_CMSG->GetcMsgPtr()));
+		RSMON_CMSG->focus_node = FOCUS_NODE;
+		RSMON_CMSG->respond_to_pings = RESPOND_TO_PINGS;
+	}
+
 }
 
 //------------------------------
@@ -424,10 +439,16 @@ int main(int narg, char *argv[])
 	sprintf(str, "rs_%s_%d", hostname, getpid());
 	CMSG_NAME = string(str);
 	cout << "Full UDL is " << ROOTSPY_UDL << endl;
-	if(USE_RS_CMSG){
-		RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
-		RS_CMSG->verbose=VERBOSE;
-		RS_CMSG->program_name = "RSMonitor";
+	if(CONNECT_AS_SERVER){
+		if( ROOTSPY_UDL.find("xMsg://") == 0){
+			RS_XMSG = new rs_xmsg(ROOTSPY_UDL, CMSG_NAME);
+			RS_XMSG->verbose = VERBOSE;
+			RS_XMSG->program_name = "RSMonitor";
+		} else {
+			RS_CMSG = new rs_cmsg(ROOTSPY_UDL, CMSG_NAME);
+			RS_CMSG->verbose = VERBOSE;
+			RS_CMSG->program_name = "RSMonitor";
+		}
 	}
 
 	signal(SIGINT, sigHandler);
@@ -444,11 +465,9 @@ int main(int narg, char *argv[])
 			case MODE_OBSERVE:
 			case MODE_MESS_SIZES:
 				if(RSMON_CMSG==NULL && (RS_CMSG==NULL || RS_CMSG->IsOnline())){
-#ifdef HAVE_CMSG
 					RSMON_CMSG = new rsmon_cmsg(CMSG_NAME, (RS_CMSG==NULL ? NULL:RS_CMSG->GetcMsgPtr()));
 					RSMON_CMSG->focus_node = FOCUS_NODE;
 					RSMON_CMSG->respond_to_pings = RESPOND_TO_PINGS;
-#endif
 				}
 				break;
 			case MODE_SPEED_TEST:

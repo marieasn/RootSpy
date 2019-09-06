@@ -1,0 +1,16 @@
+
+import os
+
+import sbms
+
+# get env object and clone it
+Import('*')
+env = env.Clone()
+
+sbms.AddROOT(env)
+sbms.AddCMSG(env)
+sbms.AddXMSG(env)
+env.PrependUnique(LIBS=['RootSpy-client', 'RootSpy'])
+
+sbms.executable(env)
+

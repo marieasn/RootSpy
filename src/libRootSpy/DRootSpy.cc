@@ -34,6 +34,7 @@ using namespace std;
 #include "DRootSpy.h"
 #include "rs_udpmessage.h"
 
+
 double DRootSpy::start_time=0.0; // overwritten on fist call to rs_cmsg::GetTime()
 
 #ifndef _DBG_
@@ -92,9 +93,9 @@ void REGISTER_ROOTSPY_MACRO(string name, string path, string macro_data){
 // This is needed because the xMsg::subscribe method will create and destroy
 // multiple instances of this callback object. Using an operator() method
 // in DRootSpy itself thus becomes problematic.
-class LocalCallBack{
+class LocalCallBackD{
 	public:
-		// n.b. it's possible for thsi to get called before the DRootSpy
+		// n.b. it's possible for this to get called before the DRootSpy
 		// constructor completes and sets gROOTSPY
 		void operator()(xmsg::Message &msg){ if(gROOTSPY) gROOTSPY->callback( msg ); }
 };
@@ -103,7 +104,7 @@ class LocalCallBack{
 // DRootSpy    (Constructor)
 //---------------------------------
 //TODO: documentation comment.
-DRootSpy::DRootSpy(string udl)
+DRootSpy::DRootSpy(string udl, string myname):myname(myname)
 {
 	Initialize(NULL, udl);
 }
@@ -112,7 +113,7 @@ DRootSpy::DRootSpy(string udl)
 // DRootSpy    (Constructor)
 //---------------------------------
 //TODO: documentation comment.
-DRootSpy::DRootSpy(pthread_rwlock_t *rw_lock, string udl)
+DRootSpy::DRootSpy(pthread_rwlock_t *rw_lock, string udl, string myname):myname(myname)
 {
 	Initialize(rw_lock, udl);
 }
@@ -138,6 +139,10 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	in_get_tree_info = false;
 	in_get_macro = false;
 
+	// This flag controls whether we send all histograms or only those
+	// in the RSINFO::sum_dir directory. (Useful for RSAggregator)
+	advertise_sum_hists_only = false;
+
 	// Initialize the gROOTSPY_RW_LOCK global either with the user
 	// supplied rw_lock or by allocating our own.
 	if(rw_lock){
@@ -159,18 +164,20 @@ void DRootSpy::Initialize(pthread_rwlock_t *rw_lock, string myUDL)
 	hist_dir = gDirectory;
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
 	
-	// Create a unique name for ourself
-	char hostname[256];
-	gethostname(hostname, 256);
-	char str[512];
-	sprintf(str, "rs_%s_%d", hostname, getpid());
-	myname = string(str);
-	
+	// Create a unique name for ourself if not already specified
+	if( myname.empty() ){
+		char hostname[256];
+		gethostname(hostname, 256);
+		char str[512];
+		sprintf(str, "rs_%s_%d", hostname, getpid());
+		myname = string(str);
+	}
+
 	// Determine UDL for connecting to cMsg server
 	// The preference is given is:
 	//  1. udl passed to us (if not set to "<default">)
 	//  2. environment variable ROOTSPY_UDL if set
-	//  3. hardwired UDL (cMsg://localhost/cMsg/rootspy)
+	//  3. hardwired UDL (xMsg://127.0.0.1/rootspy)
 	//
 	// If "<default>" is specified, then check for 2 then 3
 	if(myUDL == "<default>"){
@@ -346,7 +353,7 @@ void DRootSpy::ConnectToXMSG(void)
 	try {
 		xmsgp = new xMsg(myname);
 		xmsgp->connect(bind_to); 
-		auto cb = LocalCallBack{};
+		auto cb = LocalCallBackD{};
 
 		cout<<"---------------------------------------------------"<<endl;
 		cout<<"rootspy name xMsg: \""<<myname<<"\""<<endl;
@@ -873,10 +880,20 @@ void DRootSpy::listHists(cMsgMessage &response)
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
 	hist_dir = gDirectory;
+	if( advertise_sum_hists_only ){
+		// n.b. One would like to use RS_INFO->sum_dir here, but it does not exist
+		// in this library. One needs to make sure the "rootspy" name stays aligned
+		// with what is in the rs_info constructor.
+		hist_dir = dynamic_cast<TDirectory*>(gROOT->FindObject("rootspy"));
+		if( hist_dir == nullptr ){
+			cout << " WARNING: histogram list requested and advertise_sum_hists_only set to true" << endl;
+			cout << "          but no sum directory named \"rootspy\" found. Will return empty list." << endl;
+		}
+	}
 	
 	// Add histograms to list, recursively traversing ROOT directories
 	vector<hinfo_t> hinfos;
-	addRootObjectsToList(hist_dir, hinfos);
+	if( hist_dir) addRootObjectsToList(hist_dir, hinfos);
 	
 	// Release lock on ROOT global
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
@@ -938,7 +955,17 @@ void DRootSpy::listHists(string sender)
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
 
 	hist_dir = gDirectory;
-	
+	if( advertise_sum_hists_only ){
+		// n.b. One would like to use RS_INFO->sum_dir here, but it does not exist
+		// in this library. One needs to make sure the "rootspy" name stays aligned
+		// with what is in the rs_info constructor.
+		hist_dir = dynamic_cast<TDirectory*>(gROOT->FindObject("rootspy"));
+		if( hist_dir == nullptr ){
+			cout << " WARNING: histogram list requested and advertise_sum_hists_only set to true" << endl;
+			cout << "          but no sum directory named \"rootspy\" found. Will return empty list." << endl;
+		}
+	}
+
 	// Add histograms to list, recursively traversing ROOT directories
 	vector<hinfo_t> hinfos;
 	addRootObjectsToList(hist_dir, hinfos);
@@ -955,9 +982,11 @@ void DRootSpy::listHists(string sender)
 		vector<string> hist_paths;
 		vector<string> hist_titles;
 		for(unsigned int i=0; i<hinfos.size(); i++){
+			string path = hinfos[i].path;
+			if(advertise_sum_hists_only && (path.find("root:/rootspy/")==0)) path.erase(0, 13);
 			hist_names.push_back(hinfos[i].name);
 			hist_types.push_back(hinfos[i].type);
-			hist_paths.push_back(hinfos[i].path);
+			hist_paths.push_back(path);
 			hist_titles.push_back(hinfos[i].title);
 		}
 		AddToPayload(payload, "hist_names",  hist_names);
@@ -993,7 +1022,7 @@ void DRootSpy::getHist(cMsgMessage &response, string &hnamepath, bool send_messa
 	if(path.find(": ") == 0) path.erase(0,2);
 
 	// Lock access to ROOT global while we access it
-	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 	// Get pointer to ROOT object
 	TDirectory *savedir = gDirectory;
@@ -1047,11 +1076,19 @@ void DRootSpy::getHist(string &sender, string &hnamepath, bool send_message)
 	string path = hnamepath.substr(0, pos);
 	if(path[path.length()-1]==':')path += "/";
 	
-	// Looks like ROOT6 has like leading " :"
+	// Looks like ROOT6 has leading " :"
 	if(path.find(": ") == 0) path.erase(0,2);
 
+	// If we are only providing summed histograms (i.e. RSAggregator) then hnamepaths
+	// sent will have had the leading "rootspy" removed. We need to add that back in here
+	if( advertise_sum_hists_only ){
+		path = "/rootspy" + path;
+		// Record hnamepaths we're being asked to deliver so RSAggregator can, in turn, request them from the producers.
+		requested_hnamepaths.insert( hnamepath );
+	}
+
 	// Lock access to ROOT global while we access it
-	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 	// Get pointer to ROOT object
 	TDirectory *savedir = gDirectory;
@@ -1063,6 +1100,7 @@ void DRootSpy::getHist(string &sender, string &hnamepath, bool send_message)
 	if(!obj){
 		// (this may happen frequently for histograms provided by other processes)
 		pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
+		_DBG_ << "Could not find \"" << hname << "\" in path\"" << path <<"\"!" << endl;
 		if(VERBOSE>3) _DBG_ << "Could not find \"" << hname << "\" in path\"" << path <<"\"!" << endl;
 		in_get_hist = false;
 		return;
@@ -1390,7 +1428,7 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath)
 	macro_info_t &the_macro = the_macro_itr->second;
 
 	// Lock access to ROOT global while we access it
-	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 	TDirectory *savedir = gDirectory;
 	
@@ -1473,7 +1511,7 @@ void DRootSpy::getMacro(string sender, string &hnamepath)
 	macro_info_t &the_macro = the_macro_itr->second;
 
 	// Lock access to ROOT global while we access it
-	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 	TDirectory *savedir = gDirectory;
 	
@@ -1542,7 +1580,7 @@ void DRootSpy::getTree(cMsgMessage &response, string &name, string &path, int64_
 	in_get_tree = true;
 
 	// Lock access to ROOT global while we access it
-	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
+	pthread_rwlock_wrlock(gROOTSPY_RW_LOCK);
 
 	// Get pointer to tree
 	TDirectory *savedir = gDirectory;
@@ -1934,7 +1972,7 @@ bool DRootSpy::RegisterMacro(string name, string path, string macro_data)
 		return false;
 	}
 	
-	cout << "ROOTSPY: Registering macro \""<<name<<"\""<<endl;
+	if( VERBOSE>1 )cout << "ROOTSPY: Registering macro \""<<name<<"\""<<endl;
 
 	// validate path - if blank, then assume we're in the root directory
 	// right now we don't do anything else special...
@@ -2030,3 +2068,33 @@ bool DRootSpy::SetMacroVersion(string name, string path, int version_number)
 	return true;
 }
 
+//---------------------------------
+// SetSumHistsOnly
+//---------------------------------
+bool DRootSpy::SetSumHistsOnly(bool advertise_sum_hists_only)
+{
+	// This sets an internal flag of the DRootSpy object that determines what gets
+	// returned in response to "list hists" requests. If set to true, then only
+	// histograms in the RS_INFO::sum_dir are returned. This is useful for RSAggregator
+	// which operates as both a server and client. By default, this flag is set to
+	// false meaning all root objects from all directories are returned.
+	// The return value is the new setting for the flag.
+
+	this->advertise_sum_hists_only = advertise_sum_hists_only;
+	return this->advertise_sum_hists_only;
+}
+
+//---------------------------------
+// PopRequested_hnamepaths
+//---------------------------------
+void DRootSpy::PopRequested_hnamepaths(set<string> &hnamepaths)
+{
+	// Swap the contents of the given container with the member container holding hnamepaths of
+	// requested histograms. The end effect of this is the same as if the contents of were
+	// copied and the internal container cleared. (Assuming the provided hnamepaths is empty).
+	// This is used by RSAggregator to request the same histograms That are being requested
+	// of it, but more frequently than would be done in the period of the main loop. In other
+	// words, it allows the user requests to propagate back to the original producers so the
+	// GUI can update faster.
+	hnamepaths.swap(requested_hnamepaths);
+}

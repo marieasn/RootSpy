@@ -8,9 +8,9 @@
 #include <unistd.h>
 
 #include "RootSpy.h"
-#include "rsmon_cmsg.h"
+#include "rsmon_xmsg.h"
 #include "rs_info.h"
-#include "rs_cmsg.h"
+#include "rs_xmsg.h"
 #include "tree_info_t.h"
 
 
@@ -22,18 +22,16 @@ using namespace std;
 
 
 extern string ROOTSPY_UDL;
-extern string CMSG_NAME;
+extern string XMSG_NAME;
 extern double START_TIME;
 
 bool sizeSort (const pair<string,double> &a, const pair<string,double> &b) { return (b.second<a.second); }
 
-#ifdef HAVE_CMSG
-#include "cMsg.h"
 
 //---------------------------------
-// rsmon_cmsg    (Constructor)
+// rsmon_xmsg    (Constructor)
 //---------------------------------
-rsmon_cmsg::rsmon_cmsg(string myname, cMsg *cMsgSys)
+rsmon_xmsg::rsmon_xmsg(string myname)
 {
 
 	// If the cMsgSys pointer is NULL, then make our own connection
@@ -70,7 +68,6 @@ rsmon_cmsg::rsmon_cmsg(string myname, cMsg *cMsgSys)
 //	all_nodes[myname].subscription_handle = cMsgSys->subscribe(myname, "*", this, NULL);
 	all_nodes[myname].subscription_handle = cMsgSys->subscribe("rs_*", "*", this, NULL);
 }
-#endif // HAVE_CMSG
 
 //---------------------------------
 // ~rsmon_cmsg    (Destructor)
@@ -87,7 +84,6 @@ rsmon_cmsg::~rsmon_cmsg()
 #endif
 }
 
-#ifdef HAVE_CMSG
 
 //---------------------------------
 // callback
@@ -172,7 +168,6 @@ void rsmon_cmsg::callback(cMsgMessage *msg, void *userObject)
 
 	delete msg;
 }
-#endif
 
 //---------------------------------
 // FillLines

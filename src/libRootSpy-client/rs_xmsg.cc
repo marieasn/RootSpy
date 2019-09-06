@@ -28,6 +28,8 @@ using namespace std;
 #include <TTree.h>
 #include <TMemFile.h>
 #include <TKey.h>
+#include <THashList.h>
+
 
 mutex REGISTRATION_MUTEX_XMSG;
 set<rs_serialized*> HISTOS_TO_REGISTER_XMSG;
@@ -712,7 +714,7 @@ void rs_xmsg::RegisterHistList(string server, RSPayloadMap &payload_map)
 			if(verbose>3) _DBG_ << "Adding hdef with hnamepath=" << hdef.hnamepath << endl;
 			RS_INFO->histdefs[hdef.hnamepath]=hdef;
 		}else{
-			if(verbose>3) _DBG_ << "Skipping adding of hdef with hnamepath=" << hdef.hnamepath << " since it already exists" << endl;
+			if(verbose>6) _DBG_ << "Skipping adding of hdef with hnamepath=" << hdef.hnamepath << " since it already exists" << endl;
 			// Need code to verify hdefs are same!!
 		}
 		
@@ -1069,7 +1071,7 @@ void rs_xmsg::RegisterHistogram(string server, RSPayloadMap &payload_map)
 	auto dhnamepath  = payload_map["hnamepath"];
 	auto dTMessage  = payload_map["TMessage"];
 	
-	if(verbose>3) _DBG_<<"Received histogram with TMessage payload of " << dTMessage->string().size() << " bytes" << endl;
+	if(verbose>3) _DBG_<<"Received histogram with TMessage payload of " << dTMessage->string().size() << " bytes for hnamepath " << dhnamepath->string() << endl;
 
 	auto serialized = new rs_serialized;
 	serialized->sender = server;
@@ -1125,6 +1127,61 @@ void rs_xmsg::RegisterHistograms(string server, RSPayloadMap &payload_map)
 		if(verbose>0) _DBG_<<"Poorly formed response for \"histograms\". None found!"<<endl;
 	}
 	REGISTRATION_MUTEX_XMSG.unlock();                                                                                                                                
+}
+
+//---------------------------------
+// MyCheckBinLabels
+//---------------------------------
+bool MyCheckBinLabels(TAxis *a1, TAxis *a2)
+{
+	THashList *l1 = a1->GetLabels();
+	THashList *l2 = a2->GetLabels();
+
+	if (!l1 && !l2 )
+		return true;
+	if (!l1 ||  !l2 ) {
+		_DBG_<<" XXXXXXXXXXX - A " << endl;
+		auto asrc  = l1 ? a1:a2;
+		auto adest = l1 ? a2:a1;
+		for (int i = 1; i <= asrc->GetNbins(); ++i) {
+			TString label1 = asrc->GetBinLabel(i);
+			adest->SetBinLabel( i, label1 );
+		}
+		return false;
+	}
+	// check now labels sizes  are the same
+	if (l1->GetSize() != l2->GetSize() ) {
+		_DBG_<<" XXXXXXXXXXX - B " << endl;
+		return false;
+	}
+	for (int i = 1; i <= a1->GetNbins(); ++i) {
+		TString label1 = a1->GetBinLabel(i);
+		TString label2 = a2->GetBinLabel(i);
+		if (label1 != label2) {
+			_DBG_<<" XXXXXXXXXXX - C " << endl;
+			return false;
+		}
+	}
+
+	return true;
+}
+
+//---------------------------------
+// MyCheckAllBinLabels
+//---------------------------------
+bool MyCheckAllBinLabels(TH1 *h1, TH1 *h2)
+{
+	if (h1->GetDimension() != h2->GetDimension() ) return false;
+	bool ret = true;
+	switch( h1->GetDimension() ){
+		case 3: ret &= MyCheckBinLabels( h1->GetZaxis(), h2->GetZaxis() );
+		case 2: ret &= MyCheckBinLabels( h1->GetYaxis(), h2->GetYaxis() );
+		case 1: ret &= MyCheckBinLabels( h1->GetXaxis(), h2->GetXaxis() );
+	}
+
+	if( !ret ) _DBG_ << "XXXXXXXXXXXXXXXX Mismatched labels for " << h1->GetName() << endl;
+
+	return ret;
 }
 
 //---------------------------------
@@ -1221,7 +1278,10 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 	hinfo->rate = 1.0/(hinfo->received - last_received);
 	if(hinfo->hist){
 		// Subtract old histo from sum
-		if( (hdef->sum_hist) && (hdef->type!=hdef_t::profile) )hdef->sum_hist->Add(hinfo->hist, -1.0);
+		if( (hdef->sum_hist) && (hdef->type!=hdef_t::profile) ){
+			MyCheckAllBinLabels( hdef->sum_hist,  hinfo->hist);
+			hdef->sum_hist->Add(hinfo->hist, -1.0);
+		}
 
 		// Delete old histo
 		delete hinfo->hist;

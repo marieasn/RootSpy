@@ -54,8 +54,8 @@ class DRootSpy:public cMsgCallback{
 
 		typedef map<string, const xmsg::proto::Data*> RSPayloadMap;
 
-		DRootSpy(string udl);
-		DRootSpy(pthread_rwlock_t *rw_lock=NULL, string udl="<default>");
+		DRootSpy(string udl, string myname="");
+		DRootSpy(pthread_rwlock_t *rw_lock=NULL, string udl="<default>", string myname="");
 		void Initialize(pthread_rwlock_t *rw_lock, string udl);
 		virtual ~DRootSpy();
 
@@ -93,6 +93,9 @@ class DRootSpy:public cMsgCallback{
 		bool AddMacroHistogram(string name, string path, TH1 *the_hist);
 		bool AddMacroHistogram(string name, string path, vector<TH1*> the_hists);
 		bool SetMacroVersion(string name, string path, int version_number);
+		bool SetSumHistsOnly(bool advertise_sum_hists_only=true);
+		void GetMacroInfos( map<string,macro_info_t> &mymacros ){ mymacros = macros;}
+		void PopRequested_hnamepaths(set<string> &hnamepaths);
 
 		static double GetTime(void){
 			struct timeval tval;
@@ -148,7 +151,7 @@ class DRootSpy:public cMsgCallback{
 		void findTreeNamesForMsg(TDirectory *dir, vector<string> &tree_names,
 		vector<string> &tree_titles, vector<string> &tree_paths);     
 
-		template<typename V> 
+		template<typename V>
 		void SendMessage(string servername, string command, V&& data, string dataType="mystery");
 		void SendMessage(string servername, string commands);
 		void SendMessage(string servername, string command, xmsg::proto::Payload &payload);
@@ -175,6 +178,8 @@ class DRootSpy:public cMsgCallback{
 		pthread_t mydebugthread;
 		string finalsender;
 		bool done;
+		bool advertise_sum_hists_only; // Only send histograms in our sum list (used by RSAggregator)
+		set<string> requested_hnamepaths;
 		mutex pub_mutex;
 
 		map<string,macro_info_t> macros;

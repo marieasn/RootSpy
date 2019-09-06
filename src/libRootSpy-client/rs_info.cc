@@ -18,20 +18,6 @@ using namespace std;
 
 extern rs_info *RS_INFO;
 
-//...................................................
-// REGISTER_ROOTSPY_MACRO
-//
-// This is similar to the version DRootSpy.cc, but is here to provide
-// a means for the RootSpy GUI program to directly attach plugins
-// and use their macros. This is primarily intended for use when reading
-// from a ROOT file so that one can test the macros without needing a
-// cMsg server.
-extern "C"{
-void REGISTER_ROOTSPY_MACRO(string name, string path, string macro_data){
-	if(RS_INFO) RS_INFO->LoadMacro(name, path, macro_data);
-}
-};
-//...................................................
 
 
 bool sortPredicate(const hid_t& hid1, const hid_t& hid2){
@@ -51,7 +37,9 @@ rs_info::rs_info()
 
 	current.serverName = "N/A";
 	current.hnamepath = "-------------------------------------------------------";
-	
+
+	// WARNING: If you change the name of the sum directory to something other than
+	// "rootspy" you'll need to also change it in the FindObject calls in DRootSpy.cc
 	sum_dir = new TDirectory("rootspy", "RootSpy local");
 	reset_dir = new TDirectory("rootspy_snapshots", "RootSpy local snapshots");
 	update = false;
