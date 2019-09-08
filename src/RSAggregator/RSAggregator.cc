@@ -147,7 +147,8 @@ void signal_usr1_handler(int signum)
 
 	vector<DRootSpy::hinfo_t> hinfos;
 	pthread_rwlock_rdlock(gROOTSPY_RW_LOCK);
-	if( gDirectory ) RS_XMSG_DESTINATIONS->addRootObjectsToList(gDirectory, hinfos);
+	if( gDirectory )
+		if( RS_XMSG_DESTINATIONS ) RS_XMSG_DESTINATIONS->addRootObjectsToList(gDirectory, hinfos);
 
 	uint32_t Nmacros_src = 0;
 	for( auto hi : RS_INFO->hinfos ){
@@ -155,7 +156,7 @@ void signal_usr1_handler(int signum)
 	}
 
 	map<string,macro_info_t> macros;
-	RS_XMSG_DESTINATIONS->GetMacroInfos( macros );
+	if( RS_XMSG_DESTINATIONS ) RS_XMSG_DESTINATIONS->GetMacroInfos( macros );
 	uint32_t Nmacros_dest = macros.size();
 
 	pthread_rwlock_unlock(gROOTSPY_RW_LOCK);
@@ -295,7 +296,7 @@ void MainLoop(void)
 				    	auto path = hnamepath.substr(0,pos);
 				    	auto &macroString = hi.second.macroString;
 //				    	_DBG_<<"++++++++++++ hnamepath=" << hnamepath << " path=" << path << " name="<<name << endl;
-					    RS_XMSG_DESTINATIONS->RegisterMacro(name, path, macroString);
+					    if( RS_XMSG_DESTINATIONS ) RS_XMSG_DESTINATIONS->RegisterMacro(name, path, macroString);
 				    }
 			    }
 
@@ -339,7 +340,7 @@ void MainLoop(void)
 
 	    // Send requests to producers for any histograms we were requested to provide
 	    set<string> hnamepaths;
-	    RS_XMSG_DESTINATIONS->PopRequested_hnamepaths( hnamepaths );
+	    if( RS_XMSG_DESTINATIONS ) RS_XMSG_DESTINATIONS->PopRequested_hnamepaths( hnamepaths );
 	    if( !hnamepaths.empty() ) {
 	    	_DBG_<<"+++++++++++ Passing requests for " << hnamepaths.size() << " histograms ... " << endl;
 		    vector<string> vhnamepaths( hnamepaths.begin(), hnamepaths.end() );
