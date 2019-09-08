@@ -649,8 +649,13 @@ void DRootSpy::callback(xmsg::Message &msg)
 	} else 	if(cmd == "get macro") {
 		// Get name of requested histogram
 		string hnamepath = payload_items["hnamepath"]->string();
+		// Get optional flag indicating whether to include histograms
+		bool include_histos = true;
+		if( (payload_items.count("include_histos")==1) && payload_items["include_histos"]->string() == "false" ){
+			include_histos = false;
+		}
 		if(VERBOSE>1) _DBG_ << "sending out macro " << hnamepath << endl;
-		getMacro(sender, hnamepath);
+		getMacro(sender, hnamepath, include_histos);
 		if(VERBOSE>3) _DBG_ << "...done" << endl;
 	//===========================================================
 	} else 	if(cmd == "provide final") {
@@ -1495,7 +1500,7 @@ void DRootSpy::getMacro(cMsgMessage &response, string &hnamepath)
 //---------------------------------
 // getMacro
 //---------------------------------
-void DRootSpy::getMacro(string sender, string &hnamepath)
+void DRootSpy::getMacro(string sender, string &hnamepath, bool include_histos)
 {
 
 	in_get_macro = true;
@@ -1520,10 +1525,10 @@ void DRootSpy::getMacro(string sender, string &hnamepath)
 	
 	// fill the TMemFile with our payload:
 	//  1) TObjString of the macro "code"
-	//  2) TObjArray of any histograms used by the macro
+	//  2) TObjArray of any histograms used by the macro (if include_histos==true)
 	TObjString *macro_str = new TObjString(the_macro.macro.c_str());
 	macro_str->Write("macro");
-	if( the_macro.histograms.size() > 0 ) {
+	if( include_histos && (the_macro.histograms.size() > 0) ) {
 		for(unsigned int i=0; i<the_macro.histograms.size(); i++)
 			the_macro.histograms[i]->Write();
 	}

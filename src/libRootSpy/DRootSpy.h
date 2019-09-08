@@ -200,7 +200,7 @@ class DRootSpy:public cMsgCallback{
 		void listMacros(cMsgMessage &response);
 		void listMacros(string sender);
 		void getMacro(cMsgMessage &response, string &hnamepath);
-		void getMacro(string sender, string &hnamepath);
+		void getMacro(string sender, string &hnamepath, bool include_histos);
 
 };
 
