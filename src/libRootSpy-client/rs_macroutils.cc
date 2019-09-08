@@ -18,6 +18,8 @@ using namespace std;
 
 static map<string, int> rs_flags;
 
+std::set<string> rs_CheckAgainstAI_fnames;
+
 //-------------------
 // rs_SetFlag
 //
@@ -64,7 +66,7 @@ void rs_ResetHisto(const string hnamepath)
 }
 
 //-------------------
-// re_RestoreHisto
+// rs_RestoreHisto
 //
 // Restore a histogram on the rootspy client. This
 // is equivalent to pushing the "Restore" button
@@ -83,4 +85,16 @@ void rs_RestoreHisto(const string hnamepath)
 	t.detach();
 }
 
+//-------------------
+// rs_CheckAgainstAI
+//
+// This is used by macros to communicate that a specific file is
+// ready to be checked using an A.I. model for its status. This
+// just adds the given filename to the global rs_CheckAgainstAI_fnames.
+// This is used by RSAI program (see that for more details).
+//-------------------
+void rs_CheckAgainstAI(const string fname)
+{
+	rs_CheckAgainstAI_fnames.insert( fname );
+}
 
