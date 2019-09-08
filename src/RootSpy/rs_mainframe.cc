@@ -181,10 +181,11 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	gROOT->ProcessLine("extern int  rs_GetFlag(const string flag);");
 	gROOT->ProcessLine("extern void rs_ResetHisto(const string hnamepath);");
 	gROOT->ProcessLine("extern void rs_RestoreHisto(const string hnamepath);");
+	gROOT->ProcessLine("extern void rs_CheckAgainstAI(const string fname);");
 	//gROOT->ProcessLine("extern void InsertSeriesData(string sdata);");
 	//gROOT->ProcessLine("extern void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0);");
-	gROOT->ProcessLine("void InsertSeriesData(string sdata){}");
-	gROOT->ProcessLine("void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0){}");
+	gROOT->ProcessLine("void InsertSeriesData(string sdata){}"); // disable insertion of series data for RootSpy GUI
+	gROOT->ProcessLine("void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0){}"); // (same as previous)
 
 	// The following ensures that the routines in rs_macroutils are
 	// linked in to the final executable
@@ -193,6 +194,7 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 		// (should never actually get here)
 		rs_ResetHisto("N/A");
 		rs_RestoreHisto("N/A");
+		rs_CheckAgainstAI("N/A");
 	}
 
 #ifdef HAVE_EZCA
