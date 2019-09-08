@@ -56,7 +56,7 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg):pub_con(NULL)
 {
 	_rs_xmsg_global = this; // needed by LocalCallBack via GetGlobalPtr
 
-	verbose = 2; // higher values=more messages. 0=minimal messages
+	verbose = 1; // higher values=more messages. 0=minimal messages
 	hist_default_active = true;
 	program_name = "rootspy-client"; // should be overwritten by specific program
 
@@ -463,10 +463,12 @@ void rs_xmsg::RequestMacroList(string servername)
 //---------------------------------
 // RequestMacro
 //---------------------------------
-void rs_xmsg::RequestMacro(string servername, string hnamepath)
+void rs_xmsg::RequestMacro(string servername, string hnamepath, bool include_histos)
 {
+	string include_histos_str = include_histos ? "true":"false";
 	xmsg::proto::Payload payload;
 	AddToPayload(payload, "hnamepath", hnamepath);
+	AddToPayload(payload, "include_histos", include_histos_str);
 	SendMessage(servername, "get macro", payload);
 
 	if(is_online) requested_macros[hnamepath]++;
@@ -1144,8 +1146,7 @@ bool MyCheckBinLabels(TAxis *a1, TAxis *a2)
 		auto asrc  = l1 ? a1:a2;
 		auto adest = l1 ? a2:a1;
 		for (int i = 1; i <= asrc->GetNbins(); ++i) {
-			TString label1 = asrc->GetBinLabel(i);
-			adest->SetBinLabel( i, label1 );
+			adest->SetBinLabel( i, asrc->GetBinLabel(i) );
 		}
 		return false;
 	}
@@ -1279,7 +1280,7 @@ void rs_xmsg::RegisterHistogram(rs_serialized *serialized)
 	if(hinfo->hist){
 		// Subtract old histo from sum
 		if( (hdef->sum_hist) && (hdef->type!=hdef_t::profile) ){
-			MyCheckAllBinLabels( hdef->sum_hist,  hinfo->hist);
+			if( ! MyCheckAllBinLabels( hdef->sum_hist,  hinfo->hist) ) MyCheckAllBinLabels( hdef->sum_hist,  hinfo->hist);
 			hdef->sum_hist->Add(hinfo->hist, -1.0);
 		}
 

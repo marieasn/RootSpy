@@ -53,7 +53,7 @@ class rs_xmsg{
 		void RequestTreeInfo(string servername);
 		void RequestTree(string servername, string tree_name, string tree_path, int64_t num_entries);
 		void RequestMacroList(string servername);
-		void RequestMacro(string servername, string hnamepath);
+		void RequestMacro(string servername, string hnamepath, bool include_histos=true);
 
 		bool   IsOnline(void)   { return is_online; }
 		xMsg*  GetxmsgPtr(void) { return xmsgp;     }
