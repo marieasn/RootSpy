@@ -132,10 +132,10 @@ int main(int narg, char *argv[])
 	
 	// when running curl as external process, suppress use
 	// of proxy which will cause failure to connect to influxdb
-	putenv("HTTP_PROXY=");
-	putenv("HTTPS_PROXY=");
-	putenv("http_proxy=");
-	putenv("https_proxy=");
+	putenv((char*)"HTTP_PROXY=");
+	putenv((char*)"HTTPS_PROXY=");
+	putenv((char*)"http_proxy=");
+	putenv((char*)"https_proxy=");
 
 	// ------------------- initialization ---------------------------------
 	BeginRun();
