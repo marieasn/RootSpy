@@ -86,6 +86,65 @@ void rs_RestoreHisto(const string hnamepath)
 }
 
 //-------------------
+// rs_ResetAllMacroHistos
+//
+// Reset all histograms associated with the specified
+// macro. This is equivalent to pushing the "Reset"
+// button on the RootSpy GUI program for each histogram
+// a macro has specified in its comments. The histograms
+// can be restored using re_RestoreAllMacroHistos.
+//-------------------
+void rs_ResetAllMacroHistos(const string hnamepath)
+{
+	if( RS_INFO->histdefs.count(hnamepath) ==0 ){
+		_DBG_<< " rs_ResetAllMacroHistos called with hnamepath==" << hnamepath << " but no such hdef_t exists!" << endl;
+		return;
+	}
+
+	auto &hdef = RS_INFO->histdefs[hnamepath];
+	auto macro_hnamepaths = hdef.macro_hnamepaths; // make local copy for passing to lambda by value
+
+	cout << "Resetting " << hdef.macro_hnamepaths.size() << " histograms for macro: " << hnamepath << endl;
+
+	// We need to do this in a separate thread since this
+	// will be called from a macro which will already have
+	// mutexes locked.
+	thread t( [hnamepath,macro_hnamepaths](){
+		for( auto h : macro_hnamepaths) RS_INFO->ResetHisto(h);
+	} );
+	t.detach();
+}
+
+//-------------------
+// rs_RestoreAllMacroHistos
+//
+// Restore all histograms associated with the specified
+// macro. This is equivalent to pushing the "Restore"
+// button on the RootSpy GUI program for each histogram
+// a macro has specified in its comments.
+//-------------------
+void rs_RestoreAllMacroHistos(const string hnamepath)
+{
+	if( RS_INFO->histdefs.count(hnamepath) ==0 ){
+		_DBG_<< " rs_RestoreAllMacroHistos called with hnamepath==" << hnamepath << " but no such hdef_t exists!" << endl;
+		return;
+	}
+
+	auto &hdef = RS_INFO->histdefs[hnamepath];
+	auto macro_hnamepaths = hdef.macro_hnamepaths; // make local copy for passing to lambda by value
+
+	cout << "Restoring " << hdef.macro_hnamepaths.size() << " histograms for macro: " << hnamepath << endl;
+
+	// We need to do this in a separate thread since this
+	// will be called from a macro which will already have
+	// mutexes locked.
+	thread t( [hnamepath,macro_hnamepaths](){
+		for( auto h : macro_hnamepaths ) RS_INFO->RestoreHisto(h);
+	} );
+	t.detach();
+}
+
+//-------------------
 // rs_CheckAgainstAI
 //
 // This is used by macros to communicate that a specific file is

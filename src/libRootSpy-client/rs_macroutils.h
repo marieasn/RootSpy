@@ -14,5 +14,7 @@ void rs_SetFlag(const string flag, int val);
 int  rs_GetFlag(const string flag);
 void rs_ResetHisto(const string hnamepath);
 void rs_RestoreHisto(const string hnamepath);
+void rs_ResetAllMacroHistos(const string hnamepath);
+void rs_RestoreAllMacroHistos(const string hnamepath);
 
 void rs_CheckAgainstAI(const string fname);
