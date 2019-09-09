@@ -187,6 +187,8 @@ void BeginRun()
 	gROOT->ProcessLine("extern int  rs_GetFlag(const string flag);");
 	gROOT->ProcessLine("extern void rs_ResetHisto(const string hnamepath);");
 	gROOT->ProcessLine("extern void rs_RestoreHisto(const string hnamepath);");
+	gROOT->ProcessLine("extern void rs_ResetAllMacroHistos(const string hnamepath);");
+	gROOT->ProcessLine("extern void rs_RestoreAllMacroHistos(const string hnamepath);");
 	gROOT->ProcessLine("extern void rs_CheckAgainstAI(const string fname);");
 	gROOT->ProcessLine("void InsertSeriesData(string sdata){}"); // disable insertion of time series data for RSAI
 	gROOT->ProcessLine("void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0){}"); // (same as previous)
@@ -245,7 +247,7 @@ void MainLoop(void)
 				cerr << "      names set are: " << endl;
 				for( auto h : rs_CheckAgainstAI_fnames ) cerr << "         " << h << endl;
 			}else if( rs_CheckAgainstAI_fnames.size()==1 ) {
-				//c1->Update();
+				c1->Update();
 				string fname = *rs_CheckAgainstAI_fnames.begin();
 				cout << "    - Writing file " << fname << endl;
 				c1->SaveAs(fname.c_str(), "");
@@ -319,7 +321,7 @@ void GetAllHists(uint32_t Twait)
 		if( hdef.type == hdef_t::macro ){
 			if(VERBOSE>1) cout << "Requesting macro " <<  hdef.hnamepath << " ..." << endl;
 			if( RS_CMSG ) RS_CMSG->RequestMacro(p.first, hdef.hnamepath);
-			if( RS_XMSG ) RS_XMSG->RequestMacro(p.first, hdef.hnamepath, false);
+			if( RS_XMSG ) RS_XMSG->RequestMacro(p.first, hdef.hnamepath, true);
 		}
 	}	
 	RS_INFO->Unlock();
@@ -353,6 +355,7 @@ void GetAllHists(uint32_t Twait)
 	for(auto &p : RS_INFO->hinfos){
 		string &macroString = p.second.macroString;
 		if(macroString.find("rs_CheckAgainstAI") != string::npos) MACRO_HNAMEPATHS.insert(p.second.hnamepath);
+//		if( p.second.hnamepath == "//CDC_occupancy" ) _DBG_<< "============ " << p.second.hnamepath << endl << macroString << endl;
 	}
 	
 	// 6. Send a request for the MACRO_HNAMEPATHS of all macros selected
