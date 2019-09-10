@@ -560,9 +560,10 @@ void rs_info::LoadMacro(string name, string path, string macro_data)
 //---------------------------------
 void  rs_info::ResetHisto(const string &hnamepath)
 {
-	cout << "Resetting histo: " << hnamepath << endl;
 
 	RS_INFO->Lock();
+
+	cout << "Resetting histo: " << hnamepath << endl;
 
 	// Get pointer to hdef_t
 	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
@@ -615,9 +616,10 @@ void  rs_info::ResetHisto(const string &hnamepath)
 //---------------------------------
 void  rs_info::RestoreHisto(const string &hnamepath)
 {
-	cout << "Restoring histo: " << hnamepath << endl;
 
 	RS_INFO->Lock();
+
+	cout << "Restoring histo: " << hnamepath << endl;
 
 	// Get pointer to hdef_t
 	map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
