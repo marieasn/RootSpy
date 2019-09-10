@@ -46,11 +46,21 @@ using namespace std;
 //////////////////////////////////////////////
 // GLOBALS
 //////////////////////////////////////////////
+TCanvas *c1 = nullptr;
+static int VERBOSE = 1;  // Verbose output to screen - default is to print out some information
+map<string, map<int, int> > CHUNK_COUNTER; // key=base_name(i.e. of macro/file) val=map of pads with key=pad number and val=counter
+
+
+// The following is passed to the macros as a means to set the scale for how often
+// images should be produced. Most occupancy plots will just use this directly as
+// the number of events processed while making the plot.
+int MIN_EVENTS_RSAI = 1.0E5;
+
+
 rs_cmsg *RS_CMSG = NULL;
 rs_xmsg *RS_XMSG = NULL;
 rs_info *RS_INFO = NULL;
 pthread_rwlock_t *ROOT_MUTEX = NULL;
-bool MAKE_BACKUP = false;
 set<string> MACRO_HNAMEPATHS;
 
 bool USE_CMSG=false;
@@ -66,8 +76,6 @@ extern mutex REGISTRATION_MUTEX_XMSG;
 extern set<rs_serialized*> HISTOS_TO_REGISTER_XMSG;
 extern set<rs_serialized*> MACROS_TO_REGISTER_XMSG;
 
-TCanvas *c1 = nullptr;
-static int VERBOSE = 1;  // Verbose output to screen - default is to print out some information
 
 // configuration variables
 namespace config {
@@ -200,7 +208,9 @@ void BeginRun()
 
 	// Set flag so macros will automatically reset histograms after
 	// a successful fit. This flag is used by RSAI
+	rs_SetFlag("Is_RSAI", 1);
 	rs_SetFlag("RESET_AFTER_SAVEPAD", 1);
+	rs_SetFlag("MIN_EVENTS_RSAI", MIN_EVENTS_RSAI);
 
 	// The following ensures that the routines in rs_macroutils are
 	// linked in to the final executable so they are available to 
@@ -238,8 +248,8 @@ void MainLoop(void)
 			auto hdef = RS_INFO->histdefs[hnamepath];
 			if(hdef.hists.empty()) continue;
 			auto the_hinfo = hdef.hists.begin()->second;
-//			if( c1 ) delete c1;
-//			c1 = new TCanvas("c1", "A Canvas", 1600, 1200);
+			c1->cd();
+			c1->Clear();
 			if(the_hinfo.Nkeys == 1){
 				ExecuteMacro(RS_INFO->sum_dir, the_hinfo.macroString);
 			}else{
@@ -258,6 +268,7 @@ void MainLoop(void)
 
 				// Save whole canvas to temporary file.
 				const char *tmp_img_fname = "tmp_canvas.png";
+				c1->Update();
 				c1->SaveAs(tmp_img_fname);
 
 				// Loop over base filenames. Generally, there will only be one of these.
@@ -269,8 +280,7 @@ void MainLoop(void)
 
 						// Standard filename format includes pad number and time "chunk"
 						char fname[512];
-						int ichunk_count = 0; // Need to make this a real counter
-						sprintf(fname, "%s-%02d_%04d.png", basename.c_str(), ipad, ichunk_count);
+						sprintf(fname, "%s-%02d_%04d.png", basename.c_str(), ipad, CHUNK_COUNTER[basename][ipad]++);
 
 						// Get pad of interest
 						auto *pad = c1->GetPad(ipad);
@@ -515,21 +525,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	config_filename += "/.RSTimeSeries";
 	const char *configptr = getenv("ROOTSPY_CONFIG_FILENAME");
 	if(configptr) config_filename = configptr;  
-	
-//	INIReader config_reader(config_filename.c_str());
-//	
-//	if (config_reader.ParseError() < 0) {
-//		std::cout << "Can't load configuration file '" << config_filename << "'" << endl;
-//	} else {
-//		
-//		// [main]
-//		ROOTSPY_UDL = config_reader.Get("main", "rootspy_udl",  "cMsg://127.0.0.1/cMsg/rootspy");
-//		SESSION     = config_reader.Get("main", "session_name", "");
-//		
-//		POLL_DELAY      = config_reader.GetInteger("main", "poll_delay", 60);
-//		MIN_POLL_DELAY  = config_reader.GetInteger("main", "min_poll_delay", 10);
-//	}
-	
+
 	// allow for environmental variables
 	const char *ptr = getenv("ROOTSPY_UDL");
 	if(ptr)ROOTSPY_UDL = ptr;
