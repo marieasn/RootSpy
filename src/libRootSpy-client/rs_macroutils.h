@@ -6,9 +6,10 @@
 
 #include <string>
 #include <set>
+#include <map>
 using std::string;
 
-extern std::set<string> rs_CheckAgainstAI_fnames;
+extern std::map<string, set<int> > rs_PadsToSave;  // key=macro basename  val=Tpad numbers to save (0=whole canvas)
 
 void rs_SetFlag(const string flag, int val);
 int  rs_GetFlag(const string flag);
@@ -17,4 +18,4 @@ void rs_RestoreHisto(const string hnamepath);
 void rs_ResetAllMacroHistos(const string hnamepath);
 void rs_RestoreAllMacroHistos(const string hnamepath);
 
-void rs_CheckAgainstAI(const string fname);
+void rs_SavePad(const string fname, int ipad);

@@ -25,6 +25,7 @@
 #include <TInterpreter.h>
 #include <TLatex.h>
 #include <TPad.h>
+#include <TASImage.h>
 #include <TCanvas.h>
 
 #include <map>
@@ -189,15 +190,17 @@ void BeginRun()
 	gROOT->ProcessLine("extern void rs_RestoreHisto(const string hnamepath);");
 	gROOT->ProcessLine("extern void rs_ResetAllMacroHistos(const string hnamepath);");
 	gROOT->ProcessLine("extern void rs_RestoreAllMacroHistos(const string hnamepath);");
-	gROOT->ProcessLine("extern void rs_CheckAgainstAI(const string fname);");
+	gROOT->ProcessLine("extern void rs_SavePad(const string fname, int ipad);");
 	gROOT->ProcessLine("void InsertSeriesData(string sdata){}"); // disable insertion of time series data for RSAI
 	gROOT->ProcessLine("void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0){}"); // (same as previous)
 
 	// Set flag so macros will NOT automatically reset histograms after
-	// a successful fit. This flag is used for time series data. A
-	// similar flag is not used for AI as its assumed the macro will
-	// automatically reset histos when it calls rs_CheckAgainstAI().
+	// a successful fit. This flag is used by RSTimeSeries
 	rs_SetFlag("RESET_AFTER_FIT", 0);
+
+	// Set flag so macros will automatically reset histograms after
+	// a successful fit. This flag is used by RSAI
+	rs_SetFlag("RESET_AFTER_SAVEPAD", 1);
 
 	// The following ensures that the routines in rs_macroutils are
 	// linked in to the final executable so they are available to 
@@ -206,7 +209,7 @@ void BeginRun()
 		// (should never actually get here)
 		rs_ResetHisto("N/A");
 		rs_RestoreHisto("N/A");
-		rs_CheckAgainstAI("N/A");
+		rs_SavePad("N/A", 0);
 	}
 }
 
@@ -235,27 +238,74 @@ void MainLoop(void)
 			auto hdef = RS_INFO->histdefs[hnamepath];
 			if(hdef.hists.empty()) continue;
 			auto the_hinfo = hdef.hists.begin()->second;
+//			if( c1 ) delete c1;
+//			c1 = new TCanvas("c1", "A Canvas", 1600, 1200);
 			if(the_hinfo.Nkeys == 1){
 				ExecuteMacro(RS_INFO->sum_dir, the_hinfo.macroString);
 			}else{
 				ExecuteMacro(the_hinfo.macroData, the_hinfo.macroString);
 			}
 
-			// Save canvas to file if macro signals that it is ready
-			if( rs_CheckAgainstAI_fnames.size() > 1 ){
-				cerr << "ERROR Macro: " << hnamepath << "has set more than one name in rs_CheckAgainstAI_fnames!" << endl;
-				cerr << "      names set are: " << endl;
-				for( auto h : rs_CheckAgainstAI_fnames ) cerr << "         " << h << endl;
-			}else if( rs_CheckAgainstAI_fnames.size()==1 ) {
-				c1->Update();
-				string fname = *rs_CheckAgainstAI_fnames.begin();
-				cout << "    - Writing file " << fname << endl;
-				c1->SaveAs(fname.c_str(), "");
-				fnames_written.insert( fname );
+			// Due to some long standing bug in TPad, the SaveAs method does not work
+			// properly and we are advised to use only TCanvas::SaveAs. See:
+			// https://sft.its.cern.ch/jira/browse/ROOT-7633
+			//
+			// Thus, if we are to save any pads, then we must save the entire canvas
+			// first and then crop the pads from that. Technically, there should be a way
+			// to do this in memory by getting the TASImage of the canvas directly, but
+			// that looks to be rather complicated.
+			if( ! rs_PadsToSave.empty() ){
+
+				// Save whole canvas to temporary file.
+				const char *tmp_img_fname = "tmp_canvas.png";
+				c1->SaveAs(tmp_img_fname);
+
+				// Loop over base filenames. Generally, there will only be one of these.
+				for( auto p : rs_PadsToSave ) {
+					auto &basename = p.first;
+
+					// Loops over pads to save using this bae filename
+					for (int ipad : p.second) {
+
+						// Standard filename format includes pad number and time "chunk"
+						char fname[512];
+						int ichunk_count = 0; // Need to make this a real counter
+						sprintf(fname, "%s-%02d_%04d.png", basename.c_str(), ipad, ichunk_count);
+
+						// Get pad of interest
+						auto *pad = c1->GetPad(ipad);
+						if (pad) {
+
+							// Determine crop parameters for this pad
+							int x1 = pad->XtoAbsPixel(pad->GetX1());
+							int x2 = pad->XtoAbsPixel(pad->GetX2());
+							int y1 = pad->YtoAbsPixel(pad->GetY1());
+							int y2 = pad->YtoAbsPixel(pad->GetY2());
+
+							int w = x2 - x1;
+							int h = y1 - y2; // yep, seems backwards doesn't it?
+
+							// Read in image as TASImage object and crop it
+							auto img = TASImage::Open( tmp_img_fname );
+							img->Crop(x1, y2, w, h);
+
+							// Write cropped image to file
+							cout << "    - Writing file " << fname << endl;
+							img->WriteImage(fname, TImage::kPng);
+							delete img;
+							fnames_written.insert(fname);
+						}else{
+							_DBG_ << "Unable to get pad " << ipad << " for " << hnamepath << " (for writing to " << fname << ")" << endl;
+						}
+					}
+				}
+
+				// Delete temporary image file
+				unlink( tmp_img_fname );
 			}
 
 			// Clear global
-			rs_CheckAgainstAI_fnames.clear();
+			rs_PadsToSave.clear();
 
 		}
 		RS_INFO->Unlock();
@@ -319,9 +369,11 @@ void GetAllHists(uint32_t Twait)
 	for(auto &p : RS_INFO->histdefs){
 		hdef_t &hdef = p.second;
 		if( hdef.type == hdef_t::macro ){
-			if(VERBOSE>1) cout << "Requesting macro " <<  hdef.hnamepath << " ..." << endl;
-			if( RS_CMSG ) RS_CMSG->RequestMacro(p.first, hdef.hnamepath);
-			if( RS_XMSG ) RS_XMSG->RequestMacro(p.first, hdef.hnamepath, true);
+			if( hdef.macro_hnamepaths.empty() ) { // try to only request each macro once
+				if (VERBOSE > 1) cout << "Requesting macro " << hdef.hnamepath << " ..." << endl;
+				if (RS_CMSG) RS_CMSG->RequestMacro(p.first, hdef.hnamepath);
+				if (RS_XMSG) RS_XMSG->RequestMacro(p.first, hdef.hnamepath, true);
+			}
 		}
 	}	
 	RS_INFO->Unlock();
@@ -354,7 +406,7 @@ void GetAllHists(uint32_t Twait)
 	RS_INFO->Lock();
 	for(auto &p : RS_INFO->hinfos){
 		string &macroString = p.second.macroString;
-		if(macroString.find("rs_CheckAgainstAI") != string::npos) MACRO_HNAMEPATHS.insert(p.second.hnamepath);
+		if(macroString.find("rs_SavePad") != string::npos) MACRO_HNAMEPATHS.insert(p.second.hnamepath);
 //		if( p.second.hnamepath == "//CDC_occupancy" ) _DBG_<< "============ " << p.second.hnamepath << endl << macroString << endl;
 	}
 	

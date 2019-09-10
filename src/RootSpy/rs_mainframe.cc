@@ -183,18 +183,20 @@ rs_mainframe::rs_mainframe(const TGWindow *p, UInt_t w, UInt_t h,  bool build_gu
 	gROOT->ProcessLine("extern void rs_RestoreHisto(const string hnamepath);");
 	gROOT->ProcessLine("extern void rs_ResetAllMacroHistos(const string hnamepath);");
 	gROOT->ProcessLine("extern void rs_RestoreAllMacroHistos(const string hnamepath);");
-	gROOT->ProcessLine("extern void rs_CheckAgainstAI(const string fname);");
+	gROOT->ProcessLine("void rs_SavePad(const string fname, int ipad){}"); // disable this for RootSpy GUI (it's meant for RSAI)
 	gROOT->ProcessLine("void InsertSeriesData(string sdata){}"); // disable insertion of series data for RootSpy GUI
 	gROOT->ProcessLine("void InsertSeriesMassFit(string ptype, double mass, double width, double mass_err, double width_err, double unix_time=0.0){}"); // (same as previous)
 
+	rs_SetFlag("RESET_AFTER_FIT", 0);     // ensure histograms are not automatically reset by macros supporting RSTimeSeries
+	rs_SetFlag("RESET_AFTER_SAVEPAD", 0); // ensure histograms are not automatically reset by macros supporting RSAI
+
 	// The following ensures that the routines in rs_macroutils are
 	// linked in to the final executable
-	rs_SetFlag("RESET_AFTER_FIT", 0);
 	if(rs_GetFlag("RESET_AFTER_FIT")){
 		// (should never actually get here)
 		rs_ResetHisto("N/A");
 		rs_RestoreHisto("N/A");
-		rs_CheckAgainstAI("N/A");
+		rs_SavePad("N/A", 0);
 	}
 
 #ifdef HAVE_EZCA

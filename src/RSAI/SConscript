@@ -10,7 +10,7 @@ env = env.Clone()
 sbms.AddROOT(env)
 sbms.AddCMSG(env)
 sbms.AddXMSG(env)
-env.PrependUnique(LIBS=['RootSpy-client', 'curl'])
+env.PrependUnique(LIBS=['RootSpy-client', 'curl', 'ASImage'])   # n.b. ASImage is to provide ROOTs TASImage class
 
 # This a temporary fix to avoid requiring 
 # the gcc 4.8 compiler

@@ -18,7 +18,7 @@ using namespace std;
 
 static map<string, int> rs_flags;
 
-std::set<string> rs_CheckAgainstAI_fnames;
+std::map<string, set<int> > rs_PadsToSave;  // key=macro basename  val=Tpad numbers to save (0=whole canvas)
 
 //-------------------
 // rs_SetFlag
@@ -56,7 +56,7 @@ int rs_GetFlag(const string flag)
 //-------------------
 void rs_ResetHisto(const string hnamepath)
 {
-	cout << "Resetting: " << hnamepath << endl;
+	cout << "Scheduled reset of : " << hnamepath << endl;
 	
 	// We need to do this in a separate thread since this
 	// will be called from a macro which will already have
@@ -76,7 +76,7 @@ void rs_ResetHisto(const string hnamepath)
 //-------------------
 void rs_RestoreHisto(const string hnamepath)
 {
-	cout << "Restoring: " << hnamepath << endl;
+	cout << "Scheduled restoration of: " << hnamepath << endl;
 
 	// We need to do this in a separate thread since this
 	// will be called from a macro which will already have
@@ -104,7 +104,7 @@ void rs_ResetAllMacroHistos(const string hnamepath)
 	auto &hdef = RS_INFO->histdefs[hnamepath];
 	auto macro_hnamepaths = hdef.macro_hnamepaths; // make local copy for passing to lambda by value
 
-	cout << "Resetting " << hdef.macro_hnamepaths.size() << " histograms for macro: " << hnamepath << endl;
+	cout << "Scheduled reset of " << hdef.macro_hnamepaths.size() << " histograms for macro: " << hnamepath << endl;
 
 	// We need to do this in a separate thread since this
 	// will be called from a macro which will already have
@@ -133,7 +133,7 @@ void rs_RestoreAllMacroHistos(const string hnamepath)
 	auto &hdef = RS_INFO->histdefs[hnamepath];
 	auto macro_hnamepaths = hdef.macro_hnamepaths; // make local copy for passing to lambda by value
 
-	cout << "Restoring " << hdef.macro_hnamepaths.size() << " histograms for macro: " << hnamepath << endl;
+	cout << "Scheduled restoration of " << hdef.macro_hnamepaths.size() << " histograms for macro: " << hnamepath << endl;
 
 	// We need to do this in a separate thread since this
 	// will be called from a macro which will already have
@@ -145,15 +145,15 @@ void rs_RestoreAllMacroHistos(const string hnamepath)
 }
 
 //-------------------
-// rs_CheckAgainstAI
+// rs_SavePad
 //
-// This is used by macros to communicate that a specific file is
-// ready to be checked using an A.I. model for its status. This
-// just adds the given filename to the global rs_CheckAgainstAI_fnames.
-// This is used by RSAI program (see that for more details).
+// This is used by macros to indicate that a specific pad of the
+// current canvas should be saved to a file with the given basenames.
+// This is used by RSAI to allow macros to indicate when an image
+// should be saved and checked against an AI model.
 //-------------------
-void rs_CheckAgainstAI(const string fname)
+void rs_SavePad(const string fname, int ipad)
 {
-	rs_CheckAgainstAI_fnames.insert( fname );
+	rs_PadsToSave[fname].insert( ipad );
 }
 

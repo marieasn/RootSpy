@@ -191,6 +191,7 @@ void BeginRun()
 	// Set flag so macros will automatically reset histograms after
 	// a successful fit.
 	rs_SetFlag("RESET_AFTER_FIT", 1);
+	rs_SetFlag("RESET_AFTER_SAVEPAD", 0); // ensure histograms are not automatically reset by macros supporting RSAI
 
 	// The following ensures that the routines in rs_macroutils are
 	// linked in to the final executable so they are available to 
