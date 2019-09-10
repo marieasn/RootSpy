@@ -40,7 +40,7 @@ int rs_GetFlag(const string flag)
 	if(rs_flags.count(flag)){
 		return rs_flags[flag];
 	}else{
-		cerr << "Unknown flag \"" << flag << "\" requested from macro!" << endl;
+		// cerr << "Unknown flag \"" << flag << "\" requested from macro!" << endl;
 		return -1;
 	}
 }
