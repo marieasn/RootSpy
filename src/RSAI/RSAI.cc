@@ -92,7 +92,8 @@ namespace config {
 	
 	bool DONE = false;
 	bool RUN_IN_PROGRESS = false;
-	int RUN_NUMBER = 99999;   
+	int RUN_NUMBER = 99999;
+	string OUTPUT_DIR = ".";
 	
 }
 
@@ -267,23 +268,34 @@ void MainLoop(void)
 			if( ! rs_PadsToSave.empty() ){
 
 				// Save whole canvas to temporary file.
-				const char *tmp_img_fname = "tmp_canvas.png";
+				string tmp_img_fname = OUTPUT_DIR + "/tmp_canvas.png";
 				c1->Update();
-				c1->SaveAs(tmp_img_fname);
+				c1->SaveAs(tmp_img_fname.c_str());
 
 				// Loop over base filenames. Generally, there will only be one of these.
 				for( auto p : rs_PadsToSave ) {
 					auto &basename = p.first;
 
-					// Loops over pads to save using this bae filename
+					// Loops over pads to save using this base filename
 					for (int ipad : p.second) {
 
-						// Standard filename format includes pad number and time "chunk"
+						// If the pad has a non-default name, use that. Otherwise, use a zero-padded pad number
+						auto *pad = c1->GetPad(ipad);
+						stringstream default_pad_name;
+						default_pad_name << c1->GetName() << "_" << ipad;
+						string pad_name = pad->GetName();
+
+						// Standard filename format includes pad name or number and time "chunk"
 						char fname[512];
-						sprintf(fname, "%s-%02d_%04d.png", basename.c_str(), ipad, CHUNK_COUNTER[basename][ipad]++);
+						if( pad_name == default_pad_name.str() ){
+							// Use pad number in fname
+							sprintf(fname, "%s/%s-%02d_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), ipad, CHUNK_COUNTER[basename][ipad]++);
+						}else{
+							// Use pad name in fname
+							sprintf(fname, "%s/%s-%s_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), pad_name.c_str(), CHUNK_COUNTER[basename][ipad]++);
+						}
 
 						// Get pad of interest
-						auto *pad = c1->GetPad(ipad);
 						if (pad) {
 
 							// Determine crop parameters for this pad
@@ -296,7 +308,7 @@ void MainLoop(void)
 							int h = y1 - y2; // yep, seems backwards doesn't it?
 
 							// Read in image as TASImage object and crop it
-							auto img = TASImage::Open( tmp_img_fname );
+							auto img = TASImage::Open( tmp_img_fname.c_str() );
 							img->Crop(x1, y2, w, h);
 
 							// Write cropped image to file
@@ -311,7 +323,7 @@ void MainLoop(void)
 				}
 
 				// Delete temporary image file
-				unlink( tmp_img_fname );
+				unlink( tmp_img_fname.c_str() );
 			}
 
 			// Clear global
@@ -533,6 +545,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	// check command line options
 	static struct option long_options[] = {
 		{"help",           no_argument,       0,  'h' },
+		{"dir",            required_argument, 0,  'd' },
 		{"run-number",     required_argument, 0,  'R' },
 		{"poll-delay",     required_argument, 0,  'p' },
 		{"udl",            required_argument, 0,  'u' },
@@ -552,7 +565,11 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 				if(optarg == NULL) Usage();
 				RUN_NUMBER = atoi(optarg);
 				break;
-			case 'f' : 
+			case 'd' :
+				if(optarg == NULL) Usage();
+				OUTPUT_DIR = optarg;
+				break;
+			case 'f' :
 				FORCE_START = true;
 				break;
 			case 'p' : 
@@ -588,6 +605,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	// DUMP configuration
 	cout << "-------------------------------------------------" << endl;
 	cout << "Current configuration:" << endl;
+	cout << "      OUTPUT_DIR = " << OUTPUT_DIR << endl;
 	cout << "     ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
 	cout << "         SESSION = " << SESSION << endl;
 	cout << "      RUN_NUMBER = " << RUN_NUMBER << endl;
@@ -613,6 +631,7 @@ void Usage(void)
 	cout<<endl;
 	cout<<"   -h,--help                 Print this message"<<endl;
 	cout<<"   -u,--udl udl              UDL of cMsg RootSpy server"<<endl;
+	cout<<"   -d,--dir output-dir       Output directory for image files"<<endl;
 	cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
 	cout<<"   -R,--run-number number    The number of the current run" << endl;
 	cout<<"   -p,--poll-delay time      Time (in seconds) to wait between polling seconds" << endl;
