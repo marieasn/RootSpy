@@ -290,10 +290,10 @@ void MainLoop(void)
 						char fname[512];
 						if( pad_name == default_pad_name.str() ){
 							// Use pad number in fname
-							sprintf(fname, "%s/%s-%02d_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), ipad, CHUNK_COUNTER[basename][ipad]++);
+							sprintf(fname, "%s/%s-%02d_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), ipad, ++CHUNK_COUNTER[basename][ipad]);
 						}else{
 							// Use pad name in fname
-							sprintf(fname, "%s/%s-%s_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), pad_name.c_str(), CHUNK_COUNTER[basename][ipad]++);
+							sprintf(fname, "%s/%s-%s_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), pad_name.c_str(), ++CHUNK_COUNTER[basename][ipad]);
 						}
 
 						// Get pad of interest
