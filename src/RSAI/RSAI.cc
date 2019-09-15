@@ -282,7 +282,8 @@ void MainLoop(void)
 						// If the pad has a non-default name, use that. Otherwise, use a zero-padded pad number
 						auto *pad = c1->GetPad(ipad);
 						stringstream default_pad_name;
-						default_pad_name << c1->GetName() << "_" << ipad;
+						default_pad_name << c1->GetName();
+						if( ipad != 0 ) default_pad_name << "_" << ipad;
 						string pad_name = pad->GetName();
 
 						// Standard filename format includes pad name or number and time "chunk"
