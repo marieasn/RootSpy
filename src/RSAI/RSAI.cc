@@ -558,7 +558,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	
 	int opt = 0;
 	int long_index = 0;
-	while ((opt = getopt_long(narg, argv,"hR:p:u:s:A:BF:PHY:v", 
+	while ((opt = getopt_long(narg, argv,"hR:d:p:u:s:A:BF:PHY:v",
 							  long_options, &long_index )) != -1) {
 		switch (opt) {
 			case 'R':
