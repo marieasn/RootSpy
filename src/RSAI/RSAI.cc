@@ -288,7 +288,10 @@ void MainLoop(void)
 
 						// Standard filename format includes pad name or number and time "chunk"
 						char fname[512];
-						if( pad_name == default_pad_name.str() ){
+						if( ipad == 0 ){
+							// Whole canvas excludes pad from fname
+							sprintf(fname, "%s/%s_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), ++CHUNK_COUNTER[basename][ipad]);
+						}else if( pad_name == default_pad_name.str() ){
 							// Use pad number in fname
 							sprintf(fname, "%s/%s-%02d_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), ipad, ++CHUNK_COUNTER[basename][ipad]);
 						}else{
