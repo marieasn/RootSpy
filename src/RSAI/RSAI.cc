@@ -94,6 +94,7 @@ namespace config {
 	bool RUN_IN_PROGRESS = false;
 	int RUN_NUMBER = 99999;
 	string OUTPUT_DIR = ".";
+	string SYMLINK_DIR = "";
 	
 }
 
@@ -287,17 +288,19 @@ void MainLoop(void)
 						string pad_name = pad->GetName();
 
 						// Standard filename format includes pad name or number and time "chunk"
-						char fname[512];
+						char fname_base[256];
 						if( ipad == 0 ){
 							// Whole canvas excludes pad from fname
-							sprintf(fname, "%s/%s_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), ++CHUNK_COUNTER[basename][ipad]);
+							sprintf(fname_base, "%s_%04d.png", basename.c_str(), ++CHUNK_COUNTER[basename][ipad]);
 						}else if( pad_name == default_pad_name.str() ){
 							// Use pad number in fname
-							sprintf(fname, "%s/%s-%02d_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), ipad, ++CHUNK_COUNTER[basename][ipad]);
+							sprintf(fname_base, "%s-%02d_%04d.png", basename.c_str(), ipad, ++CHUNK_COUNTER[basename][ipad]);
 						}else{
 							// Use pad name in fname
-							sprintf(fname, "%s/%s-%s_%04d.png", OUTPUT_DIR.c_str(), basename.c_str(), pad_name.c_str(), ++CHUNK_COUNTER[basename][ipad]);
+							sprintf(fname_base, "%s-%s_%04d.png", basename.c_str(), pad_name.c_str(), ++CHUNK_COUNTER[basename][ipad]);
 						}
+						char fname[512];
+						sprintf(fname, "%s/%s",  OUTPUT_DIR.c_str(), fname_base);
 
 						// Get pad of interest
 						if (pad) {
@@ -320,6 +323,13 @@ void MainLoop(void)
 							img->WriteImage(fname, TImage::kPng);
 							delete img;
 							fnames_written.insert(fname);
+
+							if( ! SYMLINK_DIR.empty() ){
+								char fname_sym[256];
+								sprintf( fname_sym, "%s/%s", SYMLINK_DIR.c_str(), fname_base);
+								cout << "    - Creating symlink " << fname << " <- " << fname_sym <<endl;
+								symlink(fname, fname_sym);
+							}
 						}else{
 							_DBG_ << "Unable to get pad " << ipad << " for " << hnamepath << " (for writing to " << fname << ")" << endl;
 						}
@@ -550,6 +560,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	static struct option long_options[] = {
 		{"help",           no_argument,       0,  'h' },
 		{"dir",            required_argument, 0,  'd' },
+		{"link",           required_argument, 0,  'l' },
 		{"run-number",     required_argument, 0,  'R' },
 		{"poll-delay",     required_argument, 0,  'p' },
 		{"udl",            required_argument, 0,  'u' },
@@ -562,7 +573,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	
 	int opt = 0;
 	int long_index = 0;
-	while ((opt = getopt_long(narg, argv,"hR:d:p:u:s:A:BF:PHY:v",
+	while ((opt = getopt_long(narg, argv,"hR:d:l:p:u:s:A:BF:PHY:v",
 							  long_options, &long_index )) != -1) {
 		switch (opt) {
 			case 'R':
@@ -572,6 +583,10 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 			case 'd' :
 				if(optarg == NULL) Usage();
 				OUTPUT_DIR = optarg;
+				break;
+			case 'l' :
+				if(optarg == NULL) Usage();
+				SYMLINK_DIR = optarg;
 				break;
 			case 'f' :
 				FORCE_START = true;
@@ -610,6 +625,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	cout << "-------------------------------------------------" << endl;
 	cout << "Current configuration:" << endl;
 	cout << "      OUTPUT_DIR = " << OUTPUT_DIR << endl;
+	cout << "     SYMLINK_DIR = " << (SYMLINK_DIR.empty() ? "<none>":SYMLINK_DIR) << endl;
 	cout << "     ROOTSPY_UDL = " << ROOTSPY_UDL << endl;
 	cout << "         SESSION = " << SESSION << endl;
 	cout << "      RUN_NUMBER = " << RUN_NUMBER << endl;
@@ -636,6 +652,7 @@ void Usage(void)
 	cout<<"   -h,--help                 Print this message"<<endl;
 	cout<<"   -u,--udl udl              UDL of cMsg RootSpy server"<<endl;
 	cout<<"   -d,--dir output-dir       Output directory for image files"<<endl;
+	cout<<"   -l,--link symlink-dir     Create symlinks to image files in this directory"<<endl;
 	cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
 	cout<<"   -R,--run-number number    The number of the current run" << endl;
 	cout<<"   -p,--poll-delay time      Time (in seconds) to wait between polling seconds" << endl;
