@@ -2012,7 +2012,12 @@ void rs_mainframe::ExecuteMacro(TDirectory *f, string macro)
 	// until the next macro is drawn.
 	static std::map<string, TStyle*> styles;
 	if( styles.count( macro ) == 0 ){
-		styles[macro] = new TStyle(*gStyle);
+		// n.b. 12/19/2019 DL  -  The following originally passed *gStyle into the TStyle
+		// constructor. It was this way for a long time, but it was recently noticed that
+		// a side effect was to inherit some style settings from a previous macro. I'm
+		// adding this comment just because it had been that way for so long, if this change
+		// has an unanticipated affect I can remind myself of the the history.
+		styles[macro] = new TStyle();  // originally TStyle(gStyle)
 	}
 	*gStyle = *styles[macro];
 	//TStyle savestyle(*gStyle);
