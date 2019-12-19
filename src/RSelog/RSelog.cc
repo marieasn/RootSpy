@@ -494,11 +494,18 @@ void ExecuteMacro(TDirectory *f, string macro)
 	// Lock ROOT
 	pthread_rwlock_wrlock(ROOT_MUTEX);
 
-	TStyle savestyle(*gStyle);
-
 	TDirectory *savedir = gDirectory;
 	f->cd();
-	
+
+	// Keep a separate TSyle for each macro we draw. This used to
+	// allow macros to change the style and have it stay changed
+	// until the next macro is drawn.
+	static std::map<string, TStyle*> styles;
+	if( styles.count( macro ) == 0 ){
+		styles[macro] = new TStyle();
+	}
+	*gStyle = *styles[macro];
+
 	TVirtualPad *top_pad = gPad;
 
 	// execute script line-by-line
@@ -545,8 +552,6 @@ void ExecuteMacro(TDirectory *f, string macro)
 
 	// restore
 	savedir->cd();
-	
-	*gStyle = savestyle;
 
 	// Unlock ROOT
 	pthread_rwlock_unlock(ROOT_MUTEX);
