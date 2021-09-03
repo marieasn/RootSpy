@@ -703,6 +703,24 @@ void rs_cmsg::callback(cMsgMessage *msg, void *userObject)
 //TODO: documentation comment.
 void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 {
+	// This can be called either when a message is received, or when
+	// reading from a file and there is no rs_cmsg object. In the
+	// former case, we want to use some of the member data. For the
+	// latter case, it does not exist.
+	//
+	// So what follows is some very poor software design. To do it
+	// the right way though would require more work/time than I
+	// have so this hack should at least help regain the ability to
+	// debug rootspy macros coming from plugins.
+	
+	int myverbose = 2;
+	bool myhist_default_active = true;
+	if( server != "localfile" ){
+		// Assume we are a real rs_cmsg object and can access members
+		myverbose = this->verbose;
+		myhist_default_active = this->hist_default_active;
+	}
+
 	/// Copy list of histograms from cMsg into RS_INFO structures.
 	bool good_response = true;
 
@@ -717,7 +735,7 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		hist_paths = msg->getStringVector("hist_paths");
 		hist_titles = msg->getStringVector("hist_titles");
 	} catch (cMsgException e) {
-		if(verbose>2) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+		if(myverbose>2) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
 		return;
 	}
 
@@ -736,11 +754,11 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 
 	// If the response is incomplete for any reason, then alert user and return.
 	if(!good_response){
-		if(verbose>0) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
+		if(myverbose>0) _DBG_<<"Poorly formed response for \"hists list\". Ignoring."<<endl;
 		return;
 	}
 
-	if(verbose>2) _DBG_ << "got histogram list from " << server << endl;
+	if(myverbose>2) _DBG_ << "got histogram list from " << server << endl;
 
 	// Looks like we got a good response. Loop over histograms and add them to
 	// list of hdef_t objects kept in RS_INFO. If there is already an entry
@@ -765,7 +783,7 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		else hdef.type = hdef_t::noneD;
 
 		hdef.title = (*hist_titles)[i];
-		if(hist_default_active)
+		if(myhist_default_active)
 			hdef.active = true;
 		else
 			hdef.active = false;
@@ -773,10 +791,10 @@ void rs_cmsg::RegisterHistList(string server, cMsgMessage *msg)
 		// Look for entry in RS_INFO
 		RS_INFO -> Lock();
 		if(RS_INFO->histdefs.find(hdef.hnamepath)==RS_INFO->histdefs.end()){
-			if(verbose>3) _DBG_ << "Adding hdef with hnamepath=" << hdef.hnamepath << endl;
+			if(myverbose>3) _DBG_ << "Adding hdef with hnamepath=" << hdef.hnamepath << endl;
 			RS_INFO->histdefs[hdef.hnamepath]=hdef;
 		}else{
-			if(verbose>3) _DBG_ << "Skipping adding of hdef with hnamepath=" << hdef.hnamepath << " since it already exists" << endl;
+			if(myverbose>3) _DBG_ << "Skipping adding of hdef with hnamepath=" << hdef.hnamepath << " since it already exists" << endl;
 			// Need code to verify hdefs are same!!
 		}
 		
@@ -1124,7 +1142,24 @@ void rs_cmsg::RegisterTree(string server, cMsgMessage *msg)
 //TODO: documentation comment.
 void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg) 
 {
-    if(verbose>3)_DBG_ << "In rs_cmsg::RegisterHistogram()..." << endl;
+	// This can be called either when a message is received, or when
+	// reading from a file and there is no rs_cmsg object. In the
+	// former case, we want to use some of the member data. For the
+	// latter case, it does not exist.
+	//
+	// So what follows is some very poor software design. To do it
+	// the right way though would require more work/time than I
+	// have so this hack should at least help regain the ability to
+	// debug rootspy macros coming from plugins.
+	
+	int myverbose = 2;
+	bool localfile = ( server == "localfile" );
+	if( !localfile ){
+		// Assume we are a real rs_cmsg object and can access members
+		myverbose = this->verbose;
+	}
+
+    if(myverbose>3)_DBG_ << "In rs_cmsg::RegisterHistogram()..." << endl;
     
     // Get hnamepath from message
     string hnamepath = msg->getString("hnamepath");
@@ -1132,12 +1167,12 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
 	 
 	 if(hnamepath.find(": ") == 0 ) hnamepath.erase(0,2);
 
-	  if(verbose>=3) _DBG_ << "Registering histogram " << hnamepath << endl;
+	  if(myverbose>=3) _DBG_ << "Registering histogram " << hnamepath << endl;
 
     // Lock RS_INFO mutex while working with RS_INFO
     RS_INFO->Lock();
 	 
-	 received_histograms[hnamepath]++;
+	 if(!localfile) received_histograms[hnamepath]++;
     
     // Get pointer to hdef_t
     map<string,hdef_t>::iterator hdef_iter = RS_INFO->histdefs.find(hnamepath);
@@ -1240,7 +1275,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
     hdef->hists.insert(pair<string, hinfo_t>(server, (hinfo_iter->second)));
     
     // Add new histogram to sum and flag it as modified
-    if(verbose>2) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
+    if(myverbose>2) _DBG_<<"Adding "<<h->GetEntries()<<" from "<<server<<" to hist "<<hnamepath<<endl;
     if(hdef->sum_hist){
 		// Reset sum histo first if showing only one histo at a time
 		if(RS_INFO->viewStyle==rs_info::kViewByServer)hdef->sum_hist->Reset();
@@ -1258,7 +1293,7 @@ void rs_cmsg::RegisterHistogram(string server, cMsgMessage *msg, bool delete_msg
 		hist_sum_dir = dir;
 	  }
 	  
-      if(verbose>2) cout << "saving in directory " << sum_path << endl;
+      if(myverbose>2) cout << "saving in directory " << sum_path << endl;
 
       string sum_hist_name = string(h->GetName())+"__sum";
       hdef->sum_hist = (TH1*)h->Clone(sum_hist_name.c_str());
