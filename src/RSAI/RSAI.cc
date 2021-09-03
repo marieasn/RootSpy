@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/stat.h>
 
 #include <TROOT.h>
 #include <TFile.h>
@@ -35,6 +36,8 @@
 #include <sstream>
 #include <algorithm>
 #include <mutex>
+#include <dirent.h>
+
 using namespace std;
 
 #include "RSAI.h"
@@ -642,7 +645,35 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 	cout << "  MIN_POLL_DELAY = " << MIN_POLL_DELAY << endl;
 	
 	cout << "-------------------------------------------------" << endl;
-	
+
+	// Check if output directories exist and if not, try to make them.
+	// Note that in the GlueX online, these directories should be made
+	// already by the start_monitoring script.
+	auto *dir = opendir(OUTPUT_DIR.c_str());
+	if( dir == NULL ) {
+		cout << "Output directory does not exist: " << OUTPUT_DIR << endl;
+		if( mkdir( OUTPUT_DIR.c_str(), 0775 ) ) {
+			cout << "ERROR: Unable to create output directory: " << OUTPUT_DIR << endl;
+		}else{
+			cout << "Output directory created: " << OUTPUT_DIR << endl;
+		}
+	}else{
+		closedir( dir );
+	}
+
+	if( !SYMLINK_DIR.empty() ){
+		dir = opendir(SYMLINK_DIR.c_str());
+		if( dir == NULL ) {
+			cout << "Symlink directory does not exist: " << SYMLINK_DIR << endl;
+			if( mkdir( SYMLINK_DIR.c_str(), 0775 ) ) {
+				cout << "ERROR: Unable to create symlink directory: " << SYMLINK_DIR << endl;
+			}else{
+				cout << "Symlink directory created: " << SYMLINK_DIR << endl;
+			}
+		}else{
+			closedir( dir );
+		}
+	}
 }
 
 
