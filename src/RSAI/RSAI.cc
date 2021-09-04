@@ -512,6 +512,7 @@ void ExecuteMacro(TDirectory *f, string macro)
 	// Keep a separate TSyle for each macro we draw. This used to
 	// allow macros to change the style and have it stay changed
 	// until the next macro is drawn.
+	TStyle savestyle(*gStyle);
 	static std::map<string, TStyle*> styles;
 	if( styles.count( macro ) == 0 ){
 		styles[macro] = new TStyle();
@@ -538,6 +539,7 @@ void ExecuteMacro(TDirectory *f, string macro)
 	}
 
 	// restore
+	*gStyle = savestyle;
 	savedir->cd();
 	
 	// Unlock ROOT
