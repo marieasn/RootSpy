@@ -506,6 +506,14 @@ void ExecuteMacro(TDirectory *f, string macro)
 	}
 	*gStyle = *styles[macro];
 
+	// Reset color palette to default. Macros may change this
+	// with gStyle->SetPalette(...) but it is not actually a
+	// property of the TSyle object. The SetPalette method just
+	// maps to a static method of TColor which changes the palette
+	// for the current TCanvas. (At least that is how I think this
+	// works!)
+	gStyle->SetPalette(); // reset to default 	
+
 	TVirtualPad *top_pad = gPad;
 
 	// execute script line-by-line

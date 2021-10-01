@@ -384,7 +384,7 @@ void ExecuteMacro(TDirectory *f, string macro)
 
 	TDirectory *savedir = gDirectory;
 	f->cd();
-
+	
 	// Keep a separate TSyle for each macro we draw. This used to
 	// allow macros to change the style and have it stay changed
 	// until the next macro is drawn.
@@ -393,6 +393,14 @@ void ExecuteMacro(TDirectory *f, string macro)
 		styles[macro] = new TStyle();
 	}
 	*gStyle = *styles[macro];
+
+	// Reset color palette to default. Macros may change this
+	// with gStyle->SetPalette(...) but it is not actually a
+	// property of the TSyle object. The SetPalette method just
+	// maps to a static method of TColor which changes the palette
+	// for the current TCanvas. (At least that is how I think this
+	// works!)
+	gStyle->SetPalette(); // reset to default 	
 
 	// execute script line-by-line
 	// maybe we should do some sort of sanity check first?
