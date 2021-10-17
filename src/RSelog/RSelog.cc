@@ -67,6 +67,7 @@ static string TMPDIR = "/home/hdops/tmp";
 static string ELOG_NAME = "TLOG";
 static bool ELOG_NOTIFY = false;
 static string ELOG_EMAIL = "";
+static uint32_t TIMEOUT_SECS=25; // maximum seconds to wait for histograms or macros before giving up
 
 bool DONE = false;
 int RUN_NUMBER = 0;   
@@ -78,7 +79,7 @@ int RUN_NUMBER = 0;
 
 void signal_stop_handler(int signum);
 
-bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs=15, bool send_request=true);
+bool GetHists(const set<string> &hnamepaths, bool send_request=true);
 void RegisterQueuedItems(void);
 void ExecuteMacro(TDirectory *f, string macro);
 void ParseCommandLineArguments(int &narg, char *argv[]);
@@ -197,7 +198,7 @@ int main(int narg, char *argv[])
 		// Get any additional hnamepaths this may require (if it is a macro)
 		bool skip = false;
 		if( ! macro_hnamepaths.empty() ){
-			bool good = GetHists(macro_hnamepaths,12,true);
+			bool good = GetHists(macro_hnamepaths,true);
 			if( !good ){
 				cerr << "Could not find all hnamepaths needed for macro " << hnamepath << " -- skipping " << endl;
 				ss_log << "Could not find all " << macro_hnamepaths.size() << " hnamepaths needed for macro \"" << hnamepath << "\"  -- skipped" << endl;
@@ -294,19 +295,19 @@ int main(int narg, char *argv[])
 //-----------
 // GetHists
 //-----------
-bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_request)
+bool GetHists(const set<string> &hnamepaths, bool send_request)
 {
 	// Send requests for all of the listed hnamepaths and
 	// then wait until at least one server responds with each.
 	// A check is first made that all histogram definitons are
-	// already present and this will wait up to timeout_secs 
+	// already present and this will wait up to TIMEOUT_SECS 
 	// for them to come in. (They are all requested at the beginning
 	// of the program.)
 	// 
 	// Once all definitions are present, requests for the hnamepaths
 	// themselves are sent. A minimum of 2 seconds is spent waiting
 	// in order to  give multiple servers a chance to respond. A maximum
-	// of timeout_secs is spent waiting. This may also spend less than
+	// of TIMEOUT_SECS is spent waiting. This may also spend less than
 	// 2 seconds waiting if the received times of all relevant histograms
 	// indicate a request was sent out at least 2 seconds earlier.
 	// If all hists are found then true is returned. Otherwise false is
@@ -332,7 +333,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 		if(found_hnamepaths.size() == hnamepaths.size()) break;
 
 		uint32_t sleep_tics = 200000;
-		uint32_t max_tries = timeout_secs*(1000000/sleep_tics); // 2 seconds
+		uint32_t max_tries = TIMEOUT_SECS*(1000000/sleep_tics); // 2 seconds
 
 		if(Ntries >= max_tries) {
 			cerr << endl << "Timed out waiting for hnamepath definitions!" << endl;
@@ -400,7 +401,7 @@ bool GetHists(const set<string> &hnamepaths, uint32_t timeout_secs, bool send_re
 
 		uint32_t sleep_tics = 200000;
 		uint32_t min_tries = (2*1000000)/sleep_tics; // 2 seconds
-		uint32_t max_tries = timeout_secs*(1000000/sleep_tics);
+		uint32_t max_tries = TIMEOUT_SECS*(1000000/sleep_tics);
 				
 		// Check if everything is found
 		if(found_hnamepaths.size() == hnamepaths.size()) {
@@ -584,6 +585,7 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 		{"logbook",        required_argument, 0,  'L' },
 		{"udl",            required_argument, 0,  'u' },
 		{"server",         required_argument, 0,  's' },
+		{"timeout",        required_argument, 0,  't' },
 		{"email",          required_argument, 0,  'e' },
 		{"hnamepath",      required_argument, 0,  'H' },
 		{"verbose",        no_argument,       0,  'V' },
@@ -607,6 +609,9 @@ void ParseCommandLineArguments(int &narg, char *argv[])
 				ROOTSPY_UDL = "cMsg://";
 				ROOTSPY_UDL += optarg;
 				ROOTSPY_UDL += "/cMsg/rootspy";
+				break;
+			case 't' :
+				TIMEOUT_SECS = atoi(optarg);;
 				break;
 			case 'L' :
 				if(optarg == NULL) Usage();
@@ -667,6 +672,7 @@ void Usage(void)
 	cout<<"   -u,--udl udl              UDL of cMsg RootSpy server"<<endl;
 	cout<<"   -L,--logbook logbook      Logbook to make entry (def." << ELOG_NAME << ")" <<endl;
 	cout<<"   -s,--server server-name   Set RootSpy UDL to point to server IP/hostname"<<endl;
+	cout<<"   -t,--timeout seconds      Set maximum time to wait for histograms or macros (total may be double this)"<<endl;
 	cout<<"   -R,--run-number number    The number of the current run" << endl;
 	cout<<"   -H,--hnamepath hnamepath  An hnamepath to include (can be multiple of these)" << endl;
 	cout<<"   -e,--email                Comma separated list of email addresses to notify" << endl;
