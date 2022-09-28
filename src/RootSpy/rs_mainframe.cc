@@ -254,7 +254,8 @@ void rs_mainframe::SavePreferences(void)
 	ofs<<"auto-refresh " << (bAutoRefresh->GetState()==kButtonDown ? "on":"off") << endl;
 	ofs<<"auto-advance " << (bAutoAdvance->GetState()==kButtonDown ? "on":"off") << endl;
 	ofs<<"delay        " << delay_time << endl;
-	ofs<<"selected-tab " << fMainTab->GetCurrent() << endl;
+	// ofs<<"selected-tab " << fMainTab->GetCurrent() << endl;
+        ofs<<"selected-tab 0" << endl;
 	ofs<<endl;
 
 	ofs<<endl;
