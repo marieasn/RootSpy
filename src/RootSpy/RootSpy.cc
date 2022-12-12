@@ -29,7 +29,7 @@ string CMSG_NAME = "<not set here. see below>";
 
 string ELOG_NAME   = "HDMONITOR";
 string ELOG_EMAIL  = "nsj@cmu.edu";
-bool   ELOG_NOTIFY = true;
+bool   ELOG_NOTIFY = false;
 
 string CONFIG_FILENAME = "";
 string INPUT_ROOT_FILENAME = "";
