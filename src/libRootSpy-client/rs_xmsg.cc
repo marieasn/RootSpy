@@ -29,6 +29,8 @@ using namespace std;
 #include <TMemFile.h>
 #include <TKey.h>
 #include <THashList.h>
+#include <TObjString.h>
+
 
 
 mutex REGISTRATION_MUTEX_XMSG;
@@ -87,6 +89,8 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg):pub_con(NULL)
 		try {
 
 			xmsgp = new xMsg(name);
+			ProxyAddress pa(bind_to);
+		    xmsgp->connect(pa); 
 
 			// Create a unique name for ourself
 			char hostname[256];
@@ -101,19 +105,20 @@ rs_xmsg::rs_xmsg(string &udl, string &name, bool connect_to_xmsg):pub_con(NULL)
 			cout<<"---------------------------------------------------"<<endl;
 
 			// Subscribe to generic rootspy info requests
-			auto connection = xmsgp->connect(bind_to);
+			
+			auto connection = xmsgp->connect(pa);
 			auto topic_all = xmsg::Topic::build("rootspy", "rootspy", "*");
 			auto cb = LocalCallBack{};
 
 			subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), cb).release() );
 
 			// Subscribe to rootspy requests specific to me
-			connection = xmsgp->connect(bind_to); // xMsg requires unique connections
+			connection = xmsgp->connect(pa); // xMsg requires unique connections
 			auto topic_me = xmsg::Topic::build("rootspy", myname, "*");
 			subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), cb).release() );
 
 			// Create connection for outgoing messages
-			pub_con = new xmsg::ProxyConnection( xmsgp->connect(bind_to) );
+			pub_con = new xmsg::ProxyConnection( xmsgp->connect(pa) );
 
 			// Broadcast request for available servers
 			PingServers();
@@ -1505,6 +1510,7 @@ void rs_xmsg::RegisterMacro(rs_serialized *serialized)
 			_DBG_<<"savedir=" << savedir << " (this shouldn't happen!)" << endl;
 		}
     
+		//TObjString *macro_str = new TObjString(the_macro.macro.c_str());
 		TObjString *macro_str = (TObjString *)f->Get("macro");
 		if(macro_str) hinfo->macroString = macro_str->GetString().Data();
 		hinfo->macroData = f;

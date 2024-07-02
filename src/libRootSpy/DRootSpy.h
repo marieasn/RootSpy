@@ -12,6 +12,7 @@
 #ifndef _DRootSpy_
 #define _DRootSpy_
 
+
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -35,9 +36,10 @@
 #include <cMsg.hxx>
 using namespace cmsg;
 
+
 #include <memory> 
-#include <xmsg/xmsg.h>
-#include <xmsg/util.h>
+#include </home/angen/work/2024.06.16.RootSpy/RootSpy/xmsgbuild/opt/usr/local/include/xmsg/util.h>
+#include </home/angen/work/2024.06.16.RootSpy/RootSpy/xmsgbuild/opt/usr/local/include/xmsg/xmsg.h>
 using namespace xmsg;
 
 #ifndef _DBG_
@@ -49,8 +51,8 @@ extern pthread_rwlock_t *gROOTSPY_RW_LOCK;
 extern string gROOTSPY_PROGRAM_NAME;
 
 
-class DRootSpy:public cMsgCallback{
-	public:
+class DRootSpy : public cMsgCallback {
+public:
 
 		typedef map<string, const xmsg::proto::Data*> RSPayloadMap;
 

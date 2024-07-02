@@ -18,7 +18,7 @@
 // These globals are used by the global InsertSeriesData
 // routines. Those are here to make it possible to write
 // to the influxdb from a macro.
-static rs_influxdb *db = NULL;
+static rs_influxdb*db = NULL;
 static bool enabled = true;
 //=======================================================
 

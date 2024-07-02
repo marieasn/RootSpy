@@ -30,6 +30,7 @@ using namespace std;
 #include <TLeaf.h>
 #include <TFile.h>
 #include <TMemFile.h>
+#include <TObjString.h>
 
 #include "DRootSpy.h"
 #include "rs_udpmessage.h"
@@ -352,7 +353,8 @@ void DRootSpy::ConnectToXMSG(void)
 	// Connect to xmsg system
 	try {
 		xmsgp = new xMsg(myname);
-		xmsgp->connect(bind_to); 
+		ProxyAddress pa(bind_to);
+		xmsgp->connect(pa); 
 		auto cb = LocalCallBackD{};
 
 		cout<<"---------------------------------------------------"<<endl;
@@ -360,17 +362,17 @@ void DRootSpy::ConnectToXMSG(void)
 		cout<<"---------------------------------------------------"<<endl;
 	
 		// Subscribe to generic rootspy info requests
-		auto connection = xmsgp->connect(bind_to);
+		auto connection = xmsgp->connect(pa);
 		auto topic_all = xmsg::Topic::build("rootspy", "rootspy", "*");
 		xmsg_subscription_handles.push_back( xmsgp->subscribe(topic_all, std::move(connection), cb).release() );
 
 		// Subscribe to rootspy requests specific to me
-		connection = xmsgp->connect(bind_to); // xMsg requires unique connections
+		connection = xmsgp->connect(pa); // xMsg requires unique connections
 		auto topic_me = xmsg::Topic::build("rootspy", myname, "*");
 		xmsg_subscription_handles.push_back( xmsgp->subscribe(topic_me, std::move(connection), cb).release() );
 		
 		// Create connection for outgoing messages
-		pub_con = new xmsg::ProxyConnection( xmsgp->connect(bind_to) );
+		pub_con = new xmsg::ProxyConnection( xmsgp->connect(pa) );
 
 	} catch ( std::exception& e ) {
 		cout<<endl<<endl<<endl<<endl<<"_______________  ROOTSPY unable to connect to xmsg system! __________________"<<endl;
