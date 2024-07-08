@@ -42,9 +42,9 @@ using namespace std;
 
 #include "RSAI.h"
 
-#include "rs_cmsg.h"
-#include "rs_info.h"
-#include "rs_macroutils.h"
+#include "/home/angen/work/2024.07.02.RootSpy/RootSpy/src/libRootSpy-client/rs_cmsg.h"
+#include "/home/angen/work/2024.07.02.RootSpy/RootSpy/src/libRootSpy-client/rs_info.h"
+#include "/home/angen/work/2024.07.02.RootSpy/RootSpy/src/libRootSpy-client/rs_macroutils.h"
 
 //////////////////////////////////////////////
 // GLOBALS

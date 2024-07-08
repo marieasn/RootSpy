@@ -15,10 +15,26 @@ find_package(xmsg REQUIRED)
 #find_package(CURL REQUIRED)
 #message(STATUS "xsmg_INCLUDE_DIRS=${xsmg_INCLUDE_DIRS}")
 
+# cmsg
+set(CMSG_ROOT "$ENV{cmsg_ROOT}")
+if (NOT CMSG_ROOT)
+    message(FATAL_ERROR "Environment variable cmsg_ROOT is not set.")
+endif()
+
+set(CMSG_INCLUDE_DIR "${CMSG_ROOT}/Linux-x86_64/include")
 include_directories(${ROOT_INCLUDE_DIRS})
 include_directories(${xmsg_DIR}/../../../include)
-include_directories(/home/angen/work/2024.06.16.RootSpy/RootSpy/xmsgbuild/opt/usr/local/Linux-x86_64/include)
-# include_directories(home/angen/work/2024.06.16.RootSpy/RootSpy/xmsgbuild/opt/usr/local/include)
+include_directories(${CMSG_INCLUDE_DIR})
+
+# Iterate over all variables
+get_cmake_property(all_variables VARIABLES)
+
+# Print variables that contain "xmsg"
+foreach(var ${all_variables})
+    if(var MATCHES "^Protobuf_")
+        message(STATUS "${var} = ${${var}}")
+    endif()
+endforeach()
 
 # Define the library target
 add_library(RootSpy-client rs_cmsg.cc rs_xmsg.cc rs_macroutils.cc rs_info.cc rs_influxdb.cc) 

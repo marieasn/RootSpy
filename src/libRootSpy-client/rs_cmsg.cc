@@ -34,6 +34,7 @@ using namespace std;
 #include <TTree.h>
 #include <TMemFile.h>
 #include <TKey.h>
+#include <TObjString.h>
 
 mutex REGISTRATION_MUTEX_CMSG;
 map<void*, string> HISTOS_TO_REGISTER_CMSG;
