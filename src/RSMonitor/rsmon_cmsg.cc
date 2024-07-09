@@ -8,9 +8,9 @@
 #include <unistd.h>
 
 #include "RootSpy.h"
-#include "rsmon_xmsg.h"
+#include "rsmon_cmsg.h"
 #include "rs_info.h"
-#include "rs_xmsg.h"
+#include "rs_cmsg.h"
 #include "tree_info_t.h"
 
 
